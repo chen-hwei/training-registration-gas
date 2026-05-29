@@ -13,7 +13,7 @@
 - 選擇推薦課程或自訂課程進行登錄
 - 上傳研習證明（PDF / JPG / PNG，上限 8MB）
 - 即時查詢審核狀態（待審核 / 已通過 / 已退件）
-- 退件時顯示原因，可一鍵重新送出
+- 退件時顯示原因，可一鍵重新送出；若證明檔案無誤可選擇「沿用上次上傳的證明」，避免重複上傳
 
 ### 管理者端（需 `training_admin` 權限）
 - 新增、編輯、封存所屬處室的推薦研習課程
@@ -32,6 +32,8 @@
 | 身分驗證 | SchoolPortalLib（共用函式庫，`txxxx` + PIN，CacheService Token） |
 | 前端 | HTML / CSS / Vanilla JS（GAS HtmlService） |
 | 檔案上傳 | FileReader → Base64 → `google.script.run`（單次上傳，上限 8MB） |
+| 圖片壓縮 | Canvas API 前端壓縮（JPG/PNG 自動壓縮至 2MB 以下再上傳，防手機大圖逾時） |
+| 併發保護 | `LockService.getScriptLock()` 保護所有試算表寫入（submitRecord / reviewRecord） |
 
 ---
 
@@ -184,3 +186,5 @@ clasp push
 - 所有含個人資料的備份禁止設定公開連結
 - 共用 PIN 碼存放於 GAS `PropertiesService`，不得寫入程式碼或推送至 GitHub
 - Token 使用 `CacheService`（非 `PropertiesService`），TTL 6 小時，自動回收
+- 所有試算表寫入操作（`submitRecord`、`reviewRecord`）均以 `LockService` 保護，防止多人同時送出時資料錯位
+- 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
