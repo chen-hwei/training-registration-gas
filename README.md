@@ -19,6 +19,16 @@
 - 新增、編輯、封存所屬處室的推薦研習課程
 - 批次審核教師上傳的研習證明（核准 / 退件並附理由）
 - 匯出研習紀錄報表（CSV）
+- 預覽並手動觸發通知（即時掌握待通知教師名單）
+
+### 自動通知（學校 Gmail）
+系統透過 GAS `MailApp` 使用管理者的學校 Gmail 自動寄送三種通知信：
+
+| 情境 | 觸發條件 | 收件者 |
+|---|---|---|
+| **到期前提醒**（N1） | 必修課程距截止日 ≤ 7 天，教師無登錄紀錄 | 教師本人 |
+| **逾期未完成**（N2） | 必修課程已過截止日，無通過審核的紀錄 | 教師本人 ＋ 所屬處室管理者 |
+| **待審逾時**（N3） | PENDING 紀錄超過 3 天未被審核 | 所屬處室管理者 |
 
 ---
 
@@ -34,6 +44,8 @@
 | 檔案上傳 | FileReader → Base64 → `google.script.run`（單次上傳，上限 8MB） |
 | 圖片壓縮 | Canvas API 前端壓縮（JPG/PNG 自動壓縮至 2MB 以下再上傳，防手機大圖逾時） |
 | 併發保護 | `LockService.getScriptLock()` 保護所有試算表寫入（submitRecord / reviewRecord） |
+| 通知寄送 | GAS `MailApp`，使用腳本擁有者的學校 Gmail，1,500 封/日配額 |
+| Email 來源 | `SchoolPortalLib.getUser(txxxx).email`，不重複儲存（教職員名冊為唯一來源） |
 
 ---
 
@@ -138,6 +150,7 @@
 ├── Review.gs      # 審核流程（核准 / 退件 / 匯出）
 ├── Drive.gs       # Google Drive 資料夾與授權管理
 ├── Sync.gs        # 每晚同步 TrainingStats → Portal Hub
+├── Notify.gs      # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
 ├── Index.html     # 教師端首頁（目錄 + 我的紀錄）
 ├── Submit.html    # 選課與上傳頁面
 ├── Admin.html     # 管理者審核後台（批次審核 + 目錄管理）
@@ -188,3 +201,5 @@ clasp push
 - Token 使用 `CacheService`（非 `PropertiesService`），TTL 6 小時，自動回收
 - 所有試算表寫入操作（`submitRecord`、`reviewRecord`）均以 `LockService` 保護，防止多人同時送出時資料錯位
 - 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
+- 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 封；以 `CacheService` 防止同一教師同一天重複收到相同通知
+- 管理者收件對象依**教師所屬處室**對應，不會跨處室通知
