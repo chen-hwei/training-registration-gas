@@ -155,12 +155,12 @@
       actions +=
         '<button class="btn btn-sm btn-outline"' +
         ' style="border-color:var(--danger);color:var(--danger)"' +
-        ' onclick="deleteRecord(' + JSON.stringify(r.recordId) + ')">🗑 刪除此筆</button>';
+        ' onclick="deleteRecord(\'' + _e(r.recordId) + '\')">🗑 刪除此筆</button>';
     }
     if (r.status === 'REJECTED') {
       actions +=
         '<button class="btn btn-sm btn-primary"' +
-        ' onclick="resubmit(' + JSON.stringify(r.recordId) + ')">✏️ 重新送出</button>';
+        ' onclick="resubmit(\'' + _e(r.recordId) + '\')">✏️ 重新送出</button>';
     }
 
     /* 退件原因區塊 */

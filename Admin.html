@@ -329,7 +329,7 @@
     return '<div class="' + rowCls + '" id="rrow-' + r.recordId + '">' +
       /* 勾選框 */
       '<div class="' + checkCls + '" id="chk-' + r.recordId + '"' +
-      ' onclick="toggleCheck(' + JSON.stringify(r.recordId) + ')">' +
+      ' onclick="toggleCheck(\'' + r.recordId + '\')">' +
       (checked ? '✓' : '') +
       '</div>' +
       /* 內容 */
@@ -346,14 +346,13 @@
       /* 操作按鈕 */
       '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:100px">' +
         (r.fileId
-          ? '<button class="btn btn-xs btn-outline" onclick="viewFile(' +
-            JSON.stringify(r.fileId) + ')">📎 查看證明</button>'
+          ? '<button class="btn btn-xs btn-outline" onclick="viewFile(\'' +
+            r.fileId + '\')">📎 查看證明</button>'
           : '') +
         '<button class="btn btn-xs btn-success"' +
-        ' onclick="approveOne(' + JSON.stringify(r.recordId) + ')">✅ 核准</button>' +
+        ' onclick="approveOne(\'' + r.recordId + '\')">✅ 核准</button>' +
         '<button class="btn btn-xs btn-danger"' +
-        ' onclick="openRejectModal(' + JSON.stringify(r.recordId) + ',' +
-        JSON.stringify(r.title) + ',' + JSON.stringify(r.userId) + ')">❌ 退件</button>' +
+        ' onclick="openRejectModal(\'' + r.recordId + '\')">❌ 退件</button>' +
       '</div>' +
       '</div>';
   }
@@ -470,12 +469,17 @@
   }
 
   /* ── 退件 Modal ── */
-  function openRejectModal(recordId, title, userId) {
+  function openRejectModal(recordId) {
     _rejectTargetId = recordId;
     document.getElementById('reject-note-input').value = '';
     document.getElementById('reject-note-err').style.display = 'none';
+    // 從全域陣列查詢 title / userId（避免 JSON.stringify 雙引號衝突 HTML 屬性）
+    var rec = null;
+    for (var i = 0; i < _reviewRecords.length; i++) {
+      if (_reviewRecords[i].recordId === recordId) { rec = _reviewRecords[i]; break; }
+    }
     document.getElementById('reject-modal-target').textContent =
-      '課程：' + (title || '─') + '　教師：' + (userId || '─');
+      '課程：' + (rec ? rec.title : '─') + '　教師：' + (rec ? rec.userId : '─');
     document.getElementById('reject-modal').style.display = 'flex';
   }
 
@@ -550,18 +554,29 @@
         '</div>' +
         '<div class="catalog-admin-actions">' +
           '<button class="btn btn-xs btn-outline"' +
-          ' onclick="openCatalogModal(' + JSON.stringify(c) + ')">✏️ 編輯</button>' +
+          ' onclick="openCatalogModal(\'' + c.catalogId + '\')">✏️ 編輯</button>' +
           '<button class="btn btn-xs btn-outline"' +
           ' style="border-color:var(--warning);color:var(--warning)"' +
-          ' onclick="archiveCatalog(' + JSON.stringify(c.catalogId) + ',' +
-          JSON.stringify(c.title) + ')">🗃 封存</button>' +
+          ' onclick="archiveCatalog(\'' + c.catalogId + '\')">🗃 封存</button>' +
         '</div>' +
         '</div>';
     }).join('');
   }
 
   /* ── 新增 / 編輯 Modal ── */
-  function openCatalogModal(catalogObj) {
+  function openCatalogModal(catalogIdOrObj) {
+    // 接受 null（新增模式）、catalogId 字串（編輯模式）
+    // 改用 ID 查詢是因為直接傳 JSON.stringify(obj) 會因雙引號破壞 HTML onclick 屬性
+    var catalogObj = null;
+    if (catalogIdOrObj && typeof catalogIdOrObj === 'string') {
+      for (var i = 0; i < _catalogRecords.length; i++) {
+        if (_catalogRecords[i].catalogId === catalogIdOrObj) {
+          catalogObj = _catalogRecords[i]; break;
+        }
+      }
+    } else if (catalogIdOrObj && typeof catalogIdOrObj === 'object') {
+      catalogObj = catalogIdOrObj; // 向下相容（直接傳物件的呼叫方式）
+    }
     _editCatalogId = catalogObj ? catalogObj.catalogId : null;
 
     // 填入欄位
@@ -660,7 +675,14 @@
   }
 
   /* ── 封存課程 ── */
-  function archiveCatalog(catalogId, title) {
+  function archiveCatalog(catalogId) {
+    // title 從全域陣列查詢（避免 JSON.stringify 雙引號衝突 HTML onclick 屬性）
+    var title = catalogId;
+    for (var i = 0; i < _catalogRecords.length; i++) {
+      if (_catalogRecords[i].catalogId === catalogId) {
+        title = _catalogRecords[i].title; break;
+      }
+    }
     showConfirmModal(
       '確認封存',
       '<p>確定要封存課程 <strong>「' + _e(title) + '」</strong> 嗎？</p>' +

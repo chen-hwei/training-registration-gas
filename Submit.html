@@ -506,7 +506,13 @@
         btn.textContent = '📤 送出研習登錄';
         if (res && res.success) {
           showToast('✅ 登錄成功！請等候管理者審核。', 'success');
-          setTimeout(function() { _navigate('?page=records'); }, 2000);
+          // GAS iframe sandbox 限制：setTimeout 內的 window.top 導覽被瀏覽器以
+          // 「無使用者手勢」為由封鎖（allow-top-navigation-by-user-activation）
+          // 解法：將按鈕直接變成跳轉入口，由使用者點擊觸發（符合 user activation）
+          btn.disabled = false;
+          btn.textContent = '📋 前往我的紀錄 →';
+          btn.style.background = 'var(--success)';
+          btn.onclick = function() { _navigate('?page=records'); };
         } else {
           showToast((res && res.error) || '送出失敗，請稍後再試', 'error');
         }
