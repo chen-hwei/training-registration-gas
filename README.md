@@ -1,6 +1,6 @@
 # 研習登錄與審核系統
 
-> 學校資訊系統整合平台 · 第五個子系統
+> 臺北市立中崙高中（`@zlsh.tp.edu.tw`）· 學校資訊系統整合平台 · 第五個子系統
 
 以 Google Apps Script 建構的研習登錄與審核系統，讓教師可以線上登錄研習紀錄、上傳研習證明，並由各處室管理者進行審核與退件。審核通過的紀錄定時彙整至整合平台 Hub，提供全校年度研習時數儀表板。
 
@@ -59,6 +59,8 @@
 | `title` · `hours` · `organizer` | 課程名稱、時數、主辦單位 |
 | `department` · `createdBy` | 推薦處室、建立者（txxxx） |
 | `startDate` · `endDate` | 研習日期區間（格式 `YYYY/M/D`） |
+| `targetAudience` | 研習對象（如「全體教師」、「導師」）；留空表示不限 |
+| `link` | 研習公文 URL 或報名頁面；前端顯示為可點擊超連結 |
 | `isRequired` | 是否必修（TRUE / FALSE） |
 | `status` | `ACTIVE`（可選）/ `ARCHIVED`（封存） |
 
@@ -151,9 +153,10 @@
 ├── Drive.gs       # Google Drive 資料夾與授權管理
 ├── Sync.gs        # 每晚同步 TrainingStats → Portal Hub
 ├── Notify.gs      # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
-├── Index.html     # 教師端首頁（目錄 + 我的紀錄）
+├── Index.html     # 教師端首頁（研習公告列表，含關鍵字搜尋、研習對象標籤、相關連結）
 ├── Submit.html    # 選課與上傳頁面
-├── Admin.html     # 管理者審核後台（批次審核 + 目錄管理）
+├── Records.html   # 教師端個人研習紀錄查詢（PENDING / APPROVED / REJECTED 分頁）
+├── Admin.html     # 管理者審核後台（批次審核 + 目錄管理 + 通知預覽）
 ├── style.html     # 共用 CSS（狀態色彩 / RWD / 字型縮放）
 └── config.html    # 共用 JS（api() bridge / Token / Base64 工具）
 ```
@@ -203,3 +206,10 @@ clasp push
 - 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
 - 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 封；以 `CacheService` 防止同一教師同一天重複收到相同通知
 - 管理者收件對象依**教師所屬處室**對應，不會跨處室通知
+
+## 系統設計哲學
+
+本系統的定位是「**輔助收件 + 清單管理 + 提醒通知**」，不是自動認列系統。所有研習時數的認列均由行政人員**人工確認後點擊核准**，系統不自動判斷時數、日期或研習對象是否符合規定，確保行政彈性。
+
+- ✅ 系統負責：收件、附件保存、清單管理、通過登錄、查詢紀錄、逾期提醒
+- ❌ 系統不做：自動判斷時數是否達標、自動判斷研習對象是否符合、超過截止日自動拒絕
