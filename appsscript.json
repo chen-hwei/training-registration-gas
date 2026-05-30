@@ -1,0 +1,24 @@
+{
+  "timeZone": "Asia/Taipei",
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "SchoolPortalLib",
+        "libraryId": "TODO_填入_SchoolPortalLib_Library_ID",
+        "version": "1",
+        "developmentMode": false
+      }
+    ]
+  },
+  "exceptionLogging": "STACKDRIVER",
+  "runtimeVersion": "V8",
+  "oauthScopes": [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+    "https://www.googleapis.com/auth/script.send_mail"
+  ],
+  "webapp": {
+    "executeAs": "USER_DEPLOYING",
+    "access": "DOMAIN"
+  }
+}
