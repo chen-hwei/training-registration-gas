@@ -4,6 +4,12 @@ const TRAINING_DRIVE_ROOT_FOLDER_ID = '1YoGvcZqlHFZdqyZdNlIuoo3a0wQ_Z1um';
 const HUB_SPREADSHEET_ID            = '10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ';
 const LOG_SPREADSHEET_ID            = '1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM';
 
+// ==================== Web App 絕對 URL（前端導覽用）====================
+// 必須使用含 /a/macros/zlsh.tp.edu.tw/ 的 Workspace 域 URL
+// 此值會透過 doGet() template.appBaseUrl 注入前端，供 _navigate() 使用
+// 若日後重新部署（新 Deployment ID），需一併更新此常數
+const WEB_APP_BASE_URL = 'https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec';
+
 // ==================== SHEET_SCHEMA ====================
 // headers：試算表第一列的中文標題（唯一來源）
 // keys   ：前後端程式碼使用的英文 Key（與 headers 一一對應）
@@ -62,7 +68,14 @@ function parseSheetData(sheet) {
     .map(row => {
       const obj = {};
       schema.keys.forEach((key, i) => {
-        obj[key] = (row[i] !== undefined && row[i] !== null) ? row[i] : '';
+        let val = (row[i] !== undefined && row[i] !== null) ? row[i] : '';
+        // ⚠️ GAS 地雷：日期格式儲存格 getValues() 回傳 JS Date 物件
+        // google.script.run postMessage 無法序列化 Date → result 變 null → 靜默白屏
+        // 必須在此強制轉為字串
+        if (val instanceof Date) {
+          val = Utilities.formatDate(val, 'Asia/Taipei', 'yyyy-MM-dd');
+        }
+        obj[key] = val;
       });
       return obj;
     });

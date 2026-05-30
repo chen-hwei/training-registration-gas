@@ -9,6 +9,8 @@ function doGet(e) {
   // 將 URL 參數傳入模板（sanitized：僅允許英數字）
   template.initCatalogId  = (e.parameter && e.parameter.catalog  || '').replace(/[^A-Za-z0-9]/g, '');
   template.initResubmitId = (e.parameter && e.parameter.resubmit || '').replace(/[^A-Za-z0-9]/g, '');
+  // 注入絕對 URL 至前端，供 _navigate() 使用（防止 googleusercontent.com 相對路徑導覽問題）
+  template.appBaseUrl     = WEB_APP_BASE_URL;
 
   return template.evaluate()
     .setTitle('研習登錄系統 — 中崙高中')

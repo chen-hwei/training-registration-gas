@@ -34,6 +34,7 @@
 </head>
 <body>
   <?!= include('config') ?>
+  <script>var APP_BASE_URL = '<?!= appBaseUrl ?>';</script>
 
   <!-- ── 退件原因 Modal（自訂，含驗證）── -->
   <div id="reject-modal"
@@ -160,9 +161,9 @@
 
   <!-- ── 導航列 ── -->
   <nav class="app-nav">
-    <a class="nav-link" onclick="window.top.location.href='?page=index'">公告課程</a>
-    <a class="nav-link" onclick="window.top.location.href='?page=submit'">登錄研習</a>
-    <a class="nav-link" onclick="window.top.location.href='?page=records'">我的紀錄</a>
+    <a class="nav-link" onclick="_navigate('?page=index')">公告課程</a>
+    <a class="nav-link" onclick="_navigate('?page=submit')">登錄研習</a>
+    <a class="nav-link" onclick="_navigate('?page=records')">我的紀錄</a>
     <a class="nav-link active">管理後台</a>
   </nav>
 
@@ -244,7 +245,7 @@
   function onLoginSuccess() {
     if (!isAdmin()) {
       showToast('您沒有管理者權限，即將返回首頁', 'error');
-      setTimeout(function(){ window.top.location.href = '?page=index'; }, 1500);
+      setTimeout(function(){ _navigate('?page=index'); }, 1500);
       return;
     }
     // 更新頁首姓名顯示（登入後才有值）

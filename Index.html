@@ -8,6 +8,7 @@
 </head>
 <body>
   <?!= include('config') ?>
+  <script>var APP_BASE_URL = '<?!= appBaseUrl ?>';</script>
 
   <!-- ── 頁首 ── -->
   <div class="app-header">
@@ -28,8 +29,8 @@
   <!-- ── 導航列 ── -->
   <nav class="app-nav">
     <a class="nav-link active">公告課程</a>
-    <a class="nav-link" onclick="window.top.location.href='?page=submit'">登錄研習</a>
-    <a class="nav-link" onclick="window.top.location.href='?page=records'">我的紀錄</a>
+    <a class="nav-link" onclick="_navigate('?page=submit')">登錄研習</a>
+    <a class="nav-link" onclick="_navigate('?page=records')">我的紀錄</a>
   </nav>
 
   <!-- ── 主內容 ── -->
@@ -59,7 +60,7 @@
     <div style="text-align:center;padding:20px 0 8px">
       <span style="font-size:0.82rem;color:var(--gray-500)">找不到您的研習課程？</span>
       <button class="btn btn-sm btn-outline" style="margin-left:8px"
-              onclick="window.top.location.href='?page=submit'">
+              onclick="_navigate('?page=submit')">
         自訂登錄研習 →
       </button>
     </div>
@@ -185,7 +186,7 @@
   }
 
   function goSubmit(catalogId) {
-    window.top.location.href = '?page=submit&catalog=' + encodeURIComponent(catalogId);
+    _navigate('?page=submit&catalog=' + encodeURIComponent(catalogId));
   }
 
   /* ── HTML 跳脫 ── */

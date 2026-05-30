@@ -159,6 +159,18 @@ function doLogin() {
     .handleRequest({ action: 'login', body: { userId: userId, pin: pin } });
 }
 
+// ── 導覽輔助（防止 googleusercontent.com 相對路徑錯誤）──
+// window.top.location.href 可能是 googleusercontent.com，
+// 直接設相對路徑 '?page=admin' 會停在 googleusercontent.com
+// 此函式優先使用後端注入的 APP_BASE_URL（絕對路徑），
+// 若未注入則取 window.top href 去掉 query string 作備援
+function _navigate(qs) {
+  var base = (typeof APP_BASE_URL !== 'undefined' && APP_BASE_URL)
+    ? APP_BASE_URL
+    : window.top.location.href.split('?')[0];
+  window.top.location.href = base + qs;
+}
+
 // ── 頁面初始化（每頁 DOMContentLoaded 後呼叫）──
 function initPage(opts) {
   opts = opts || {};
@@ -175,7 +187,7 @@ function initPage(opts) {
   if (!getToken()) { _showLoginOverlay(); return false; }
   if (opts.adminOnly && !isAdmin()) {
     showToast('您沒有管理者權限', 'error');
-    setTimeout(function(){ window.top.location.href = '?page=index'; }, 1500);
+    setTimeout(function(){ _navigate('?page=index'); }, 1500);
     return false;
   }
   return true;
@@ -190,7 +202,7 @@ function _renderAdminNav() {
   a.className = 'nav-link';
   a.dataset.adminLink = '1';
   a.textContent = '管理後台';
-  a.onclick = function(){ window.top.location.href = '?page=admin'; };
+  a.onclick = function(){ _navigate('?page=admin'); };
   nav.appendChild(a);
 }
 
@@ -333,4 +345,5 @@ window.getToken          = getToken;
 window.getUserId         = getUserId;
 window.getUserName       = getUserName;
 window.isAdmin           = isAdmin;
+window._navigate         = _navigate;
 </script>

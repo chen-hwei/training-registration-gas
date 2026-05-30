@@ -8,6 +8,7 @@
 </head>
 <body>
   <?!= include('config') ?>
+  <script>var APP_BASE_URL = '<?!= appBaseUrl ?>';</script>
 
   <!-- ── 頁首 ── -->
   <div class="app-header">
@@ -27,8 +28,8 @@
 
   <!-- ── 導航列 ── -->
   <nav class="app-nav">
-    <a class="nav-link" onclick="window.top.location.href='?page=index'">公告課程</a>
-    <a class="nav-link" onclick="window.top.location.href='?page=submit'">登錄研習</a>
+    <a class="nav-link" onclick="_navigate('?page=index')">公告課程</a>
+    <a class="nav-link" onclick="_navigate('?page=submit')">登錄研習</a>
     <a class="nav-link active">我的紀錄</a>
   </nav>
 
@@ -57,7 +58,7 @@
     <!-- 底部快速登錄入口 -->
     <div style="text-align:center;padding:8px 0 24px">
       <button class="btn btn-sm btn-outline"
-              onclick="window.top.location.href='?page=submit'">
+              onclick="_navigate('?page=submit')">
         ＋ 登錄新研習
       </button>
     </div>
@@ -236,7 +237,7 @@
 
   /* ── 重新送出（跳至 Submit.html 並帶入退件紀錄 ID）── */
   function resubmit(recordId) {
-    window.top.location.href = '?page=submit&resubmit=' + encodeURIComponent(recordId);
+    _navigate('?page=submit&resubmit=' + encodeURIComponent(recordId));
   }
 
   function _e(s) {
