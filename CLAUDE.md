@@ -125,10 +125,15 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 |---|---|---|
 | 白屏（連藍色頁首都沒有） | 使用消費者 URL，每次部署 `googleusercontent.com` hash 改變，localStorage Token 失效 | 改用 `/a/macros/zlsh.tp.edu.tw/` 域 URL |
 | 白屏（頁首可見，內容空白） | `showSpinner()` 的 `z-index:900` 蓋住 `z-index:100` 的頁首 | `style.html` spinner `z-index` 已改為 `90` |
+| 點導覽連結又被帶到 `googleusercontent.com` | `window.top.location.href = '?page=...'` 是相對路徑；若 `window.top` 停在 `googleusercontent.com`，相對路徑就停留在 `googleusercontent.com` | `config.html` 新增 `_navigate()` helper，後端注入絕對 URL `APP_BASE_URL`（`WEB_APP_BASE_URL` 常數定義於 `Schema.gs`，`doGet()` 以 `template.appBaseUrl` 注入） |
+| 資料載入後內容靜默空白（Date 序列化地雷） | 日期欄位 `getValues()` 回傳 JS `Date` 物件，`google.script.run` postMessage 無法序列化 → `result = null` → `withSuccessHandler(null)` → 靜默白屏，不進 `.catch()` | `Schema.gs parseSheetData` 補 `instanceof Date` 判斷，強制 `Utilities.formatDate()` 轉字串（同教職員名冊管理系統） |
 | 管理後台跳回首頁 | Hub `UserStatusCache` 的 `systemAccess` 欄未設 `training_admin:true` | 見上方「管理者權限設定」 |
 | clasp push 後改了沒生效 | 部署版本未更新 | 每次 push 後到 GAS 編輯器「新增版本」 |
 | SchoolPortalLib 設定消失 | 以前 `appsscript.json` 沒有 Library 設定，clasp push 時覆寫 | Library 已嵌入 `appsscript.json`，此問題已修復 |
 | `initSheetHeaders()` 拋出「工作表不存在」 | 舊版 `ensureSheetHeaders` 用 `_getTrainingSheet` 會 throw | `ensureSheetHeaders` 已改為自動建立工作表 |
+
+### ⚠️ WEB_APP_BASE_URL 更新時機
+若日後**重新部署**（產生新 Deployment ID），必須同步更新 `Schema.gs` 中的 `WEB_APP_BASE_URL` 常數，否則 `_navigate()` 會導向舊部署。
 
 ---
 
