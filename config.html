@@ -186,8 +186,10 @@ function initPage(opts) {
   // Token 檢查
   if (!getToken()) { _showLoginOverlay(); return false; }
   if (opts.adminOnly && !isAdmin()) {
+    // GAS iframe sandbox 同樣限制：setTimeout 內無法執行 window.top 導覽
+    // 此處為頁面載入時自動檢查，無使用者手勢，直接同步導覽即可
     showToast('您沒有管理者權限', 'error');
-    setTimeout(function(){ _navigate('?page=index'); }, 1500);
+    _navigate('?page=index');
     return false;
   }
   return true;
