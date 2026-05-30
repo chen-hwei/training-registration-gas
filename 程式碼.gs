@@ -67,9 +67,16 @@ function handleRequest(payload) {
   }
 
   // ── Level 2：驗證管理者身分 ──
+  // ⚠️ SchoolPortalLib.getUser() 的 systemAccess 可能是已解析的 Object（非字串）
+  // 若直接 JSON.parse(Object) 會拋 SyntaxError → catch → access={} → 誤判 FORBIDDEN
   const user = SchoolPortalLib.getUser(userId);
   let access = {};
-  try { access = JSON.parse(user.systemAccess || '{}'); } catch (_) {}
+  try {
+    const sa = user ? user.systemAccess : undefined;
+    access = (typeof sa === 'object' && sa !== null)
+      ? sa                            // Library 已解析為物件，直接使用
+      : JSON.parse(String(sa || '{}')); // Library 回傳字串，需解析
+  } catch (_) {}
   if (!access.training_admin) return _err('FORBIDDEN');
 
   switch (action) {
