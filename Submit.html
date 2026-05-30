@@ -467,6 +467,8 @@
       organizer:    organizer
     };
 
+    if (_resubmitRec) body.resubmitOf = _resubmitRec.recordId;
+
     if (reuseChecked && _resubmitRec && _resubmitRec.fileId) {
       // 沿用舊檔案：直接送出（不需壓縮 / base64）
       body.reuseFileId = _resubmitRec.fileId;

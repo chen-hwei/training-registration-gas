@@ -36,21 +36,31 @@
   <?!= include('config') ?>
   <script>var APP_BASE_URL = '<?!= appBaseUrl ?>';</script>
 
-  <!-- ── 退件原因 Modal（自訂，含驗證）── -->
+  <!-- ── 退件原因 Modal（含預設選項 + 其他自訂）── -->
   <div id="reject-modal"
     style="position:fixed;inset:0;background:rgba(0,0,0,0.5);
-           display:flex;align-items:center;justify-content:center;
-           z-index:1020;padding:16px;display:none">
+           display:none;align-items:flex-start;justify-content:center;
+           z-index:1020;padding:16px;overflow-y:auto">
     <div style="background:#fff;border-radius:12px;padding:24px;
-                width:100%;max-width:460px;box-shadow:var(--shadow-md)">
+                width:100%;max-width:480px;box-shadow:var(--shadow-md);margin:auto">
       <div style="font-size:1rem;font-weight:700;color:var(--danger);margin-bottom:6px">退件說明</div>
       <div id="reject-modal-target"
-           style="font-size:0.82rem;color:var(--gray-700);margin-bottom:14px"></div>
-      <div class="form-group">
-        <label class="form-label">退件原因 <span class="req">*</span>（至少 10 字）</label>
-        <textarea id="reject-note-input" class="form-control" rows="4"
-          placeholder="請詳細說明退件原因，例如：證明文件模糊、研習日期與課程不符、未完整蓋章…"></textarea>
+           style="font-size:0.82rem;color:var(--gray-700);margin-bottom:16px"></div>
+
+      <!-- 預設退件原因（radio 單選）-->
+      <div class="form-label" style="margin-bottom:10px">
+        退件原因 <span class="req">*</span>
       </div>
+      <div id="reject-reason-list" style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+        <!-- 由 JS 動態產生 -->
+      </div>
+
+      <!-- 其他：自訂輸入框（選「其他」時才顯示）-->
+      <div id="reject-custom-section" class="hidden" style="margin-bottom:12px">
+        <textarea id="reject-custom-input" class="form-control" rows="3"
+          placeholder="請輸入退件說明…"></textarea>
+      </div>
+
       <div id="reject-note-err"
            style="color:var(--danger);font-size:0.80rem;margin-bottom:10px;display:none"></div>
       <div style="display:flex;gap:10px;justify-content:flex-end">
@@ -454,8 +464,8 @@
     api('v1/admin/getFileUrl', { fileId: fileId })
       .then(function(res) {
         hideSpinner();
-        if (res && res.data && res.data.url) {
-          window.open(res.data.url, '_blank');
+        if (res && res.url) {
+          window.open(res.url, '_blank');
         } else {
           showToast('無法取得檔案連結', 'error');
         }
@@ -469,18 +479,59 @@
   }
 
   /* ── 退件 Modal ── */
+  var _REJECT_REASONS = [
+    '證明文件模糊，無法識別',
+    '上傳之證明文件與研習名稱不符',
+    '研習時數與證明文件標示不符',
+    '非本學年度之研習紀錄',
+    '其他（自訂輸入）'
+  ];
+
   function openRejectModal(recordId) {
     _rejectTargetId = recordId;
-    document.getElementById('reject-note-input').value = '';
-    document.getElementById('reject-note-err').style.display = 'none';
-    // 從全域陣列查詢 title / userId（避免 JSON.stringify 雙引號衝突 HTML 屬性）
+
+    // 從全域陣列查詢課程與教師（避免 JSON.stringify 雙引號破壞 HTML onclick 屬性）
     var rec = null;
     for (var i = 0; i < _reviewRecords.length; i++) {
       if (_reviewRecords[i].recordId === recordId) { rec = _reviewRecords[i]; break; }
     }
     document.getElementById('reject-modal-target').textContent =
       '課程：' + (rec ? rec.title : '─') + '　教師：' + (rec ? rec.userId : '─');
+
+    // 動態產生 radio 選項
+    var html = '';
+    _REJECT_REASONS.forEach(function(reason, idx) {
+      html +=
+        '<label style="display:flex;align-items:center;gap:12px;padding:10px 14px;' +
+        'border:2px solid var(--gray-300);border-radius:var(--radius);cursor:pointer;' +
+        'transition:border-color .15s" id="rr-label-' + idx + '">' +
+        '<input type="radio" name="reject-reason" value="' + idx + '"' +
+        ' onchange="onRejectReasonChange(' + idx + ')"' +
+        ' style="width:20px;height:20px;flex-shrink:0;cursor:pointer">' +
+        '<span style="font-size:0.88rem">' + _e(reason) + '</span>' +
+        '</label>';
+    });
+    document.getElementById('reject-reason-list').innerHTML = html;
+
+    // 重置狀態
+    document.getElementById('reject-custom-section').classList.add('hidden');
+    document.getElementById('reject-custom-input').value = '';
+    document.getElementById('reject-note-err').style.display = 'none';
+
     document.getElementById('reject-modal').style.display = 'flex';
+  }
+
+  function onRejectReasonChange(idx) {
+    var isOther = (idx === _REJECT_REASONS.length - 1);
+    // 其他：顯示自訂 textarea
+    document.getElementById('reject-custom-section').classList.toggle('hidden', !isOther);
+    if (isOther) document.getElementById('reject-custom-input').focus();
+    // 更新選項邊框高亮
+    _REJECT_REASONS.forEach(function(_, i) {
+      var label = document.getElementById('rr-label-' + i);
+      if (label) label.style.borderColor = (i === idx) ? 'var(--danger)' : 'var(--gray-300)';
+    });
+    document.getElementById('reject-note-err').style.display = 'none';
   }
 
   function closeRejectModal() {
@@ -489,17 +540,32 @@
   }
 
   function confirmReject() {
-    var note = document.getElementById('reject-note-input').value.trim();
     var errEl = document.getElementById('reject-note-err');
-    if (!note || note.length < 10) {
-      errEl.textContent = '請填寫至少 10 字的退件原因。';
+    // 讀取選取的 radio
+    var radios = document.querySelectorAll('input[name="reject-reason"]');
+    var selectedIdx = -1;
+    for (var i = 0; i < radios.length; i++) {
+      if (radios[i].checked) { selectedIdx = parseInt(radios[i].value); break; }
+    }
+    if (selectedIdx === -1) {
+      errEl.textContent = '請選擇退件原因。';
+      errEl.style.display = 'block';
+      return;
+    }
+    var isOther = (selectedIdx === _REJECT_REASONS.length - 1);
+    var note = isOther
+      ? document.getElementById('reject-custom-input').value.trim()
+      : _REJECT_REASONS[selectedIdx];
+    if (!note) {
+      errEl.textContent = '請填寫退件說明。';
       errEl.style.display = 'block';
       return;
     }
     errEl.style.display = 'none';
+    var targetId = _rejectTargetId; // 先存起來，closeRejectModal 會把 _rejectTargetId 清成 null
     closeRejectModal();
     _doReview(
-      [{ recordId: _rejectTargetId, status: 'REJECTED', reviewNote: note }],
+      [{ recordId: targetId, status: 'REJECTED', reviewNote: note }],
       '已退件 1 筆紀錄'
     );
   }
@@ -841,9 +907,10 @@
   window.approveOne          = approveOne;
   window.batchApprove        = batchApprove;
   window.viewFile            = viewFile;
-  window.openRejectModal     = openRejectModal;
-  window.closeRejectModal    = closeRejectModal;
-  window.confirmReject       = confirmReject;
+  window.openRejectModal       = openRejectModal;
+  window.onRejectReasonChange  = onRejectReasonChange;
+  window.closeRejectModal      = closeRejectModal;
+  window.confirmReject         = confirmReject;
   window.openCatalogModal    = openCatalogModal;
   window.closeCatalogModal   = closeCatalogModal;
   window.saveCatalog         = saveCatalog;

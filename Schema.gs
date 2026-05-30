@@ -30,12 +30,12 @@ const SHEET_SCHEMA = {
     headers: [
       '紀錄編號', '教師 ID', '課程編號', '研習名稱', '研習時數', '是否自訂',
       '研習日期', '主辦單位', 'Drive 檔案 ID', '原始檔名', '審核狀態',
-      '審核者', '退件原因', '審核時間', '送出時間'
+      '審核者', '退件原因', '審核時間', '送出時間', '補件自'
     ],
     keys: [
       'recordId', 'userId', 'catalogId', 'title', 'hours', 'isCustom',
       'trainingDate', 'organizer', 'fileId', 'fileName', 'status',
-      'reviewedBy', 'reviewNote', 'reviewedAt', 'submittedAt'
+      'reviewedBy', 'reviewNote', 'reviewedAt', 'submittedAt', 'resubmitOf'
     ]
   }
 };
@@ -73,7 +73,12 @@ function parseSheetData(sheet) {
         // google.script.run postMessage 無法序列化 Date → result 變 null → 靜默白屏
         // 必須在此強制轉為字串
         if (val instanceof Date) {
-          val = Utilities.formatDate(val, 'Asia/Taipei', 'yyyy-MM-dd');
+          // submittedAt / reviewedAt 含時間，必須保留 HH:mm:ss 才能做新舊比較
+          const timeKeys = ['submittedAt', 'reviewedAt', 'createdAt', 'updatedAt', 'borrowTime', 'returnTime', 'lentAt'];
+          const fmt = timeKeys.indexOf(key) !== -1
+            ? 'yyyy-MM-dd HH:mm:ss'
+            : 'yyyy-MM-dd';
+          val = Utilities.formatDate(val, 'Asia/Taipei', fmt);
         }
         obj[key] = val;
       });

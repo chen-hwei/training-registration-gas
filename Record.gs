@@ -68,7 +68,8 @@ function submitRecord(userId, body) {
       reviewedBy:   '',
       reviewNote:   '',
       reviewedAt:   '',
-      submittedAt:  _now()
+      submittedAt:  _now(),
+      resubmitOf:   String(body.resubmitOf || '')
     };
 
     const newRow = schema.keys.map(k => newRecord[k] !== undefined ? newRecord[k] : '');

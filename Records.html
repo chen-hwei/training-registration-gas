@@ -65,10 +65,11 @@
   </div>
 
   <script>
-  var _allRecords = [];
-  var _activeTab  = 'PENDING';
-  var _curPage    = 1;
-  var _pageSize   = 10;
+  var _allRecords  = [];
+  var _superseded  = {}; // { recordId: true } — REJECTED 且已有後續補件的紀錄
+  var _activeTab   = 'PENDING';
+  var _curPage     = 1;
+  var _pageSize    = 10;
 
   /* ── 登入成功後載入 ── */
   function onLoginSuccess() { _loadRecords(); }
@@ -83,6 +84,7 @@
         _allRecords.sort(function(a, b) {
           return (b.submittedAt || '').localeCompare(a.submittedAt || '');
         });
+        _superseded = _buildSupersededSet(_allRecords);
         _updateTabCounts();
         _renderTab();
       })
@@ -93,6 +95,16 @@
             '<div class="empty-state"><div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
         }
       });
+  }
+
+  /* ── 判斷哪些 REJECTED 紀錄已有後續補件 ── */
+  function _buildSupersededSet(records) {
+    // 只要有另一筆紀錄的 resubmitOf === 此紀錄的 recordId，即視為已補件
+    var result = {};
+    records.forEach(function(r) {
+      if (r.resubmitOf) result[r.resubmitOf] = true;
+    });
+    return result;
   }
 
   function _updateTabCounts() {
@@ -148,6 +160,7 @@
   function _renderCard(r) {
     var statusMap = { PENDING:'待審中', APPROVED:'已核准', REJECTED:'已退件' };
     var label = statusMap[r.status] || r.status;
+    var isSuperseded = !!(r.status === 'REJECTED' && _superseded[r.recordId]);
 
     /* 操作按鈕 */
     var actions = '';
@@ -157,7 +170,8 @@
         ' style="border-color:var(--danger);color:var(--danger)"' +
         ' onclick="deleteRecord(\'' + _e(r.recordId) + '\')">🗑 刪除此筆</button>';
     }
-    if (r.status === 'REJECTED') {
+    // 已補件的退件紀錄不再顯示「重新送出」
+    if (r.status === 'REJECTED' && !isSuperseded) {
       actions +=
         '<button class="btn btn-sm btn-primary"' +
         ' onclick="resubmit(\'' + _e(r.recordId) + '\')">✏️ 重新送出</button>';
@@ -185,9 +199,20 @@
         'border-radius:999px;padding:2px 8px;margin-left:6px;vertical-align:middle">自訂</span>'
       : '';
 
-    return '<div class="record-card ' + r.status + '">' +
+    /* 已補件標記（視覺降權） */
+    var supersededBadge = isSuperseded
+      ? '<span style="font-size:0.70rem;background:var(--gray-200);color:var(--gray-500);' +
+        'border-radius:999px;padding:2px 8px;margin-left:6px;vertical-align:middle">已補件</span>'
+      : '';
+
+    /* 已補件時整張卡片降低透明度、背景改灰 */
+    var cardStyle = isSuperseded
+      ? ' style="opacity:0.6;background:#f8f8f8;"'
+      : '';
+
+    return '<div class="record-card ' + r.status + '"' + cardStyle + '>' +
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
-        '<div class="rc-title">' + _e(r.title) + customBadge + '</div>' +
+        '<div class="rc-title">' + _e(r.title) + customBadge + supersededBadge + '</div>' +
         '<span class="status-badge status-' + r.status + '">' + label + '</span>' +
       '</div>' +
       '<div class="rc-meta">' +

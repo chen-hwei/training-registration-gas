@@ -75,6 +75,8 @@
 | `fileId` · `fileName` | Google Drive 檔案 ID 與原始檔名 |
 | `status` | `PENDING` / `APPROVED` / `REJECTED` |
 | `reviewedBy` · `reviewNote` · `reviewedAt` | 審核者、退件原因、審核時間 |
+| `submittedAt` | 送出時間 |
+| `resubmitOf` | 若為退件後重送，記錄原始退件紀錄的 `recordId`；初次送出為空字串 |
 
 ---
 
@@ -173,7 +175,7 @@
 | Phase 2 | 審核流程（Review.gs + 管理者 Catalog API）— **MVP 完成** | ✅ 完成（2026-05-30） |
 | Phase 3 | 前端介面（Index / Submit / Records / Admin）— 擴展 | ✅ 完成（2026-05-30） |
 | Phase 4 | 整合收尾（Hub 同步 / 觸發器 / 通知系統）— 維運就緒 | ✅ 完成（2026-05-30） |
-| **UAT** | 端對端驗收測試（T1–T9）— T1 ✅ | 🔲 進行中 |
+| **UAT** | 端對端驗收測試（T1–T9）— T1–T4 ✅ | 🔲 進行中 |
 
 ### 已部署系統常數
 | 常數 | 說明 |

@@ -17,9 +17,7 @@ function reviewRecord(reviewerId, body) {
 
   for (const r of body.records) {
     if (!['APPROVED', 'REJECTED'].includes(r.status)) return _err('狀態值無效，只接受 APPROVED 或 REJECTED。');
-    if (r.status === 'REJECTED' && (!r.reviewNote || r.reviewNote.length < 10)) {
-      return _err('退件原因至少需填寫 10 個字。');
-    }
+    if (r.status === 'REJECTED' && !r.reviewNote) return _err('退件原因不可為空。');
   }
 
   const schema      = SHEET_SCHEMA.TRAINING_RECORD;
@@ -40,23 +38,28 @@ function reviewRecord(reviewerId, body) {
     body.records.forEach(r => { updateMap[r.recordId] = r; });
 
     const now = _now();
+    let updatedCount = 0;
+    // 直接更新命中列的 4 個欄位（status/reviewedBy/reviewNote/reviewedAt 為連續欄）
+    // 避免 clearContents + 全表 setValues 因混有 Date 物件導致隱性失敗
     for (let i = 1; i < data.length; i++) {
-      const row    = data[i];
-      const update = updateMap[row[idIdx]];
+      const update = updateMap[String(data[i][idIdx]).trim()];
       if (!update) continue;
-      row[statusIdx]   = update.status;
-      row[reviewerIdx] = reviewerId;
-      row[noteIdx]     = update.reviewNote || '';
-      row[atIdx]       = now;
+      sheet.getRange(i + 1, statusIdx + 1, 1, 4).setValues([[
+        update.status,
+        reviewerId,
+        update.reviewNote || '',
+        now
+      ]]);
+      updatedCount++;
     }
 
-    sheet.clearContents();
-    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    if (updatedCount === 0) return _err('RECORD_NOT_FOUND');
+    SpreadsheetApp.flush();
 
     body.records.forEach(r => {
       SchoolPortalLib.logAction(reviewerId, 'REVIEW_' + r.status, r.recordId);
     });
-    return { success: true, reviewed: body.records.length };
+    return { success: true, reviewed: updatedCount };
   } finally {
     lock.releaseLock();
   }
