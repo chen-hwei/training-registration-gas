@@ -182,6 +182,7 @@
 | `HUB_SPREADSHEET_ID` | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ` |
 | `LOG_SPREADSHEET_ID` | `1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM` |
 | `SchoolPortalLib ID` | `1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` |
+| `WEB_APP_BASE_URL` | `https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec` |
 
 ### ⚠️ 正確的系統網址（Google Workspace 域專用）
 
@@ -190,6 +191,17 @@ https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF3
 ```
 
 > **必須使用含 `/a/macros/zlsh.tp.edu.tw/` 的 Workspace 域 URL**，才能讓頁面導覽（`?page=admin` 等相對路徑）停在 `script.google.com` 域下，避免被轉址至 `googleusercontent.com` 造成 localStorage Token 失效（白屏問題）。
+
+### 🐛 UAT 環境修復紀錄（2026-05-30）
+
+UAT 啟動時發現並修復下列 GAS 環境地雷，**這些問題不會出現在一般 Web 開發，但在 GAS iframe 沙箱中必定踩到**：
+
+| 症狀 | 根本原因 | 修復位置 |
+|---|---|---|
+| 點選導覽連結後白屏，URL 變 `googleusercontent.com` | 所有 `window.top.location.href = '?page=X'` 使用相對路徑；當 `window.top` 在 `googleusercontent.com` 時，相對路徑仍留在錯誤域 | `config.html` 新增 `_navigate()` 函式，從 `doGet()` 注入絕對 `APP_BASE_URL` 至各頁面 |
+| 頁面完全白屏（無藍色頁首），API 靜默失敗 | `getValues()` 對日期格式儲存格回傳 JS `Date` 物件；`google.script.run` postMessage 無法序列化 `Date`，`withSuccessHandler` 收到 `null`，例外無法被 `.catch()` 攔截 | `Schema.gs` `parseSheetData` 加入 `instanceof Date` 檢查，以 `Utilities.formatDate()` 轉為字串 |
+| 管理後台「待審核」頁面回傳 FORBIDDEN | `SchoolPortalLib.getUser().systemAccess` 可能已是解析後的 JS Object；`JSON.parse(Object)` 拋 SyntaxError，catch 後 `access={}` → `training_admin` 為 `undefined` → 誤判無權限 | `程式碼.gs` Level 2 檢查改為先判斷 `typeof sa === 'object'`，再決定是否需要 `JSON.parse` |
+| 導覽列出現兩個「管理後台」連結 | `Admin.html` 靜態 `<a>` 缺少 `data-admin-link="1"` 屬性；`_renderAdminNav()` 未偵測到已存在的連結，重複插入 | `Admin.html` 靜態連結加入 `data-admin-link="1"` |
 
 ---
 
