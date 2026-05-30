@@ -1,6 +1,15 @@
 {
   "timeZone": "Asia/Taipei",
-  "dependencies": {},
+  "dependencies": {
+    "libraries": [
+      {
+        "userSymbol": "SchoolPortalLib",
+        "libraryId": "1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS",
+        "version": "0",
+        "developmentMode": true
+      }
+    ]
+  },
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "oauthScopes": [

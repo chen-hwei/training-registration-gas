@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>研習登錄系統 — 我的紀錄</title>
+  <?!= include('style') ?>
+</head>
+<body>
+  <?!= include('config') ?>
+
+  <!-- ── 頁首 ── -->
+  <div class="app-header">
+    <h1>🏫 研習登錄系統</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0">
+      <span id="user-name-display"></span>
+      <div class="font-size-toggle">
+        <button class="font-btn" data-size="small"  onclick="setFontSize('small')">小</button>
+        <button class="font-btn" data-size="medium" onclick="setFontSize('medium')">中</button>
+        <button class="font-btn" data-size="large"  onclick="setFontSize('large')">大</button>
+      </div>
+      <button class="btn btn-sm"
+        style="border:1px solid rgba(255,255,255,.5);color:#fff;background:transparent;min-height:36px"
+        onclick="logout()">登出</button>
+    </div>
+  </div>
+
+  <!-- ── 導航列 ── -->
+  <nav class="app-nav">
+    <a class="nav-link" onclick="window.top.location.href='?page=index'">公告課程</a>
+    <a class="nav-link" onclick="window.top.location.href='?page=submit'">登錄研習</a>
+    <a class="nav-link active">我的紀錄</a>
+  </nav>
+
+  <!-- ── 主內容 ── -->
+  <div class="main-content">
+
+    <!-- 標籤頁 -->
+    <div class="tab-bar">
+      <button id="tab-PENDING"  class="tab-btn active" onclick="switchTab('PENDING')">
+        待審中 <span id="cnt-pending"  class="tab-count">0</span>
+      </button>
+      <button id="tab-APPROVED" class="tab-btn" onclick="switchTab('APPROVED')">
+        已核准 <span id="cnt-approved" class="tab-count" style="background:var(--success)">0</span>
+      </button>
+      <button id="tab-REJECTED" class="tab-btn" onclick="switchTab('REJECTED')">
+        已退件 <span id="cnt-rejected" class="tab-count" style="background:var(--danger)">0</span>
+      </button>
+    </div>
+
+    <!-- 紀錄列表 -->
+    <div id="records-container"></div>
+
+    <!-- 分頁 -->
+    <div id="pagination-container" class="pagination"></div>
+
+    <!-- 底部快速登錄入口 -->
+    <div style="text-align:center;padding:8px 0 24px">
+      <button class="btn btn-sm btn-outline"
+              onclick="window.top.location.href='?page=submit'">
+        ＋ 登錄新研習
+      </button>
+    </div>
+  </div>
+
+  <script>
+  var _allRecords = [];
+  var _activeTab  = 'PENDING';
+  var _curPage    = 1;
+  var _pageSize   = 10;
+
+  /* ── 登入成功後載入 ── */
+  function onLoginSuccess() { _loadRecords(); }
+
+  function _loadRecords() {
+    showSpinner();
+    api('v1/getMyRecords', {})
+      .then(function(res) {
+        hideSpinner();
+        _allRecords = (res && res.data) ? res.data : [];
+        // 依送出時間由新到舊排序
+        _allRecords.sort(function(a, b) {
+          return (b.submittedAt || '').localeCompare(a.submittedAt || '');
+        });
+        _updateTabCounts();
+        _renderTab();
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          document.getElementById('records-container').innerHTML =
+            '<div class="empty-state"><div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
+        }
+      });
+  }
+
+  function _updateTabCounts() {
+    var p = 0, a = 0, r = 0;
+    _allRecords.forEach(function(rec) {
+      if (rec.status === 'PENDING')  p++;
+      if (rec.status === 'APPROVED') a++;
+      if (rec.status === 'REJECTED') r++;
+    });
+    document.getElementById('cnt-pending').textContent  = p;
+    document.getElementById('cnt-approved').textContent = a;
+    document.getElementById('cnt-rejected').textContent = r;
+  }
+
+  /* ── 標籤切換 ── */
+  function switchTab(tab) {
+    _activeTab = tab;
+    _curPage   = 1;
+    ['PENDING','APPROVED','REJECTED'].forEach(function(t) {
+      document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    });
+    _renderTab();
+  }
+
+  /* ── 渲染紀錄列表 ── */
+  function _renderTab() {
+    var filtered = _allRecords.filter(function(r) { return r.status === _activeTab; });
+    var totalPages = Math.max(1, Math.ceil(filtered.length / _pageSize));
+    if (_curPage > totalPages) _curPage = 1;
+
+    var pageItems = filtered.slice(
+      (_curPage - 1) * _pageSize,
+      _curPage * _pageSize
+    );
+
+    var container = document.getElementById('records-container');
+    if (!pageItems.length) {
+      var emojis   = { PENDING:'⏳', APPROVED:'✅', REJECTED:'📋' };
+      var labels   = { PENDING:'待審中', APPROVED:'已核准', REJECTED:'已退件' };
+      container.innerHTML =
+        '<div class="empty-state">' +
+        '<div class="ei">' + (emojis[_activeTab] || '📋') + '</div>' +
+        '<p>目前無' + (labels[_activeTab] || '') + '的研習紀錄。</p></div>';
+    } else {
+      container.innerHTML = pageItems.map(function(r) {
+        return _renderCard(r);
+      }).join('');
+    }
+
+    renderPagination('pagination-container', _curPage, totalPages, 'goPage');
+  }
+
+  function _renderCard(r) {
+    var statusMap = { PENDING:'待審中', APPROVED:'已核准', REJECTED:'已退件' };
+    var label = statusMap[r.status] || r.status;
+
+    /* 操作按鈕 */
+    var actions = '';
+    if (r.status === 'PENDING') {
+      actions +=
+        '<button class="btn btn-sm btn-outline"' +
+        ' style="border-color:var(--danger);color:var(--danger)"' +
+        ' onclick="deleteRecord(' + JSON.stringify(r.recordId) + ')">🗑 刪除此筆</button>';
+    }
+    if (r.status === 'REJECTED') {
+      actions +=
+        '<button class="btn btn-sm btn-primary"' +
+        ' onclick="resubmit(' + JSON.stringify(r.recordId) + ')">✏️ 重新送出</button>';
+    }
+
+    /* 退件原因區塊 */
+    var rejectBox = '';
+    if (r.status === 'REJECTED' && r.reviewNote) {
+      rejectBox =
+        '<div class="reject-reason">💬 <strong>退件原因：</strong>' +
+        _e(r.reviewNote) + '</div>';
+    }
+
+    /* 核准時間 */
+    var approvedInfo = '';
+    if (r.status === 'APPROVED' && r.reviewedAt) {
+      approvedInfo =
+        '<div style="font-size:0.78rem;color:var(--success);margin-top:4px">' +
+        '✅ 核准時間：' + fmtTs(r.reviewedAt) + '</div>';
+    }
+
+    /* 自訂課程標記 */
+    var customBadge = r.isCustom
+      ? '<span style="font-size:0.70rem;background:var(--gray-200);color:var(--gray-700);' +
+        'border-radius:999px;padding:2px 8px;margin-left:6px;vertical-align:middle">自訂</span>'
+      : '';
+
+    return '<div class="record-card ' + r.status + '">' +
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-wrap:wrap">' +
+        '<div class="rc-title">' + _e(r.title) + customBadge + '</div>' +
+        '<span class="status-badge status-' + r.status + '">' + label + '</span>' +
+      '</div>' +
+      '<div class="rc-meta">' +
+        '📅 ' + _e(r.trainingDate || '─') +
+        ' &nbsp; ⏱ ' + (r.hours != null ? r.hours : '─') + ' 小時' +
+        (r.organizer ? ' &nbsp; 🏛 ' + _e(r.organizer) : '') +
+      '</div>' +
+      '<div class="rc-meta">🕐 送出：' + fmtTs(r.submittedAt) + '</div>' +
+      rejectBox +
+      approvedInfo +
+      (actions ? '<div class="rc-actions">' + actions + '</div>' : '') +
+      '</div>';
+  }
+
+  /* ── 分頁跳轉 ── */
+  function goPage(page) {
+    _curPage = page;
+    _renderTab();
+    window.scrollTo(0, 0);
+  }
+
+  /* ── 刪除 PENDING 紀錄 ── */
+  function deleteRecord(recordId) {
+    showConfirmModal(
+      '確認刪除',
+      '<p style="font-size:0.90rem">確定要刪除這筆<strong>待審中</strong>的研習紀錄嗎？</p>' +
+      '<p style="font-size:0.82rem;color:var(--danger);margin-top:8px">此操作無法復原。</p>',
+      '確認刪除',
+      function() {
+        showSpinner();
+        api('v1/deleteRecord', { recordId: recordId })
+          .then(function() {
+            hideSpinner();
+            showToast('已刪除', 'success');
+            _loadRecords();
+          })
+          .catch(function(err) {
+            hideSpinner();
+            if (err && err.message !== 'TOKEN_EXPIRED') {
+              showToast('刪除失敗：' + (err.message || '請稍後再試'), 'error');
+            }
+          });
+      },
+      'btn-danger'
+    );
+  }
+
+  /* ── 重新送出（跳至 Submit.html 並帶入退件紀錄 ID）── */
+  function resubmit(recordId) {
+    window.top.location.href = '?page=submit&resubmit=' + encodeURIComponent(recordId);
+  }
+
+  function _e(s) {
+    return String(s || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── 初始化 ── */
+  document.addEventListener('DOMContentLoaded', function() {
+    var ok = initPage();
+    if (ok) _loadRecords();
+  });
+
+  /* ── GAS Warden 作用域隔離修正 ── */
+  window.onLoginSuccess = onLoginSuccess;
+  window.switchTab      = switchTab;
+  window.goPage         = goPage;
+  window.deleteRecord   = deleteRecord;
+  window.resubmit       = resubmit;
+  </script>
+</body>
+</html>

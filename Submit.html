@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>研習登錄系統 — 登錄研習</title>
+  <?!= include('style') ?>
+</head>
+<body>
+  <?!= include('config') ?>
+
+  <!-- ── 頁首 ── -->
+  <div class="app-header">
+    <h1>🏫 研習登錄系統</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0">
+      <span id="user-name-display"></span>
+      <div class="font-size-toggle">
+        <button class="font-btn" data-size="small"  onclick="setFontSize('small')">小</button>
+        <button class="font-btn" data-size="medium" onclick="setFontSize('medium')">中</button>
+        <button class="font-btn" data-size="large"  onclick="setFontSize('large')">大</button>
+      </div>
+      <button class="btn btn-sm"
+        style="border:1px solid rgba(255,255,255,.5);color:#fff;background:transparent;min-height:36px"
+        onclick="logout()">登出</button>
+    </div>
+  </div>
+
+  <!-- ── 導航列 ── -->
+  <nav class="app-nav">
+    <a class="nav-link" onclick="window.top.location.href='?page=index'">公告課程</a>
+    <a class="nav-link active">登錄研習</a>
+    <a class="nav-link" onclick="window.top.location.href='?page=records'">我的紀錄</a>
+  </nav>
+
+  <!-- ── 主內容 ── -->
+  <div class="main-content">
+
+    <!-- 重新送出提示橫幅 -->
+    <div id="resubmit-banner" class="hidden"
+      style="background:var(--warning-bg);border:1px solid var(--warning);border-radius:var(--radius);
+             padding:12px 16px;margin-bottom:16px;font-size:0.86rem;color:#856404">
+      📝 <strong>重新送出模式</strong>：以下已預填原有資料，請確認後選擇是否沿用原證明檔案。
+    </div>
+
+    <!-- ① 選擇課程方式 -->
+    <div class="card">
+      <div class="card-title">① 選擇課程方式</div>
+
+      <!-- 模式切換 -->
+      <div style="display:flex;border:2px solid var(--gray-300);border-radius:var(--radius);
+                  overflow:hidden;margin-bottom:16px">
+        <button id="mode-btn-catalog"
+          style="flex:1;padding:12px;font-size:0.88rem;font-weight:600;cursor:pointer;
+                 border:none;min-height:48px;transition:all .15s"
+          onclick="setMode('catalog')">從研習目錄選擇</button>
+        <button id="mode-btn-custom"
+          style="flex:1;padding:12px;font-size:0.88rem;font-weight:600;cursor:pointer;
+                 border:none;border-left:2px solid var(--gray-300);min-height:48px;transition:all .15s"
+          onclick="setMode('custom')">自訂課程</button>
+      </div>
+
+      <!-- 目錄選擇區 -->
+      <div id="section-catalog">
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">選擇研習課程 <span class="req">*</span></label>
+          <select id="catalog-select" class="form-control" onchange="onCatalogSelect()">
+            <option value="">— 載入中，請稍候 —</option>
+          </select>
+          <div class="form-hint">選擇後將自動帶入課程資料</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ② 填寫研習資料 -->
+    <div class="card">
+      <div class="card-title">② 填寫研習資料</div>
+
+      <div class="form-group">
+        <label class="form-label">研習名稱 <span class="req">*</span></label>
+        <input id="field-title" type="text" class="form-control" placeholder="請輸入研習名稱">
+        <div id="hint-title-auto" class="form-hint hidden">✦ 由課程目錄自動帶入</div>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1;min-width:0">
+          <label class="form-label">研習時數 <span class="req">*</span></label>
+          <input id="field-hours" type="number" min="0.5" step="0.5"
+                 class="form-control" placeholder="例：6">
+        </div>
+        <div class="form-group" style="flex:2;min-width:0">
+          <label class="form-label">研習日期 <span class="req">*</span></label>
+          <input id="field-date" type="date" class="form-control">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label class="form-label">主辦單位 <span class="req">*</span></label>
+        <input id="field-organizer" type="text" class="form-control"
+               placeholder="例：教育部、臺北市教育局、本校">
+      </div>
+    </div>
+
+    <!-- ③ 上傳研習證明 -->
+    <div class="card">
+      <div class="card-title">③ 上傳研習證明</div>
+
+      <!-- 沿用舊檔案選項（重新送出時才顯示） -->
+      <div id="reuse-section" class="hidden" style="margin-bottom:16px">
+        <div style="font-size:0.86rem;font-weight:600;color:var(--gray-700);margin-bottom:8px">
+          請選擇證明檔案方式：
+        </div>
+        <label id="opt-reuse-box"
+          style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+                 border:2px solid var(--gray-300);border-radius:var(--radius);
+                 cursor:pointer;margin-bottom:8px;transition:border-color .15s">
+          <input type="radio" name="file-opt" id="opt-reuse" value="reuse"
+                 onchange="onFileOptChange()" style="width:20px;height:20px;cursor:pointer">
+          <div>
+            <div style="font-weight:600;font-size:0.88rem">沿用上次上傳的證明</div>
+            <div id="reuse-filename" style="font-size:0.78rem;color:var(--gray-500);margin-top:2px">─</div>
+          </div>
+        </label>
+        <label id="opt-upload-box"
+          style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+                 border:2px solid var(--primary);border-radius:var(--radius);
+                 cursor:pointer;transition:border-color .15s">
+          <input type="radio" name="file-opt" id="opt-upload" value="upload"
+                 onchange="onFileOptChange()" checked
+                 style="width:20px;height:20px;cursor:pointer">
+          <div style="font-weight:600;font-size:0.88rem">重新上傳新檔案</div>
+        </label>
+      </div>
+
+      <!-- 檔案上傳區塊 -->
+      <div id="upload-section">
+        <div id="upload-area" class="upload-area"
+             onclick="triggerFileInput()"
+             ondragover="onDragOver(event)"
+             ondragleave="onDragLeave(event)"
+             ondrop="onDrop(event)">
+          <div id="upload-hint">
+            <div style="font-size:2rem;margin-bottom:8px">📄</div>
+            <div style="font-size:0.90rem;font-weight:700;color:var(--primary)">
+              點擊或將檔案拖曳至此處
+            </div>
+            <div class="form-hint" style="margin-top:4px">
+              支援 PDF、JPG、PNG、GIF &nbsp;|&nbsp; 最大 8MB
+            </div>
+            <div class="form-hint">手機拍攝的照片會自動壓縮，無需手動處理</div>
+          </div>
+          <div id="upload-preview" class="hidden"
+               style="font-size:0.88rem;font-weight:700;color:var(--success)">
+            ✅ <span id="upload-filename"></span>
+          </div>
+        </div>
+        <input type="file" id="file-input"
+               accept=".pdf,.jpg,.jpeg,.png,.gif"
+               style="display:none" onchange="onFileSelected()">
+      </div>
+
+      <div id="upload-error"
+           style="color:var(--danger);font-size:0.80rem;margin-top:8px;display:none"></div>
+    </div>
+
+    <!-- ④ 送出 -->
+    <div style="margin-bottom:32px">
+      <button id="submit-btn" class="btn btn-primary btn-block"
+              style="font-size:1rem;padding:14px"
+              onclick="submitRecord()">
+        📤 送出研習登錄
+      </button>
+      <div class="form-hint" style="text-align:center;margin-top:8px">
+        送出後進入待審狀態，請等候處室管理者審核
+      </div>
+    </div>
+  </div>
+
+  <script>
+  /* ── GAS 模板變數（後端於 doGet 注入，已過濾為英數字）── */
+  var INIT_CATALOG_ID  = '<?= initCatalogId ?>';
+  var INIT_RESUBMIT_ID = '<?= initResubmitId ?>';
+
+  var _allCatalog      = [];    // 所有 ACTIVE 課程
+  var _selectedCatalog = null;  // 目前選取的課程物件（目錄模式）
+  var _currentMode     = 'catalog'; // 'catalog' | 'custom'
+  var _resubmitRec     = null;  // 退件紀錄（重新送出模式）
+  var _selectedFile    = null;  // 使用者選取的 File 物件
+
+  /* ── 登入成功後初始化 ── */
+  function onLoginSuccess() { _init(); }
+
+  function _init() {
+    _loadCatalog();
+  }
+
+  /* ── 載入課程目錄 ── */
+  function _loadCatalog() {
+    api('v1/getCatalog', {})
+      .then(function(res) {
+        _allCatalog = (res && res.data) ? res.data : [];
+        _buildCatalogSelect();
+
+        if (INIT_RESUBMIT_ID) {
+          _loadResubmitData();   // 重新送出模式
+        } else if (INIT_CATALOG_ID) {
+          setMode('catalog');
+          _preselectCatalog(INIT_CATALOG_ID); // 從課程頁跳來
+        } else {
+          setMode('catalog');    // 預設目錄模式
+        }
+      })
+      .catch(function() {
+        showToast('課程目錄載入失敗，請重新整理頁面', 'error');
+      });
+  }
+
+  function _buildCatalogSelect() {
+    var sel = document.getElementById('catalog-select');
+    var opts = '<option value="">— 請選擇研習課程 —</option>';
+    _allCatalog.forEach(function(c) {
+      opts += '<option value="' + c.catalogId + '">' +
+        _e(c.title) + '（' + c.hours + ' 小時）</option>';
+    });
+    sel.innerHTML = opts;
+  }
+
+  function _preselectCatalog(catalogId) {
+    var sel = document.getElementById('catalog-select');
+    sel.value = catalogId;
+    onCatalogSelect();
+  }
+
+  /* ── 載入退件紀錄（重新送出模式）── */
+  function _loadResubmitData() {
+    showSpinner();
+    api('v1/getMyRecords', {})
+      .then(function(res) {
+        hideSpinner();
+        var records = (res && res.data) ? res.data : [];
+        var rec = null;
+        for (var i = 0; i < records.length; i++) {
+          if (records[i].recordId === INIT_RESUBMIT_ID) { rec = records[i]; break; }
+        }
+        if (!rec || rec.status !== 'REJECTED') {
+          showToast('找不到退件紀錄，請重新操作', 'error');
+          return;
+        }
+        _resubmitRec = rec;
+
+        // 顯示重新送出橫幅
+        document.getElementById('resubmit-banner').classList.remove('hidden');
+
+        // 預填課程資料
+        if (rec.catalogId) {
+          setMode('catalog');
+          _preselectCatalog(rec.catalogId);
+        } else {
+          setMode('custom');
+          document.getElementById('field-title').value    = rec.title    || '';
+          document.getElementById('field-hours').value    = rec.hours    || '';
+          document.getElementById('field-organizer').value= rec.organizer|| '';
+        }
+
+        // 預填日期（YYYY/M/D → YYYY-MM-DD for date input）
+        if (rec.trainingDate) {
+          var parts = rec.trainingDate.split('/');
+          if (parts.length === 3) {
+            var y = parts[0];
+            var m = String(parseInt(parts[1])).padStart(2, '0');
+            var d = String(parseInt(parts[2])).padStart(2, '0');
+            document.getElementById('field-date').value = y + '-' + m + '-' + d;
+          }
+        }
+
+        // 顯示沿用舊檔案選項
+        if (rec.fileId && rec.fileName) {
+          document.getElementById('reuse-section').classList.remove('hidden');
+          document.getElementById('reuse-filename').textContent =
+            '📎 ' + rec.fileName;
+          // 預設選「沿用」
+          document.getElementById('opt-reuse').checked  = true;
+          document.getElementById('opt-upload').checked = false;
+          onFileOptChange();
+        }
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          showToast('載入退件資料失敗', 'error');
+        }
+      });
+  }
+
+  /* ── 模式切換 ── */
+  function setMode(mode) {
+    _currentMode = mode;
+    var isCatalog = (mode === 'catalog');
+
+    // 按鈕視覺
+    var btnC = document.getElementById('mode-btn-catalog');
+    var btnX = document.getElementById('mode-btn-custom');
+    if (isCatalog) {
+      btnC.style.background = 'var(--primary)'; btnC.style.color = '#fff';
+      btnX.style.background = '#fff'; btnX.style.color = 'var(--primary)';
+    } else {
+      btnC.style.background = '#fff'; btnC.style.color = 'var(--primary)';
+      btnX.style.background = 'var(--primary)'; btnX.style.color = '#fff';
+    }
+
+    // 區塊顯示
+    document.getElementById('section-catalog').style.display = isCatalog ? '' : 'none';
+
+    // 欄位鎖定狀態
+    if (!isCatalog) {
+      // 自訂模式：解鎖所有欄位，清空目錄選擇
+      _selectedCatalog = null;
+      document.getElementById('catalog-select').value = '';
+      document.getElementById('field-title').disabled    = false;
+      document.getElementById('field-hours').disabled    = false;
+      document.getElementById('field-organizer').disabled= false;
+      document.getElementById('hint-title-auto').classList.add('hidden');
+    } else {
+      // 目錄模式：若已選課程則鎖定
+      if (_selectedCatalog) {
+        _lockCatalogFields(_selectedCatalog);
+      }
+    }
+  }
+
+  function onCatalogSelect() {
+    var catalogId = document.getElementById('catalog-select').value;
+    if (!catalogId) {
+      _selectedCatalog = null;
+      _unlockFields();
+      document.getElementById('field-title').value     = '';
+      document.getElementById('field-hours').value     = '';
+      document.getElementById('field-organizer').value = '';
+      document.getElementById('hint-title-auto').classList.add('hidden');
+      return;
+    }
+    for (var i = 0; i < _allCatalog.length; i++) {
+      if (_allCatalog[i].catalogId === catalogId) {
+        _selectedCatalog = _allCatalog[i];
+        _lockCatalogFields(_allCatalog[i]);
+        return;
+      }
+    }
+  }
+
+  function _lockCatalogFields(c) {
+    document.getElementById('field-title').value     = c.title    || '';
+    document.getElementById('field-hours').value     = c.hours    || '';
+    document.getElementById('field-organizer').value = c.organizer|| '';
+    document.getElementById('field-title').disabled    = true;
+    document.getElementById('field-hours').disabled    = true;
+    document.getElementById('field-organizer').disabled= true;
+    document.getElementById('hint-title-auto').classList.remove('hidden');
+  }
+
+  function _unlockFields() {
+    document.getElementById('field-title').disabled    = false;
+    document.getElementById('field-hours').disabled    = false;
+    document.getElementById('field-organizer').disabled= false;
+  }
+
+  /* ── 沿用 / 重新上傳 切換 ── */
+  function onFileOptChange() {
+    var reuseChecked = document.getElementById('opt-reuse').checked;
+    document.getElementById('upload-section').style.display = reuseChecked ? 'none' : '';
+    document.getElementById('opt-reuse-box').style.borderColor =
+      reuseChecked ? 'var(--primary)' : 'var(--gray-300)';
+    document.getElementById('opt-upload-box').style.borderColor =
+      reuseChecked ? 'var(--gray-300)' : 'var(--primary)';
+    if (reuseChecked) _selectedFile = null;
+  }
+
+  /* ── 檔案上傳互動 ── */
+  function triggerFileInput() {
+    document.getElementById('file-input').click();
+  }
+
+  function onFileSelected() {
+    var input = document.getElementById('file-input');
+    if (input.files && input.files[0]) _setFile(input.files[0]);
+  }
+
+  function onDragOver(e) {
+    e.preventDefault();
+    document.getElementById('upload-area').classList.add('dragover');
+  }
+
+  function onDragLeave(e) {
+    document.getElementById('upload-area').classList.remove('dragover');
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    document.getElementById('upload-area').classList.remove('dragover');
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files[0]) _setFile(files[0]);
+  }
+
+  function _setFile(f) {
+    var allowed = ['application/pdf','image/jpeg','image/png','image/gif'];
+    if (allowed.indexOf(f.type) === -1) {
+      _showUploadError('僅支援 PDF、JPG、PNG、GIF 格式，請重新選擇。');
+      return;
+    }
+    _selectedFile = f;
+    _clearUploadError();
+    var area = document.getElementById('upload-area');
+    area.classList.add('has-file');
+    area.classList.remove('dragover');
+    document.getElementById('upload-hint').classList.add('hidden');
+    document.getElementById('upload-preview').classList.remove('hidden');
+    document.getElementById('upload-filename').textContent =
+      f.name + '（' + (f.size / 1024 / 1024).toFixed(2) + ' MB）';
+  }
+
+  function _showUploadError(msg) {
+    var el = document.getElementById('upload-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function _clearUploadError() {
+    var el = document.getElementById('upload-error');
+    el.style.display = 'none';
+    el.textContent = '';
+  }
+
+  /* ── 表單送出 ── */
+  function submitRecord() {
+    _clearUploadError();
+    var title     = document.getElementById('field-title').value.trim();
+    var hoursStr  = document.getElementById('field-hours').value;
+    var dateStr   = document.getElementById('field-date').value;
+    var organizer = document.getElementById('field-organizer').value.trim();
+    var hours     = parseFloat(hoursStr);
+
+    // 基本驗證
+    if (!title)                        { showToast('請填寫研習名稱', 'error'); return; }
+    if (!hoursStr || isNaN(hours) || hours <= 0) { showToast('請填寫正確的研習時數（正整數或 0.5 倍數）', 'error'); return; }
+    if (!dateStr)                      { showToast('請選擇研習日期', 'error'); return; }
+    if (!organizer)                    { showToast('請填寫主辦單位', 'error'); return; }
+
+    // 日期轉換：YYYY-MM-DD → YYYY/M/D
+    var dp = dateStr.split('-');
+    var trainingDate = parseInt(dp[0]) + '/' + parseInt(dp[1]) + '/' + parseInt(dp[2]);
+
+    // 判斷沿用舊檔案
+    var reuseChecked = false;
+    var reuseEl = document.getElementById('opt-reuse');
+    if (reuseEl && document.getElementById('reuse-section') &&
+        !document.getElementById('reuse-section').classList.contains('hidden')) {
+      reuseChecked = reuseEl.checked;
+    }
+
+    var body = {
+      catalogId:    (_currentMode === 'catalog' && _selectedCatalog)
+                    ? _selectedCatalog.catalogId : '',
+      title:        title,
+      hours:        hours,
+      isCustom:     _currentMode === 'custom',
+      trainingDate: trainingDate,
+      organizer:    organizer
+    };
+
+    if (reuseChecked && _resubmitRec && _resubmitRec.fileId) {
+      // 沿用舊檔案：直接送出（不需壓縮 / base64）
+      body.reuseFileId = _resubmitRec.fileId;
+      body.fileName    = _resubmitRec.fileName;
+      _doSubmit(body);
+    } else {
+      // 新上傳檔案：壓縮後轉 base64
+      if (!_selectedFile) {
+        _showUploadError('請選擇研習證明檔案。');
+        return;
+      }
+      showSpinner();
+      prepareFileForUpload(_selectedFile)
+        .then(function(fileObj) {
+          body.base64    = fileObj.base64;
+          body.mimeType  = fileObj.mimeType;
+          body.fileName  = fileObj.fileName;
+          _doSubmit(body);
+        })
+        .catch(function(err) {
+          hideSpinner();
+          _showUploadError(err && err.message ? err.message : '檔案處理失敗，請重試或換一個檔案。');
+        });
+    }
+  }
+
+  function _doSubmit(body) {
+    showSpinner();
+    var btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.textContent = '送出中…';
+
+    api('v1/submitRecord', body)
+      .then(function(res) {
+        hideSpinner();
+        btn.disabled = false;
+        btn.textContent = '📤 送出研習登錄';
+        if (res && res.success) {
+          showToast('✅ 登錄成功！請等候管理者審核。', 'success');
+          setTimeout(function() { window.top.location.href = '?page=records'; }, 2000);
+        } else {
+          showToast((res && res.error) || '送出失敗，請稍後再試', 'error');
+        }
+      })
+      .catch(function(err) {
+        hideSpinner();
+        btn.disabled = false;
+        btn.textContent = '📤 送出研習登錄';
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          showToast(err.message || '系統錯誤，請稍後再試', 'error');
+        }
+      });
+  }
+
+  function _e(s) {
+    return String(s || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── 初始化 ── */
+  document.addEventListener('DOMContentLoaded', function() {
+    var ok = initPage();
+    if (ok) _init();
+  });
+
+  /* ── GAS Warden 作用域隔離修正 ── */
+  window.onLoginSuccess  = onLoginSuccess;
+  window.setMode         = setMode;
+  window.onCatalogSelect = onCatalogSelect;
+  window.onFileOptChange = onFileOptChange;
+  window.triggerFileInput= triggerFileInput;
+  window.onFileSelected  = onFileSelected;
+  window.onDragOver      = onDragOver;
+  window.onDragLeave     = onDragLeave;
+  window.onDrop          = onDrop;
+  window.submitRecord    = submitRecord;
+  </script>
+</body>
+</html>

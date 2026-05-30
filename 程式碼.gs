@@ -1,15 +1,15 @@
 // ==================== Web App 入口點 ====================
 
 function doGet(e) {
-  const page = (e.parameter && e.parameter.page) || 'index';
-  const pageMap = {
-    'index':   'Index',
-    'submit':  'Submit',
-    'records': 'Records',
-    'admin':   'Admin'
-  };
+  const page    = (e.parameter && e.parameter.page) || 'index';
+  const pageMap = { 'index': 'Index', 'submit': 'Submit', 'records': 'Records', 'admin': 'Admin' };
   const tmplName = pageMap[page] || 'Index';
   const template = HtmlService.createTemplateFromFile(tmplName);
+
+  // 將 URL 參數傳入模板（sanitized：僅允許英數字）
+  template.initCatalogId  = (e.parameter && e.parameter.catalog  || '').replace(/[^A-Za-z0-9]/g, '');
+  template.initResubmitId = (e.parameter && e.parameter.resubmit || '').replace(/[^A-Za-z0-9]/g, '');
+
   return template.evaluate()
     .setTitle('研習登錄系統 — 中崙高中')
     .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
@@ -39,6 +39,18 @@ function handleRequest(payload) {
   const { action, token, body } = payload || {};
 
   if (!action) return _err('MISSING_ACTION');
+
+  // ── 公開路由（無需 Token）──
+  if (action === 'login') {
+    return SchoolPortalLib.login((body || {}).userId, (body || {}).pin);
+  }
+  if (action === 'getTeachers') {
+    return { success: true, data: SchoolPortalLib.getTeachers() };
+  }
+  if (action === 'logout') {
+    SchoolPortalLib.revokeToken(token);
+    return { success: true };
+  }
 
   // ── Level 1：驗證 Token ──
   const session = SchoolPortalLib.verifyToken(token);

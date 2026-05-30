@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>研習登錄系統 — 管理後台</title>
+  <?!= include('style') ?>
+  <style>
+  /* 管理後台補充樣式 */
+  .review-row-meta  { font-size:0.78rem; color:var(--gray-700); line-height:1.9; }
+  .review-row-title { font-size:0.92rem; font-weight:700; color:var(--gray-900); margin-bottom:3px; }
+  .select-all-bar {
+    display:flex; gap:8px; align-items:center;
+    padding:10px 14px;
+    background:var(--primary-bg);
+    border-radius:var(--radius);
+    margin-bottom:12px;
+    flex-wrap:wrap;
+  }
+  .catalog-admin-row {
+    background:#fff; border-radius:var(--radius); box-shadow:var(--shadow);
+    padding:12px 16px; margin-bottom:10px;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    gap:12px; flex-wrap:wrap;
+  }
+  .catalog-admin-info { flex:1; min-width:0; }
+  .catalog-admin-actions { display:flex; gap:8px; flex-shrink:0; flex-wrap:wrap; }
+  .notif-preview-card {
+    background:var(--warning-bg); border:1px solid var(--warning);
+    border-radius:var(--radius); padding:12px 14px; margin-bottom:8px;
+    font-size:0.84rem;
+  }
+  </style>
+</head>
+<body>
+  <?!= include('config') ?>
+
+  <!-- ── 退件原因 Modal（自訂，含驗證）── -->
+  <div id="reject-modal"
+    style="position:fixed;inset:0;background:rgba(0,0,0,0.5);
+           display:flex;align-items:center;justify-content:center;
+           z-index:1020;padding:16px;display:none">
+    <div style="background:#fff;border-radius:12px;padding:24px;
+                width:100%;max-width:460px;box-shadow:var(--shadow-md)">
+      <div style="font-size:1rem;font-weight:700;color:var(--danger);margin-bottom:6px">退件說明</div>
+      <div id="reject-modal-target"
+           style="font-size:0.82rem;color:var(--gray-700);margin-bottom:14px"></div>
+      <div class="form-group">
+        <label class="form-label">退件原因 <span class="req">*</span>（至少 10 字）</label>
+        <textarea id="reject-note-input" class="form-control" rows="4"
+          placeholder="請詳細說明退件原因，例如：證明文件模糊、研習日期與課程不符、未完整蓋章…"></textarea>
+      </div>
+      <div id="reject-note-err"
+           style="color:var(--danger);font-size:0.80rem;margin-bottom:10px;display:none"></div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-sm btn-outline" onclick="closeRejectModal()">取消</button>
+        <button class="btn btn-sm btn-danger" onclick="confirmReject()">確認退件</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 課程編輯 Modal ── -->
+  <div id="catalog-modal"
+    style="position:fixed;inset:0;background:rgba(0,0,0,0.5);
+           display:none;align-items:flex-start;justify-content:center;
+           z-index:1020;padding:16px;overflow-y:auto">
+    <div style="background:#fff;border-radius:12px;padding:24px;
+                width:100%;max-width:560px;box-shadow:var(--shadow-md);
+                margin:auto">
+      <div id="cm-title"
+           style="font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:20px">
+        新增研習課程
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">課程名稱 <span class="req">*</span></label>
+        <input id="cm-ftitle" type="text" class="form-control" placeholder="請輸入課程名稱">
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">研習時數 <span class="req">*</span></label>
+          <input id="cm-fhours" type="number" min="0.5" step="0.5"
+                 class="form-control" placeholder="例：6">
+        </div>
+        <div class="form-group" style="flex:2">
+          <label class="form-label">主辦單位 <span class="req">*</span></label>
+          <input id="cm-forganizer" type="text" class="form-control" placeholder="例：教育部">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">開始日期</label>
+          <input id="cm-fstart" type="date" class="form-control">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">結束日期</label>
+          <input id="cm-fend" type="date" class="form-control">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">推薦處室</label>
+        <input id="cm-fdept" type="text" class="form-control"
+               placeholder="例：教務處、輔導室（留空表示全校）">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">研習對象</label>
+        <input id="cm-faudience" type="text" class="form-control"
+               placeholder="例：全體教師、導師（留空表示不限）">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">相關連結（研習公文或報名頁面）</label>
+        <input id="cm-flink" type="url" class="form-control"
+               placeholder="https://…（選填）">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">課程說明</label>
+        <textarea id="cm-fdesc" class="form-control" rows="3"
+                  placeholder="選填，顯示於課程卡片說明文字"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px">
+          <input type="checkbox" id="cm-frequired"
+                 style="width:22px;height:22px;cursor:pointer">
+          <span style="font-size:0.88rem;font-weight:600">標記為必修課程</span>
+        </label>
+      </div>
+
+      <div id="cm-err"
+           style="color:var(--danger);font-size:0.80rem;margin-top:10px;display:none"></div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+        <button class="btn btn-sm btn-outline" onclick="closeCatalogModal()">取消</button>
+        <button class="btn btn-sm btn-primary" onclick="saveCatalog()">💾 儲存課程</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 頁首 ── -->
+  <div class="app-header">
+    <h1>🏫 研習登錄系統</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0">
+      <span id="user-name-display"></span>
+      <div class="font-size-toggle">
+        <button class="font-btn" data-size="small"  onclick="setFontSize('small')">小</button>
+        <button class="font-btn" data-size="medium" onclick="setFontSize('medium')">中</button>
+        <button class="font-btn" data-size="large"  onclick="setFontSize('large')">大</button>
+      </div>
+      <button class="btn btn-sm"
+        style="border:1px solid rgba(255,255,255,.5);color:#fff;background:transparent;min-height:36px"
+        onclick="logout()">登出</button>
+    </div>
+  </div>
+
+  <!-- ── 導航列 ── -->
+  <nav class="app-nav">
+    <a class="nav-link" onclick="window.top.location.href='?page=index'">公告課程</a>
+    <a class="nav-link" onclick="window.top.location.href='?page=submit'">登錄研習</a>
+    <a class="nav-link" onclick="window.top.location.href='?page=records'">我的紀錄</a>
+    <a class="nav-link active">管理後台</a>
+  </nav>
+
+  <!-- ── 主內容 ── -->
+  <div class="main-content">
+
+    <!-- 管理功能標籤頁 -->
+    <div class="tab-bar">
+      <button id="atab-review"  class="tab-btn active" onclick="switchAdminTab('review')">
+        待審核 <span id="cnt-review" class="tab-count">0</span>
+      </button>
+      <button id="atab-catalog" class="tab-btn" onclick="switchAdminTab('catalog')">
+        研習目錄
+      </button>
+      <button id="atab-notify"  class="tab-btn" onclick="switchAdminTab('notify')">
+        通知預覽
+      </button>
+    </div>
+
+    <!-- ── Tab 1：待審核 ── -->
+    <div id="panel-review">
+      <div class="select-all-bar">
+        <button class="btn btn-sm btn-outline" onclick="toggleSelectAll()">全選 / 取消全選</button>
+        <button class="btn btn-sm btn-success" onclick="batchApprove()">✅ 批次核准選取項目</button>
+        <span id="selected-count" style="font-size:0.80rem;color:var(--gray-700)"></span>
+      </div>
+      <div id="review-list">
+        <div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>
+      </div>
+      <div id="review-pagination" class="pagination"></div>
+    </div>
+
+    <!-- ── Tab 2：研習目錄 ── -->
+    <div id="panel-catalog" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="font-size:0.86rem;color:var(--gray-700)">
+          管理現有研習課程目錄（點擊封存後教師端將不再顯示）
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-outline" onclick="exportRecords()">📥 匯出紀錄 CSV</button>
+          <button class="btn btn-sm btn-primary" onclick="openCatalogModal(null)">＋ 新增課程</button>
+        </div>
+      </div>
+      <div id="catalog-admin-list">
+        <div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>
+      </div>
+    </div>
+
+    <!-- ── Tab 3：通知預覽 ── -->
+    <div id="panel-notify" style="display:none">
+      <div class="card">
+        <div class="card-title">📧 通知系統說明</div>
+        <div style="font-size:0.86rem;color:var(--gray-700);line-height:1.8;margin-bottom:16px">
+          系統提供三種自動通知（N1 提醒 / N2 逾期 / N3 待審），每日 07:00 定時執行。
+          點擊「預覽名單」可查看本次預計發送的通知對象，確認無誤後再點「立即發送」。
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-outline" onclick="previewNotification()">🔍 預覽名單</button>
+          <button class="btn btn-sm btn-primary" onclick="triggerNotification()">📨 立即發送通知</button>
+        </div>
+      </div>
+
+      <div id="notify-preview-result" style="margin-top:16px"></div>
+    </div>
+  </div>
+
+  <script>
+  /* ── 全域狀態 ── */
+  var _reviewRecords  = [];   // 待審紀錄
+  var _catalogRecords = [];   // 課程目錄
+  var _selectedIds    = {};   // { recordId: true }
+  var _reviewPage     = 1;
+  var _reviewPageSize = 15;
+  var _rejectTargetId = null; // 目前正在退件的 recordId
+  var _editCatalogId  = null; // null = 新增；string = 編輯
+
+  /* ── 登入成功後初始化（必須重新驗證管理者身分）── */
+  function onLoginSuccess() {
+    if (!isAdmin()) {
+      showToast('您沒有管理者權限，即將返回首頁', 'error');
+      setTimeout(function(){ window.top.location.href = '?page=index'; }, 1500);
+      return;
+    }
+    // 更新頁首姓名顯示（登入後才有值）
+    var nameEl = document.getElementById('user-name-display');
+    if (nameEl) nameEl.textContent = getUserName() || '';
+    _renderAdminNav();
+    _loadReviews();
+  }
+
+  /* ────────────────────────────────
+     Tab 切換
+  ──────────────────────────────── */
+  function switchAdminTab(tab) {
+    ['review','catalog','notify'].forEach(function(t) {
+      document.getElementById('atab-' + t).classList.toggle('active', t === tab);
+      document.getElementById('panel-' + t).style.display = (t === tab) ? '' : 'none';
+    });
+    if (tab === 'catalog' && _catalogRecords.length === 0) _loadCatalog();
+  }
+
+  /* ────────────────────────────────
+     Tab 1：待審核
+  ──────────────────────────────── */
+  function _loadReviews() {
+    showSpinner();
+    api('v1/admin/getPendingReviews', {})
+      .then(function(res) {
+        hideSpinner();
+        _reviewRecords = (res && res.data) ? res.data : [];
+        // 依送出時間由舊到新（先送先審）
+        _reviewRecords.sort(function(a,b) {
+          return (a.submittedAt || '').localeCompare(b.submittedAt || '');
+        });
+        document.getElementById('cnt-review').textContent = _reviewRecords.length;
+        _selectedIds = {};
+        _renderReviews();
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          document.getElementById('review-list').innerHTML =
+            '<div class="empty-state"><div class="ei">❌</div><p>載入失敗，請重新整理。</p></div>';
+        }
+      });
+  }
+
+  function _renderReviews() {
+    var total = _reviewRecords.length;
+    var totalPages = Math.max(1, Math.ceil(total / _reviewPageSize));
+    if (_reviewPage > totalPages) _reviewPage = 1;
+    var items = _reviewRecords.slice(
+      (_reviewPage - 1) * _reviewPageSize,
+      _reviewPage * _reviewPageSize
+    );
+
+    _updateSelectedCount();
+
+    var list = document.getElementById('review-list');
+    if (!items.length) {
+      list.innerHTML =
+        '<div class="empty-state"><div class="ei">🎉</div>' +
+        '<p>目前沒有待審紀錄，處理完畢！</p></div>';
+    } else {
+      list.innerHTML = items.map(function(r) {
+        return _renderReviewRow(r);
+      }).join('');
+    }
+
+    renderPagination('review-pagination', _reviewPage, totalPages, 'goReviewPage');
+  }
+
+  function _renderReviewRow(r) {
+    var checked  = !!_selectedIds[r.recordId];
+    var checkCls = 'check-box' + (checked ? ' checked' : '');
+    var rowCls   = 'check-row' + (checked ? ' checked' : '');
+    var customBadge = r.isCustom
+      ? '<span style="font-size:0.70rem;background:var(--gray-200);color:var(--gray-700);' +
+        'border-radius:999px;padding:1px 7px;margin-left:4px">自訂</span>'
+      : '';
+
+    return '<div class="' + rowCls + '" id="rrow-' + r.recordId + '">' +
+      /* 勾選框 */
+      '<div class="' + checkCls + '" id="chk-' + r.recordId + '"' +
+      ' onclick="toggleCheck(' + JSON.stringify(r.recordId) + ')">' +
+      (checked ? '✓' : '') +
+      '</div>' +
+      /* 內容 */
+      '<div style="flex:1;min-width:0">' +
+        '<div class="review-row-title">' + _e(r.title) + customBadge + '</div>' +
+        '<div class="review-row-meta">' +
+          '👤 ' + _e(r.userId || '─') +
+          ' &nbsp; 📅 ' + _e(r.trainingDate || '─') +
+          ' &nbsp; ⏱ ' + (r.hours != null ? r.hours : '─') + ' 小時' +
+          (r.organizer ? ' &nbsp; 🏛 ' + _e(r.organizer) : '') +
+        '</div>' +
+        '<div class="review-row-meta">🕐 送出：' + fmtTs(r.submittedAt) + '</div>' +
+      '</div>' +
+      /* 操作按鈕 */
+      '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:100px">' +
+        (r.fileId
+          ? '<button class="btn btn-xs btn-outline" onclick="viewFile(' +
+            JSON.stringify(r.fileId) + ')">📎 查看證明</button>'
+          : '') +
+        '<button class="btn btn-xs btn-success"' +
+        ' onclick="approveOne(' + JSON.stringify(r.recordId) + ')">✅ 核准</button>' +
+        '<button class="btn btn-xs btn-danger"' +
+        ' onclick="openRejectModal(' + JSON.stringify(r.recordId) + ',' +
+        JSON.stringify(r.title) + ',' + JSON.stringify(r.userId) + ')">❌ 退件</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  function goReviewPage(page) {
+    _reviewPage = page;
+    _renderReviews();
+    window.scrollTo(0, 0);
+  }
+
+  /* ── 勾選邏輯 ── */
+  function toggleCheck(recordId) {
+    if (_selectedIds[recordId]) {
+      delete _selectedIds[recordId];
+    } else {
+      _selectedIds[recordId] = true;
+    }
+    var chk = document.getElementById('chk-' + recordId);
+    var row = document.getElementById('rrow-' + recordId);
+    if (chk) {
+      chk.classList.toggle('checked', !!_selectedIds[recordId]);
+      chk.textContent = _selectedIds[recordId] ? '✓' : '';
+    }
+    if (row) row.classList.toggle('checked', !!_selectedIds[recordId]);
+    _updateSelectedCount();
+  }
+
+  function toggleSelectAll() {
+    var page = _reviewRecords.slice(
+      (_reviewPage - 1) * _reviewPageSize,
+      _reviewPage * _reviewPageSize
+    );
+    // 判斷是否全選
+    var allSelected = page.every(function(r) { return !!_selectedIds[r.recordId]; });
+    page.forEach(function(r) {
+      if (allSelected) {
+        delete _selectedIds[r.recordId];
+      } else {
+        _selectedIds[r.recordId] = true;
+      }
+    });
+    _renderReviews();
+  }
+
+  function _updateSelectedCount() {
+    var cnt = Object.keys(_selectedIds).length;
+    document.getElementById('selected-count').textContent =
+      cnt > 0 ? '已選取 ' + cnt + ' 筆' : '';
+  }
+
+  /* ── 單筆核准 ── */
+  function approveOne(recordId) {
+    _doReview([{ recordId: recordId, status: 'APPROVED', reviewNote: '' }],
+      '已核准 1 筆紀錄');
+  }
+
+  /* ── 批次核准 ── */
+  function batchApprove() {
+    var ids = Object.keys(_selectedIds);
+    if (!ids.length) { showToast('請先勾選要核准的紀錄', 'error'); return; }
+    showConfirmModal(
+      '批次核准',
+      '<p>確定要核准已選取的 <strong>' + ids.length + '</strong> 筆研習紀錄嗎？</p>',
+      '確認核准',
+      function() {
+        var records = ids.map(function(id) {
+          return { recordId: id, status: 'APPROVED', reviewNote: '' };
+        });
+        _doReview(records, '已批次核准 ' + ids.length + ' 筆紀錄');
+      },
+      'btn-success'
+    );
+  }
+
+  function _doReview(records, successMsg) {
+    showSpinner();
+    api('v1/admin/reviewRecord', { records: records })
+      .then(function(res) {
+        hideSpinner();
+        if (res && res.success) {
+          showToast('✅ ' + successMsg, 'success');
+          _selectedIds = {};
+          _loadReviews();
+        } else {
+          showToast((res && res.error) || '操作失敗', 'error');
+        }
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          showToast(err.message || '系統錯誤', 'error');
+        }
+      });
+  }
+
+  /* ── 查看證明檔案 ── */
+  function viewFile(fileId) {
+    showSpinner();
+    api('v1/admin/getFileUrl', { fileId: fileId })
+      .then(function(res) {
+        hideSpinner();
+        if (res && res.data && res.data.url) {
+          window.open(res.data.url, '_blank');
+        } else {
+          showToast('無法取得檔案連結', 'error');
+        }
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          showToast('取得檔案失敗', 'error');
+        }
+      });
+  }
+
+  /* ── 退件 Modal ── */
+  function openRejectModal(recordId, title, userId) {
+    _rejectTargetId = recordId;
+    document.getElementById('reject-note-input').value = '';
+    document.getElementById('reject-note-err').style.display = 'none';
+    document.getElementById('reject-modal-target').textContent =
+      '課程：' + (title || '─') + '　教師：' + (userId || '─');
+    document.getElementById('reject-modal').style.display = 'flex';
+  }
+
+  function closeRejectModal() {
+    document.getElementById('reject-modal').style.display = 'none';
+    _rejectTargetId = null;
+  }
+
+  function confirmReject() {
+    var note = document.getElementById('reject-note-input').value.trim();
+    var errEl = document.getElementById('reject-note-err');
+    if (!note || note.length < 10) {
+      errEl.textContent = '請填寫至少 10 字的退件原因。';
+      errEl.style.display = 'block';
+      return;
+    }
+    errEl.style.display = 'none';
+    closeRejectModal();
+    _doReview(
+      [{ recordId: _rejectTargetId, status: 'REJECTED', reviewNote: note }],
+      '已退件 1 筆紀錄'
+    );
+  }
+
+  /* ────────────────────────────────
+     Tab 2：研習目錄
+  ──────────────────────────────── */
+  function _loadCatalog() {
+    showSpinner();
+    api('v1/getCatalog', {})
+      .then(function(res) {
+        hideSpinner();
+        _catalogRecords = (res && res.data) ? res.data : [];
+        _renderCatalogAdmin();
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          document.getElementById('catalog-admin-list').innerHTML =
+            '<div class="empty-state"><div class="ei">❌</div><p>載入失敗。</p></div>';
+        }
+      });
+  }
+
+  function _renderCatalogAdmin() {
+    var list = document.getElementById('catalog-admin-list');
+    if (!_catalogRecords.length) {
+      list.innerHTML =
+        '<div class="empty-state"><div class="ei">📭</div><p>目前無研習課程，請點擊「新增課程」。</p></div>';
+      return;
+    }
+    list.innerHTML = _catalogRecords.map(function(c) {
+      var reqBadge = c.isRequired
+        ? '<span class="badge-required" style="margin-right:6px">★ 必修</span>' : '';
+      var deptBadge = c.department
+        ? '<span class="badge-dept" style="margin-right:6px">' + _e(c.department) + '</span>' : '';
+      var dateRange = '';
+      if (c.startDate && c.endDate) dateRange = '📅 ' + _e(c.startDate) + ' ～ ' + _e(c.endDate);
+
+      return '<div class="catalog-admin-row">' +
+        '<div class="catalog-admin-info">' +
+          '<div style="font-size:0.92rem;font-weight:700;color:var(--primary);margin-bottom:4px">' +
+            _e(c.title) +
+          '</div>' +
+          '<div style="margin-bottom:4px">' + reqBadge + deptBadge + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--gray-700);line-height:1.9">' +
+            '⏱ ' + (c.hours || '─') + ' 小時' +
+            (c.organizer ? ' &nbsp; 🏛 ' + _e(c.organizer) : '') +
+            (dateRange ? ' &nbsp; ' + dateRange : '') +
+            ' &nbsp; 編號：' + _e(c.catalogId || '─') +
+          '</div>' +
+        '</div>' +
+        '<div class="catalog-admin-actions">' +
+          '<button class="btn btn-xs btn-outline"' +
+          ' onclick="openCatalogModal(' + JSON.stringify(c) + ')">✏️ 編輯</button>' +
+          '<button class="btn btn-xs btn-outline"' +
+          ' style="border-color:var(--warning);color:var(--warning)"' +
+          ' onclick="archiveCatalog(' + JSON.stringify(c.catalogId) + ',' +
+          JSON.stringify(c.title) + ')">🗃 封存</button>' +
+        '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ── 新增 / 編輯 Modal ── */
+  function openCatalogModal(catalogObj) {
+    _editCatalogId = catalogObj ? catalogObj.catalogId : null;
+
+    // 填入欄位
+    document.getElementById('cm-title').textContent =
+      _editCatalogId ? '編輯研習課程' : '新增研習課程';
+    document.getElementById('cm-ftitle').value      = catalogObj ? (catalogObj.title    || '') : '';
+    document.getElementById('cm-fhours').value      = catalogObj ? (catalogObj.hours    || '') : '';
+    document.getElementById('cm-forganizer').value  = catalogObj ? (catalogObj.organizer|| '') : '';
+    document.getElementById('cm-fdept').value       = catalogObj ? (catalogObj.department|| '') : '';
+    document.getElementById('cm-faudience').value   = catalogObj ? (catalogObj.targetAudience|| '') : '';
+    document.getElementById('cm-flink').value       = catalogObj ? (catalogObj.link     || '') : '';
+    document.getElementById('cm-fdesc').value       = catalogObj ? (catalogObj.description|| '') : '';
+    document.getElementById('cm-frequired').checked = catalogObj ? !!catalogObj.isRequired : false;
+    document.getElementById('cm-err').style.display = 'none';
+
+    // 日期：YYYY/M/D → YYYY-MM-DD
+    ['start','end'].forEach(function(key) {
+      var val = catalogObj ? catalogObj[key + 'Date'] : '';
+      if (val) {
+        var parts = val.split('/');
+        if (parts.length === 3) {
+          val = parts[0] + '-' + String(parseInt(parts[1])).padStart(2,'0') +
+                '-' + String(parseInt(parts[2])).padStart(2,'0');
+        }
+      }
+      document.getElementById('cm-f' + key).value = val || '';
+    });
+
+    document.getElementById('catalog-modal').style.display = 'flex';
+  }
+
+  function closeCatalogModal() {
+    document.getElementById('catalog-modal').style.display = 'none';
+    _editCatalogId = null;
+  }
+
+  function saveCatalog() {
+    var title    = document.getElementById('cm-ftitle').value.trim();
+    var hoursStr = document.getElementById('cm-fhours').value;
+    var organizer= document.getElementById('cm-forganizer').value.trim();
+    var hours    = parseFloat(hoursStr);
+    var errEl    = document.getElementById('cm-err');
+
+    if (!title)   { errEl.textContent = '請填寫課程名稱。';  errEl.style.display='block'; return; }
+    if (!hoursStr || isNaN(hours) || hours <= 0) {
+      errEl.textContent = '請填寫正確的研習時數。'; errEl.style.display='block'; return;
+    }
+    if (!organizer) { errEl.textContent = '請填寫主辦單位。'; errEl.style.display='block'; return; }
+    errEl.style.display = 'none';
+
+    /* 日期轉換：YYYY-MM-DD → YYYY/M/D */
+    function toGasDate(val) {
+      if (!val) return '';
+      var p = val.split('-');
+      if (p.length !== 3) return val;
+      return parseInt(p[0]) + '/' + parseInt(p[1]) + '/' + parseInt(p[2]);
+    }
+
+    var body = {
+      title:          title,
+      hours:          hours,
+      organizer:      organizer,
+      department:     document.getElementById('cm-fdept').value.trim(),
+      targetAudience: document.getElementById('cm-faudience').value.trim(),
+      link:           document.getElementById('cm-flink').value.trim(),
+      description:    document.getElementById('cm-fdesc').value.trim(),
+      isRequired:     document.getElementById('cm-frequired').checked,
+      startDate:      toGasDate(document.getElementById('cm-fstart').value),
+      endDate:        toGasDate(document.getElementById('cm-fend').value)
+    };
+
+    var action = _editCatalogId
+      ? 'v1/admin/editCatalog'
+      : 'v1/admin/addCatalog';
+    if (_editCatalogId) body.catalogId = _editCatalogId;
+
+    closeCatalogModal();
+    showSpinner();
+    api(action, body)
+      .then(function(res) {
+        hideSpinner();
+        if (res && res.success) {
+          showToast(_editCatalogId ? '✅ 課程已更新' : '✅ 課程已新增', 'success');
+          _catalogRecords = [];
+          _loadCatalog();
+        } else {
+          showToast((res && res.error) || '儲存失敗', 'error');
+        }
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          showToast(err.message || '系統錯誤', 'error');
+        }
+      });
+  }
+
+  /* ── 封存課程 ── */
+  function archiveCatalog(catalogId, title) {
+    showConfirmModal(
+      '確認封存',
+      '<p>確定要封存課程 <strong>「' + _e(title) + '」</strong> 嗎？</p>' +
+      '<p style="font-size:0.82rem;color:var(--warning);margin-top:8px">' +
+      '封存後教師端將不再顯示此課程，現有紀錄不受影響。</p>',
+      '確認封存',
+      function() {
+        showSpinner();
+        api('v1/admin/archiveCatalog', { catalogId: catalogId })
+          .then(function(res) {
+            hideSpinner();
+            if (res && res.success) {
+              showToast('✅ 課程已封存', 'success');
+              _catalogRecords = [];
+              _loadCatalog();
+            } else {
+              showToast((res && res.error) || '封存失敗', 'error');
+            }
+          })
+          .catch(function(err) {
+            hideSpinner();
+            if (err && err.message !== 'TOKEN_EXPIRED') {
+              showToast(err.message || '系統錯誤', 'error');
+            }
+          });
+      },
+      'btn-warning'
+    );
+  }
+
+  /* ── 匯出紀錄 ── */
+  function exportRecords() {
+    showSpinner();
+    api('v1/admin/exportRecords', {})
+      .then(function(res) {
+        hideSpinner();
+        if (res && res.data && res.data.url) {
+          showToast('✅ 匯出成功，即將開啟下載連結', 'success');
+          window.open(res.data.url, '_blank');
+        } else if (res && res.data && res.data.csv) {
+          /* 後端直接回傳 CSV 字串時，觸發瀏覽器下載 */
+          var blob = new Blob(['﻿' + res.data.csv], { type: 'text/csv;charset=utf-8' });
+          var link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = '研習紀錄_' + new Date().toISOString().slice(0,10) + '.csv';
+          link.click();
+          URL.revokeObjectURL(link.href);
+        } else {
+          showToast('匯出失敗或無資料', 'error');
+        }
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          showToast(err.message || '系統錯誤', 'error');
+        }
+      });
+  }
+
+  /* ────────────────────────────────
+     Tab 3：通知預覽
+  ──────────────────────────────── */
+  function previewNotification() {
+    showSpinner();
+    api('v1/admin/previewNotification', {})
+      .then(function(res) {
+        hideSpinner();
+        var result = document.getElementById('notify-preview-result');
+        if (!res || !res.data) {
+          result.innerHTML =
+            '<div class="empty-state"><div class="ei">📭</div><p>目前無需發送通知。</p></div>';
+          return;
+        }
+        var data = res.data;
+        var html = '';
+        var sections = [
+          { key: 'n1', label: '🔔 N1 到期前 7 天提醒', color: 'var(--warning)' },
+          { key: 'n2', label: '⚠️ N2 逾期未完成',       color: 'var(--danger)' },
+          { key: 'n3', label: '📋 N3 待審逾時提醒',     color: 'var(--primary)' }
+        ];
+        sections.forEach(function(s) {
+          var items = data[s.key] || [];
+          if (!items.length) return;
+          html += '<div class="notif-preview-card" style="border-color:' + s.color + ';background:#fafafa">' +
+            '<div style="font-weight:700;color:' + s.color + ';margin-bottom:8px">' +
+            s.label + '（共 ' + items.length + ' 筆）</div>';
+          items.forEach(function(item) {
+            html += '<div style="font-size:0.82rem;padding:4px 0;border-top:1px solid var(--gray-200)">' +
+              '👤 ' + _e(item.userId || '') + '（' + _e(item.department || '') + '）' +
+              ' — ' + _e(item.title || '') +
+              '</div>';
+          });
+          html += '</div>';
+        });
+        result.innerHTML = html ||
+          '<div class="empty-state"><div class="ei">✅</div><p>目前無需發送任何通知。</p></div>';
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          showToast('預覽失敗：' + (err.message || '請稍後再試'), 'error');
+        }
+      });
+  }
+
+  function triggerNotification() {
+    showConfirmModal(
+      '確認立即發送通知',
+      '<p>確定要立即觸發通知系統嗎？</p>' +
+      '<p style="font-size:0.82rem;color:var(--gray-700);margin-top:6px">' +
+      '系統將依目前逾期與待審狀況，向相關教師與管理者發送 Email 通知。' +
+      '</p>',
+      '確認發送',
+      function() {
+        showSpinner();
+        api('v1/admin/triggerNotification', {})
+          .then(function(res) {
+            hideSpinner();
+            if (res && res.success) {
+              var sentCount = res.sent != null ? res.sent : '─';
+              showToast('✅ 已發送通知（共 ' + sentCount + ' 封）', 'success');
+            } else {
+              showToast((res && res.error) || '發送失敗', 'error');
+            }
+          })
+          .catch(function(err) {
+            hideSpinner();
+            if (err && err.message !== 'TOKEN_EXPIRED') {
+              showToast(err.message || '系統錯誤', 'error');
+            }
+          });
+      },
+      'btn-primary'
+    );
+  }
+
+  /* ── 工具 ── */
+  function _e(s) {
+    return String(s || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  /* ── 初始化（管理者限定）── */
+  document.addEventListener('DOMContentLoaded', function() {
+    var ok = initPage({ adminOnly: true });
+    if (ok) _loadReviews();
+  });
+
+  /* ── GAS Warden 作用域隔離修正 ── */
+  window.onLoginSuccess      = onLoginSuccess;
+  window.switchAdminTab      = switchAdminTab;
+  window.goReviewPage        = goReviewPage;
+  window.toggleCheck         = toggleCheck;
+  window.toggleSelectAll     = toggleSelectAll;
+  window.approveOne          = approveOne;
+  window.batchApprove        = batchApprove;
+  window.viewFile            = viewFile;
+  window.openRejectModal     = openRejectModal;
+  window.closeRejectModal    = closeRejectModal;
+  window.confirmReject       = confirmReject;
+  window.openCatalogModal    = openCatalogModal;
+  window.closeCatalogModal   = closeCatalogModal;
+  window.saveCatalog         = saveCatalog;
+  window.archiveCatalog      = archiveCatalog;
+  window.exportRecords       = exportRecords;
+  window.previewNotification = previewNotification;
+  window.triggerNotification = triggerNotification;
+  </script>
+</body>
+</html>

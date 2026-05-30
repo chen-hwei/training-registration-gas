@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>研習登錄系統 — 公告課程</title>
+  <?!= include('style') ?>
+</head>
+<body>
+  <?!= include('config') ?>
+
+  <!-- ── 頁首 ── -->
+  <div class="app-header">
+    <h1>🏫 研習登錄系統</h1>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:auto;flex-shrink:0">
+      <span id="user-name-display"></span>
+      <div class="font-size-toggle">
+        <button class="font-btn" data-size="small"  onclick="setFontSize('small')">小</button>
+        <button class="font-btn" data-size="medium" onclick="setFontSize('medium')">中</button>
+        <button class="font-btn" data-size="large"  onclick="setFontSize('large')">大</button>
+      </div>
+      <button class="btn btn-sm"
+        style="border:1px solid rgba(255,255,255,.5);color:#fff;background:transparent;min-height:36px"
+        onclick="logout()">登出</button>
+    </div>
+  </div>
+
+  <!-- ── 導航列 ── -->
+  <nav class="app-nav">
+    <a class="nav-link active">公告課程</a>
+    <a class="nav-link" onclick="window.top.location.href='?page=submit'">登錄研習</a>
+    <a class="nav-link" onclick="window.top.location.href='?page=records'">我的紀錄</a>
+  </nav>
+
+  <!-- ── 主內容 ── -->
+  <div class="main-content">
+
+    <!-- 搜尋 + 必修篩選 -->
+    <div class="search-bar">
+      <input id="q" type="search" class="form-control"
+             placeholder="搜尋課程名稱或主辦單位…" oninput="filterCatalog()">
+      <button id="btn-required" class="btn btn-sm btn-outline"
+              onclick="toggleRequired()" style="white-space:nowrap;min-height:44px">
+        ★ 僅必修
+      </button>
+    </div>
+
+    <!-- 結果計數 -->
+    <div id="result-count" style="font-size:0.80rem;color:var(--gray-500);margin-bottom:10px"></div>
+
+    <!-- 課程卡片格 -->
+    <div id="catalog-grid" class="catalog-grid">
+      <div class="empty-state" style="grid-column:1/-1">
+        <div class="ei">⏳</div><p>載入中…</p>
+      </div>
+    </div>
+
+    <!-- 自訂登錄入口 -->
+    <div style="text-align:center;padding:20px 0 8px">
+      <span style="font-size:0.82rem;color:var(--gray-500)">找不到您的研習課程？</span>
+      <button class="btn btn-sm btn-outline" style="margin-left:8px"
+              onclick="window.top.location.href='?page=submit'">
+        自訂登錄研習 →
+      </button>
+    </div>
+  </div>
+
+  <script>
+  var _allCatalog  = [];
+  var _showReqOnly = false;
+
+  /* ── 登入成功後載入 ── */
+  function onLoginSuccess() { _loadCatalog(); }
+
+  function _loadCatalog() {
+    api('v1/getCatalog', {})
+      .then(function(res) {
+        _allCatalog = (res && res.data) ? res.data : [];
+        _renderCatalog();
+      })
+      .catch(function(err) {
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          document.getElementById('catalog-grid').innerHTML =
+            '<div class="empty-state" style="grid-column:1/-1">' +
+            '<div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
+        }
+      });
+  }
+
+  function filterCatalog() { _renderCatalog(); }
+
+  function toggleRequired() {
+    _showReqOnly = !_showReqOnly;
+    var btn = document.getElementById('btn-required');
+    if (_showReqOnly) {
+      btn.style.background = 'var(--primary)';
+      btn.style.color = '#fff';
+      btn.style.borderColor = 'var(--primary)';
+    } else {
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }
+    _renderCatalog();
+  }
+
+  function _renderCatalog() {
+    var q = (document.getElementById('q').value || '').trim().toLowerCase();
+    var list = _allCatalog.filter(function(c) {
+      if (_showReqOnly && !c.isRequired) return false;
+      if (q) {
+        var hay = ((c.title || '') + ' ' + (c.organizer || '')).toLowerCase();
+        if (hay.indexOf(q) === -1) return false;
+      }
+      return true;
+    });
+
+    var countEl = document.getElementById('result-count');
+    countEl.textContent = list.length
+      ? '共 ' + list.length + ' 筆課程'
+      : '';
+
+    var grid = document.getElementById('catalog-grid');
+    if (!list.length) {
+      grid.innerHTML =
+        '<div class="empty-state" style="grid-column:1/-1">' +
+        '<div class="ei">📭</div><p>目前無符合條件的研習課程。</p></div>';
+      return;
+    }
+
+    grid.innerHTML = list.map(function(c) { return _renderCard(c); }).join('');
+  }
+
+  function _renderCard(c) {
+    /* 標籤列 */
+    var badges = '';
+    if (c.isRequired) {
+      badges += '<span class="badge-required">★ 必修</span> ';
+    }
+    if (c.department) {
+      badges += '<span class="badge-dept">' + _e(c.department) + '</span> ';
+    }
+    if (c.targetAudience) {
+      badges +=
+        '<span class="badge-dept" style="background:#F0FFF4;color:#276749;border:1px solid #68D391">' +
+        _e(c.targetAudience) + '</span>';
+    }
+
+    /* 日期範圍 */
+    var dateRange = '';
+    if (c.startDate && c.endDate) {
+      dateRange = '📅 ' + _e(c.startDate) + ' ～ ' + _e(c.endDate);
+    } else if (c.startDate) {
+      dateRange = '📅 ' + _e(c.startDate);
+    }
+
+    /* 說明文字 */
+    var desc = c.description
+      ? '<div style="font-size:0.80rem;color:var(--gray-700);margin-top:8px;line-height:1.6;' +
+        'display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">' +
+        _e(c.description) + '</div>'
+      : '';
+
+    /* 公文連結 */
+    var linkBtn = c.link
+      ? '<a href="' + _e(c.link) + '" target="_blank" rel="noopener"' +
+        ' class="btn btn-sm btn-outline">📎 研習公文 ↗</a>'
+      : '';
+
+    return '<div class="catalog-card">' +
+      '<div class="cc-title">' + _e(c.title) + '</div>' +
+      (badges ? '<div style="margin-bottom:6px">' + badges + '</div>' : '') +
+      '<div class="cc-meta">' +
+        '⏱ <strong>' + (c.hours || '─') + ' 小時</strong>' +
+        (c.organizer ? ' &nbsp;|&nbsp; 🏛 ' + _e(c.organizer) : '') +
+        (dateRange    ? ' &nbsp;|&nbsp; ' + dateRange : '') +
+      '</div>' +
+      desc +
+      '<div class="cc-actions">' +
+        linkBtn +
+        '<button class="btn btn-sm btn-primary"' +
+        ' onclick="goSubmit(' + JSON.stringify(c.catalogId) + ')">📝 登錄此研習</button>' +
+      '</div>' +
+      '</div>';
+  }
+
+  function goSubmit(catalogId) {
+    window.top.location.href = '?page=submit&catalog=' + encodeURIComponent(catalogId);
+  }
+
+  /* ── HTML 跳脫 ── */
+  function _e(s) {
+    return String(s || '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  /* ── 初始化 ── */
+  document.addEventListener('DOMContentLoaded', function() {
+    var ok = initPage();
+    if (ok) _loadCatalog();
+  });
+
+  /* ── GAS Warden 作用域隔離修正 ── */
+  window.onLoginSuccess  = onLoginSuccess;
+  window.filterCatalog   = filterCatalog;
+  window.toggleRequired  = toggleRequired;
+  window.goSubmit        = goSubmit;
+  </script>
+</body>
+</html>

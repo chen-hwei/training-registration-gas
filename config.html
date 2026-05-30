@@ -1,0 +1,336 @@
+<!-- ==================== 登入 Modal ==================== -->
+<div id="login-overlay" class="modal-overlay hidden">
+  <div class="modal-box">
+    <div class="modal-title">🏫 中崙高中研習登錄系統</div>
+
+    <div class="form-group">
+      <label class="form-label">您的姓名<span class="req">*</span></label>
+      <select id="login-user-select" class="form-control">
+        <option value="">— 載入中，請稍候 —</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">系統密碼<span class="req">*</span></label>
+      <input type="password" id="login-pin" class="form-control"
+             placeholder="請輸入共用密碼" autocomplete="current-password">
+    </div>
+
+    <div id="login-error"
+         style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;padding:8px 10px;background:var(--danger-bg);border-radius:6px;"></div>
+
+    <button id="login-btn" class="btn btn-primary btn-block" onclick="doLogin()">登入</button>
+  </div>
+</div>
+
+<!-- ==================== 通用確認 Modal ==================== -->
+<div id="generic-modal-overlay" class="hidden">
+  <div id="generic-modal-box">
+    <div id="generic-modal-title"></div>
+    <div id="generic-modal-body"></div>
+    <div id="generic-modal-footer"></div>
+  </div>
+</div>
+
+<!-- ==================== Toast 通知容器 ==================== -->
+<div id="toast-container"></div>
+
+<!-- ==================== 載入遮罩 ==================== -->
+<div id="spinner-overlay" class="hidden"><div class="spinner"></div></div>
+
+<!-- ==================== 共用 JS ==================== -->
+<script>
+// ── Token / Session 管理 ──
+const _SK = { token:'spl_token', uid:'spl_uid', name:'spl_name', access:'spl_access', font:'spl_font' };
+
+function getToken()    { return localStorage.getItem(_SK.token); }
+function getUserId()   { return localStorage.getItem(_SK.uid); }
+function getUserName() { return localStorage.getItem(_SK.name); }
+function isAdmin() {
+  try { return JSON.parse(localStorage.getItem(_SK.access) || '{}').training_admin === true; }
+  catch { return false; }
+}
+
+function saveSession(d) {
+  localStorage.setItem(_SK.token,  d.token);
+  localStorage.setItem(_SK.uid,    d.userId);
+  localStorage.setItem(_SK.name,   d.name);
+  localStorage.setItem(_SK.access, JSON.stringify(d.systemAccess || {}));
+}
+
+function clearSession() { Object.values(_SK).forEach(k => localStorage.removeItem(k)); }
+
+// ── API Bridge（禁止直接 fetch，全部走 google.script.run）──
+function api(action, body) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (!res) { reject(new Error('伺服器回傳空值')); return; }
+        if (res.error === 'TOKEN_EXPIRED') {
+          clearSession(); _showLoginOverlay(); reject(new Error('TOKEN_EXPIRED')); return;
+        }
+        if (res.error === 'FORBIDDEN') {
+          showToast('您沒有執行此操作的權限', 'error'); reject(new Error('FORBIDDEN')); return;
+        }
+        resolve(res);
+      })
+      .withFailureHandler(function(err) {
+        console.error('GAS 呼叫失敗：', err);
+        reject(err);
+      })
+      .handleRequest({ action: action, token: getToken(), body: body || {} });
+  });
+}
+
+// 公開 API（無需 Token，供登入流程使用）
+function apiPublic(action, body) {
+  return new Promise((resolve, reject) => {
+    google.script.run
+      .withSuccessHandler(resolve)
+      .withFailureHandler(reject)
+      .handleRequest({ action: action, body: body || {} });
+  });
+}
+
+// ── 登入流程 ──
+function _showLoginOverlay() {
+  document.getElementById('login-overlay').classList.remove('hidden');
+  _loadTeachersDropdown();
+}
+function _hideLoginOverlay() {
+  document.getElementById('login-overlay').classList.add('hidden');
+}
+
+function _loadTeachersDropdown() {
+  var sel = document.getElementById('login-user-select');
+  sel.innerHTML = '<option value="">— 載入中 —</option>';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.data || !res.data.length) {
+        sel.innerHTML = '<option value="">（找不到教師資料）</option>';
+        return;
+      }
+      var opts = '<option value="">— 請選擇您的姓名 —</option>';
+      res.data.forEach(function(t) {
+        opts += '<option value="' + t.userId + '">' + t.name + '（' + t.userId + '）</option>';
+      });
+      sel.innerHTML = opts;
+    })
+    .withFailureHandler(function() {
+      sel.innerHTML = '<option value="">載入失敗，請重新整理頁面</option>';
+    })
+    .handleRequest({ action: 'getTeachers', body: {} });
+}
+
+function doLogin() {
+  var userId = document.getElementById('login-user-select').value;
+  var pin    = document.getElementById('login-pin').value;
+  var errEl  = document.getElementById('login-error');
+  var btn    = document.getElementById('login-btn');
+
+  errEl.style.display = 'none';
+  if (!userId) { errEl.textContent = '請選擇您的姓名。'; errEl.style.display = 'block'; return; }
+  if (!pin)    { errEl.textContent = '請輸入系統密碼。'; errEl.style.display = 'block'; return; }
+
+  btn.disabled = true; btn.textContent = '驗證中…';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false; btn.textContent = '登入';
+      if (!res || !res.success) {
+        var msgs = {
+          WRONG_PIN: '密碼錯誤，請再試一次。',
+          USER_NOT_FOUND: '找不到此帳號，請聯繫管理員。',
+          USER_INACTIVE: '您的帳號目前非在職狀態，請聯繫管理員。',
+          PIN_NOT_CONFIGURED: '系統尚未設定完成，請聯繫資訊組。'
+        };
+        var msg = msgs[res && res.error] || ('登入失敗：' + (res && res.error));
+        errEl.textContent = msg; errEl.style.display = 'block'; return;
+      }
+      saveSession(res);
+      _hideLoginOverlay();
+      document.getElementById('login-pin').value = '';
+      if (typeof onLoginSuccess === 'function') onLoginSuccess();
+    })
+    .withFailureHandler(function() {
+      btn.disabled = false; btn.textContent = '登入';
+      errEl.textContent = '系統連線失敗，請重新整理頁面。'; errEl.style.display = 'block';
+    })
+    .handleRequest({ action: 'login', body: { userId: userId, pin: pin } });
+}
+
+// ── 頁面初始化（每頁 DOMContentLoaded 後呼叫）──
+function initPage(opts) {
+  opts = opts || {};
+  // 字型大小
+  var sz = localStorage.getItem(_SK.font) || 'small';
+  document.documentElement.setAttribute('data-font-size', sz);
+  _syncFontBtns(sz);
+  // 顯示姓名
+  var nameEl = document.getElementById('user-name-display');
+  if (nameEl) nameEl.textContent = getUserName() || '';
+  // 管理者導覽
+  _renderAdminNav();
+  // Token 檢查
+  if (!getToken()) { _showLoginOverlay(); return false; }
+  if (opts.adminOnly && !isAdmin()) {
+    showToast('您沒有管理者權限', 'error');
+    setTimeout(function(){ window.top.location.href = '?page=index'; }, 1500);
+    return false;
+  }
+  return true;
+}
+
+function _renderAdminNav() {
+  if (!isAdmin()) return;
+  var nav = document.querySelector('.app-nav');
+  if (!nav) return;
+  if (nav.querySelector('[data-admin-link]')) return; // 避免重複
+  var a = document.createElement('a');
+  a.className = 'nav-link';
+  a.dataset.adminLink = '1';
+  a.textContent = '管理後台';
+  a.onclick = function(){ window.top.location.href = '?page=admin'; };
+  nav.appendChild(a);
+}
+
+// ── 字型大小 ──
+function setFontSize(sz) {
+  document.documentElement.setAttribute('data-font-size', sz);
+  localStorage.setItem(_SK.font, sz);
+  _syncFontBtns(sz);
+}
+function _syncFontBtns(sz) {
+  document.querySelectorAll('.font-btn').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.size === sz);
+  });
+}
+
+// ── Toast ──
+function showToast(msg, type) {
+  var el = document.createElement('div');
+  el.className = 'toast toast-' + (type || 'info');
+  el.textContent = msg;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(function(){ el.remove(); }, 3200);
+}
+
+// ── 載入遮罩 ──
+function showSpinner() { document.getElementById('spinner-overlay').classList.remove('hidden'); }
+function hideSpinner() { document.getElementById('spinner-overlay').classList.add('hidden'); }
+
+// ── 通用確認 Modal ──
+function showConfirmModal(title, bodyHtml, confirmLabel, onConfirm, confirmClass) {
+  document.getElementById('generic-modal-title').textContent = title;
+  document.getElementById('generic-modal-body').innerHTML = bodyHtml;
+  document.getElementById('generic-modal-footer').innerHTML =
+    '<button class="btn btn-outline btn-sm" onclick="closeModal()">取消</button>' +
+    '<button id="modal-confirm-btn" class="btn ' + (confirmClass || 'btn-primary') + ' btn-sm">' + confirmLabel + '</button>';
+  document.getElementById('modal-confirm-btn').onclick = function() { closeModal(); onConfirm(); };
+  document.getElementById('generic-modal-overlay').classList.remove('hidden');
+}
+function closeModal() { document.getElementById('generic-modal-overlay').classList.add('hidden'); }
+
+// ── 分頁工具 ──
+function renderPagination(containerId, curPage, totalPages, cbName) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+  if (totalPages <= 1) { el.innerHTML = ''; return; }
+  var html = '';
+  var btn = function(label, page, disabled) {
+    return '<button class="page-btn' + (page === curPage ? ' active' : '') + '"' +
+      (disabled ? ' disabled' : '') +
+      ' onclick="' + cbName + '(' + page + ')">' + label + '</button>';
+  };
+  html += btn('‹', curPage - 1, curPage <= 1);
+  for (var i = 1; i <= totalPages; i++) {
+    if (totalPages > 7 && Math.abs(i - curPage) > 2 && i !== 1 && i !== totalPages) {
+      if (i === curPage - 3 || i === curPage + 3) html += '<span style="padding:4px 6px;color:var(--gray-500)">…</span>';
+      continue;
+    }
+    html += btn(i, i, false);
+  }
+  html += btn('›', curPage + 1, curPage >= totalPages);
+  el.innerHTML = html;
+}
+
+// ── 圖片壓縮（手機照片上傳前必須壓縮）──
+function _compressImage(file) {
+  var TARGET = 2 * 1024 * 1024; // 2MB
+  if (file.size <= TARGET) return Promise.resolve(file);
+  return new Promise(function(resolve) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var ratio  = Math.sqrt(TARGET / file.size);
+      canvas.width  = Math.floor(img.width  * ratio);
+      canvas.height = Math.floor(img.height * ratio);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(function(blob) {
+        resolve(new File([blob], file.name, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.85);
+    };
+    img.src = url;
+  });
+}
+
+function prepareFileForUpload(file) {
+  var IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
+  var process = IMAGE_TYPES.indexOf(file.type) !== -1
+    ? _compressImage(file)
+    : Promise.resolve(file);
+  return process.then(function(f) {
+    if (f.size > 8 * 1024 * 1024) {
+      throw new Error('檔案仍超過 8MB（' + (f.size/1024/1024).toFixed(1) + 'MB），請手動壓縮後再上傳。');
+    }
+    return new Promise(function(resolve, reject) {
+      var reader = new FileReader();
+      reader.onload  = function(e) {
+        resolve({ base64: e.target.result.split(',')[1], mimeType: f.type, fileName: f.name });
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(f);
+    });
+  });
+}
+
+// ── 日期格式化 ──
+function fmtTs(str) { return str ? String(str).replace('T', ' ').slice(0, 16) : '—'; }
+
+// ── 登出 ──
+function logout() {
+  if (!confirm('確定要登出嗎？')) return;
+  var t = getToken();
+  clearSession();
+  if (t) google.script.run.handleRequest({ action: 'logout', token: t, body: {} });
+  _showLoginOverlay();
+}
+
+// ── Enter 鍵觸發登入 ──
+document.addEventListener('DOMContentLoaded', function() {
+  var pin = document.getElementById('login-pin');
+  if (pin) pin.addEventListener('keydown', function(e) { if (e.key === 'Enter') doLogin(); });
+});
+
+// ── 掛載至 window（GAS Warden 作用域隔離必要措施）──
+window.api               = api;
+window.apiPublic         = apiPublic;
+window.doLogin           = doLogin;
+window.initPage          = initPage;
+window.setFontSize       = setFontSize;
+window.showToast         = showToast;
+window.showSpinner       = showSpinner;
+window.hideSpinner       = hideSpinner;
+window.showConfirmModal  = showConfirmModal;
+window.closeModal        = closeModal;
+window.renderPagination  = renderPagination;
+window.prepareFileForUpload = prepareFileForUpload;
+window.fmtTs             = fmtTs;
+window.logout            = logout;
+window.getToken          = getToken;
+window.getUserId         = getUserId;
+window.getUserName       = getUserName;
+window.isAdmin           = isAdmin;
+</script>

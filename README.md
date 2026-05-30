@@ -165,14 +165,31 @@
 
 ## 開發狀態
 
-| 階段 | 說明 | 預估時程 | 狀態 |
-|---|---|---|---|
-| 架構設計 | Schema / API / Drive 結構確認 | ─ | ✅ 完成（2026-05-29） |
-| Phase 0 | 基礎建設（試算表 + Drive 資料夾 + clasp 初始化） | 0.5 週 | ⬜ 待做 |
-| Phase 1 | 後端骨架（Schema / 路由 / 上傳）— **MVP 核心** | 1.5 週 | ⬜ 待做 |
-| Phase 2 | 審核流程（Review.gs + 管理者 Catalog API）— **MVP 完成** | 1 週 | ⬜ 待做 |
-| Phase 3 | 前端介面（三頁 HTML）— 擴展 | 2 週 | ⬜ 待做 |
-| Phase 4 | 整合收尾（Hub 同步 / 觸發器 / UAT）— 維運就緒 | 0.5 週 | ⬜ 待做 |
+| 階段 | 說明 | 狀態 |
+|---|---|---|
+| 架構設計 | Schema / API / Drive 結構確認 | ✅ 完成（2026-05-29） |
+| Phase 0 | 基礎建設（試算表 + Drive 資料夾 + clasp + SchoolPortalLib） | ✅ 完成（2026-05-30） |
+| Phase 1 | 後端骨架（Schema / 路由 / 上傳）— **MVP 核心** | ✅ 完成（2026-05-30） |
+| Phase 2 | 審核流程（Review.gs + 管理者 Catalog API）— **MVP 完成** | ✅ 完成（2026-05-30） |
+| Phase 3 | 前端介面（Index / Submit / Records / Admin）— 擴展 | ✅ 完成（2026-05-30） |
+| Phase 4 | 整合收尾（Hub 同步 / 觸發器 / 通知系統）— 維運就緒 | ✅ 完成（2026-05-30） |
+| **UAT** | 端對端驗收測試（T1–T9） | 🔲 進行中 |
+
+### 已部署系統常數
+| 常數 | 說明 |
+|---|---|
+| `TRAINING_SS_ID` | `1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y` |
+| `HUB_SPREADSHEET_ID` | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ` |
+| `LOG_SPREADSHEET_ID` | `1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM` |
+| `SchoolPortalLib ID` | `1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` |
+
+### ⚠️ 正確的系統網址（Google Workspace 域專用）
+
+```
+https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec
+```
+
+> **必須使用含 `/a/macros/zlsh.tp.edu.tw/` 的 Workspace 域 URL**，才能讓頁面導覽（`?page=admin` 等相對路徑）停在 `script.google.com` 域下，避免被轉址至 `googleusercontent.com` 造成 localStorage Token 失效（白屏問題）。
 
 ---
 

@@ -1,8 +1,8 @@
 // ==================== 系統常數（部署後填入實際 ID） ====================
-const TRAINING_SS_ID                = 'TODO_填入_研習登錄試算表_ID';
-const TRAINING_DRIVE_ROOT_FOLDER_ID = 'TODO_填入_研習證明根目錄_Drive_ID';
-const HUB_SPREADSHEET_ID            = 'TODO_填入_Portal_Hub_試算表_ID';
-const LOG_SPREADSHEET_ID            = 'TODO_填入_AuditLog_獨立日誌試算表_ID';
+const TRAINING_SS_ID                = '1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y';
+const TRAINING_DRIVE_ROOT_FOLDER_ID = '1YoGvcZqlHFZdqyZdNlIuoo3a0wQ_Z1um';
+const HUB_SPREADSHEET_ID            = '10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ';
+const LOG_SPREADSHEET_ID            = '1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM';
 
 // ==================== SHEET_SCHEMA ====================
 // headers：試算表第一列的中文標題（唯一來源）
@@ -69,20 +69,34 @@ function parseSheetData(sheet) {
 }
 
 /**
- * 確保工作表第一列為標準中文標題列（直接覆寫，不插列）
- * 部署 Phase 0 時手動執行一次即可
+ * 確保工作表存在且第一列為標準中文標題列
+ * - 工作表不存在時自動建立（Phase 0 初始化情境）
+ * - 已存在時直接覆寫第一列標題（修復/更新情境）
+ * - 絕不使用 insertRow，以免產生雙標題行
  */
 function ensureSheetHeaders(sheetName) {
   const schema = SHEET_SCHEMA[sheetName];
   if (!schema) throw new Error('SHEET_SCHEMA 找不到：' + sheetName);
-  const sheet = _getTrainingSheet(sheetName);
+
+  const ss = SpreadsheetApp.openById(TRAINING_SS_ID);
+  let sheet = ss.getSheetByName(sheetName);
+
+  // 工作表不存在時自動建立
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    Logger.log('已建立工作表：' + sheetName);
+  }
+
+  // 覆寫第一列為中文標題（不插列）
   sheet.getRange(1, 1, 1, schema.headers.length).setValues([schema.headers]);
+  Logger.log('已設定標題列：' + sheetName + '（' + schema.headers.length + ' 欄）');
 }
 
-/** 一次建立兩張工作表的標題列（Phase 0 初始化用） */
+/** 一次建立兩張工作表並寫入標題列（Phase 0 初始化，可重複執行） */
 function initSheetHeaders() {
   ensureSheetHeaders('TRAINING_CATALOG');
   ensureSheetHeaders('TRAINING_RECORD');
+  Logger.log('initSheetHeaders 完成，兩張工作表已就緒。');
 }
 
 // ==================== ID 產生器（需在 LockService 內呼叫） ====================
