@@ -20,7 +20,7 @@ function doGet(e) {
 
 /** GAS 模板語法 <?!= include('style') ?> 所需的輔助函式 */
 function include(filename) {
-  return HtmlService.createHtmlOutputFromFile(filename).getContent();
+  return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
 }
 
 function doPost(e) {
