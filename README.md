@@ -2,20 +2,22 @@
 
 > 臺北市立中崙高中（`@zlsh.tp.edu.tw`）· 學校資訊系統整合平台 · 第五個子系統
 
-以 Google Apps Script 建構的研習登錄與審核系統，讓教師可以線上登錄研習紀錄、上傳研習證明，並由各處室管理者進行審核與退件。審核通過的紀錄定時彙整至整合平台 Hub，提供全校年度研習時數儀表板。
+以 Google Apps Script 建構的研習登錄與審核系統。提供「年度研習任務進度追蹤」功能，讓教師清楚掌握學年度各項應修研習的完成狀態；支援線上登錄研習紀錄、上傳研習證明，並由各處室管理者進行審核與退件。審核通過的紀錄定時彙整至整合平台 Hub，提供全校年度研習時數儀表板。
 
 ---
 
 ## 功能概覽
 
 ### 教師端
+- **年度任務進度儀表板**：首頁依緊急程度顯示所有應修研習任務（過期 / 緊急 / 一般 / 已完成），每項任務顯示進度條與已核准時數
 - 瀏覽各處室推薦的研習課程（含必修標記）
-- 選擇推薦課程或自訂課程進行登錄
+- 選擇推薦課程或自訂課程進行登錄；可在登錄時標記「完成哪項年度任務」
 - 上傳研習證明（PDF / JPG / PNG，上限 8MB）
 - 即時查詢審核狀態（待審核 / 已通過 / 已退件）
 - 退件時顯示原因，可一鍵重新送出；若證明檔案無誤可選擇「沿用上次上傳的證明」，避免重複上傳
 
 ### 管理者端（需 `training_admin` 權限）
+- **年度任務管理**：新增、編輯、封存各學年度的研習任務；一鍵複製到下學年（自動順延截止日）
 - 新增、編輯、封存所屬處室的推薦研習課程
 - 批次審核教師上傳的研習證明（核准 / 退件並附理由）
 - 匯出研習紀錄報表（CSV）
@@ -50,6 +52,20 @@
 ---
 
 ## 資料庫 Schema
+
+### TRAINING_REQUIREMENT（年度研習任務）
+
+| 欄位 | 說明 |
+|---|---|
+| `requirementId` | 任務編號，格式 `RQ{學年度}{3位序號}`，如 `RQ114001` |
+| `academicYear` | 民國學年度（如 `114`） |
+| `name` | 任務名稱 |
+| `endDate` · `requiredHours` | 截止日期（YYYY/M/D）、規定時數（0 = 依公文確認） |
+| `hoursNote` | 分層時數說明，如「特教師18h｜普通班6h」 |
+| `deliveryType` · `semesterSplit` | 研習方式、分學期（上/下） |
+| `targetAudience` · `owner` | 適用對象、負責處室 |
+| `isRecurring` | 每學年延續（`TRUE` = 複製到下學年時包含） |
+| `status` | `ACTIVE` / `ARCHIVED` |
 
 ### TRAINING_CATALOG（研習目錄）
 
@@ -86,17 +102,21 @@
 
 | action | 說明 |
 |---|---|
+| `v1/getRequirements` | 取得當前學年所有 ACTIVE 任務 + 個人完成進度 |
 | `v1/getCatalog` | 取得 ACTIVE 研習目錄 |
 | `v1/getMyRecords` | 取得自己的登錄紀錄與審核狀態 |
-| `v1/submitRecord` | 送出研習登錄（含 Base64 檔案） |
+| `v1/submitRecord` | 送出研習登錄（含 Base64 檔案，可附 requirementId） |
 | `v1/deleteRecord` | 刪除自己的 PENDING 紀錄 |
 
 ### 管理者端（Level 2：Token + `training_admin` 角色）
 
 | action | 說明 |
 |---|---|
+| `v1/admin/getAllRequirements` | 取得所有任務（含封存，可篩選學年度） |
+| `v1/admin/addRequirement` · `editRequirement` · `archiveRequirement` | 年度任務 CRUD |
+| `v1/admin/renewRequirements` | 複製 isRecurring=TRUE 任務到下學年（自動順延截止日） |
 | `v1/admin/addCatalog` · `editCatalog` · `archiveCatalog` | 課程目錄管理 |
-| `v1/admin/getPendingReviews` | 取得待審清單（可依處室篩選） |
+| `v1/admin/getPendingReviews` | 取得待審清單 |
 | `v1/admin/reviewRecord` | 核准或退件（退件原因必填） |
 | `v1/admin/getFileUrl` | 取得研習證明暫時存取 URL |
 | `v1/admin/exportRecords` | 匯出研習紀錄 CSV |
@@ -147,20 +167,21 @@
 
 ```
 研習登錄系統/
-├── 程式碼.gs      # doGet / doPost / handleRequest 路由
-├── Schema.gs      # SHEET_SCHEMA 定義與系統常數
-├── Catalog.gs     # 研習目錄 CRUD
-├── Record.gs      # 登錄紀錄與 Base64 檔案上傳
-├── Review.gs      # 審核流程（核准 / 退件 / 匯出）
-├── Drive.gs       # Google Drive 資料夾與授權管理
-├── Sync.gs        # 每晚同步 TrainingStats → Portal Hub
-├── Notify.gs      # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
-├── Index.html     # 教師端首頁（研習公告列表，含關鍵字搜尋、研習對象標籤、相關連結）
-├── Submit.html    # 選課與上傳頁面
-├── Records.html   # 教師端個人研習紀錄查詢（PENDING / APPROVED / REJECTED 分頁）
-├── Admin.html     # 管理者審核後台（批次審核 + 目錄管理 + 通知預覽）
-├── style.html     # 共用 CSS（狀態色彩 / RWD / 字型縮放）
-└── config.html    # 共用 JS（api() bridge / Token / Base64 工具）
+├── 程式碼.gs        # doGet / doPost / handleRequest 路由
+├── Schema.gs        # SHEET_SCHEMA 定義與系統常數（含 TRAINING_REQUIREMENT）
+├── Requirement.gs   # 年度研習任務 CRUD（getRequirements / renewRequirements / seed114Requirements）
+├── Catalog.gs       # 研習目錄 CRUD
+├── Record.gs        # 登錄紀錄與 Base64 檔案上傳
+├── Review.gs        # 審核流程（核准 / 退件 / 匯出）
+├── Drive.gs         # Google Drive 資料夾與授權管理
+├── Sync.gs          # 每晚同步 TrainingStats → Portal Hub
+├── Notify.gs        # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
+├── Index.html       # 教師端首頁（年度任務進度儀表板 + 公告課程列表）
+├── Submit.html      # 選課與上傳頁面（Step ① 任務選擇 → Step ② 研習資訊）
+├── Records.html     # 教師端個人研習紀錄查詢（PENDING / APPROVED / REJECTED 分頁）
+├── Admin.html       # 管理者後台（待審核 + 研習目錄 + 通知預覽 + 年度任務管理）
+├── style.html       # 共用 CSS（狀態色彩 / RWD / 字型縮放）
+└── config.html      # 共用 JS（api() bridge / Token / Base64 工具）
 ```
 
 ---
@@ -176,6 +197,8 @@
 | Phase 3 | 前端介面（Index / Submit / Records / Admin）— 擴展 | ✅ 完成（2026-05-30） |
 | Phase 4 | 整合收尾（Hub 同步 / 觸發器 / 通知系統）— 維運就緒 | ✅ 完成（2026-05-30） |
 | **UAT** | 端對端驗收測試（T1–T9）— 全部通過 ✅ | ✅ 完成（2026-05-31） |
+| **Phase 5A** | 年度任務後端（Requirement.gs + Schema 擴充 + 8 支 API） | ✅ 完成（2026-05-31） |
+| **Phase 5B** | 年度任務前端（Index 改版 + Submit 任務選擇 + Admin 第四分頁） | ✅ 完成（2026-05-31） |
 
 ### 已部署系統常數
 | 常數 | 說明 |

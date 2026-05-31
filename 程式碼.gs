@@ -7,8 +7,9 @@ function doGet(e) {
   const template = HtmlService.createTemplateFromFile(tmplName);
 
   // 將 URL 參數傳入模板（sanitized：僅允許英數字）
-  template.initCatalogId  = (e.parameter && e.parameter.catalog  || '').replace(/[^A-Za-z0-9]/g, '');
-  template.initResubmitId = (e.parameter && e.parameter.resubmit || '').replace(/[^A-Za-z0-9]/g, '');
+  template.initCatalogId     = (e.parameter && e.parameter.catalog  || '').replace(/[^A-Za-z0-9]/g, '');
+  template.initResubmitId   = (e.parameter && e.parameter.resubmit || '').replace(/[^A-Za-z0-9]/g, '');
+  template.initRequirementId = (e.parameter && e.parameter.req      || '').replace(/[^A-Za-z0-9]/g, '');
   // 注入絕對 URL 至前端，供 _navigate() 使用（防止 googleusercontent.com 相對路徑導覽問題）
   template.appBaseUrl     = WEB_APP_BASE_URL;
 
@@ -60,10 +61,11 @@ function handleRequest(payload) {
   const userId = session.userId;
 
   switch (action) {
-    case 'v1/getCatalog':   return { success: true, data: getCatalog() };
-    case 'v1/getMyRecords': return { success: true, data: getMyRecords(userId) };
-    case 'v1/submitRecord': return submitRecord(userId, body || {});
-    case 'v1/deleteRecord': return deleteRecord(userId, body || {});
+    case 'v1/getCatalog':       return { success: true, data: getCatalog() };
+    case 'v1/getMyRecords':     return { success: true, data: getMyRecords(userId) };
+    case 'v1/submitRecord':     return submitRecord(userId, body || {});
+    case 'v1/deleteRecord':     return deleteRecord(userId, body || {});
+    case 'v1/getRequirements':  return { success: true, data: getRequirements(userId) };
   }
 
   // ── Level 2：驗證管理者身分 ──
@@ -80,15 +82,20 @@ function handleRequest(payload) {
   if (!access.training_admin) return _err('FORBIDDEN');
 
   switch (action) {
-    case 'v1/admin/addCatalog':          return addCatalog(userId, body || {});
-    case 'v1/admin/editCatalog':         return editCatalog(userId, body || {});
-    case 'v1/admin/archiveCatalog':      return archiveCatalog(body || {});
-    case 'v1/admin/getPendingReviews':   return { success: true, data: getPendingReviews() };
-    case 'v1/admin/reviewRecord':        return reviewRecord(userId, body || {});
-    case 'v1/admin/getFileUrl':          return getFileUrl(body || {});
-    case 'v1/admin/exportRecords':       return exportRecords(body || {});
-    case 'v1/admin/previewNotification': return previewNotification();
-    case 'v1/admin/triggerNotification': return { success: true, sent: checkAndNotifyOverdue() };
+    case 'v1/admin/addCatalog':           return addCatalog(userId, body || {});
+    case 'v1/admin/editCatalog':          return editCatalog(userId, body || {});
+    case 'v1/admin/archiveCatalog':       return archiveCatalog(body || {});
+    case 'v1/admin/getPendingReviews':    return { success: true, data: getPendingReviews() };
+    case 'v1/admin/reviewRecord':         return reviewRecord(userId, body || {});
+    case 'v1/admin/getFileUrl':           return getFileUrl(body || {});
+    case 'v1/admin/exportRecords':        return exportRecords(body || {});
+    case 'v1/admin/previewNotification':  return previewNotification();
+    case 'v1/admin/triggerNotification':  return { success: true, sent: checkAndNotifyOverdue() };
+    case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements(body || {}) };
+    case 'v1/admin/addRequirement':       return addRequirement(userId, body || {});
+    case 'v1/admin/editRequirement':      return editRequirement(userId, body || {});
+    case 'v1/admin/archiveRequirement':   return archiveRequirement(userId, body || {});
+    case 'v1/admin/renewRequirements':    return renewRequirements(userId, body || {});
     default: return _err('UNKNOWN_ACTION');
   }
 }

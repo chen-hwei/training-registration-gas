@@ -30,6 +30,14 @@
     border-radius:var(--radius); padding:12px 14px; margin-bottom:8px;
     font-size:0.84rem;
   }
+  .req-admin-row {
+    background:#fff; border-radius:var(--radius); box-shadow:var(--shadow);
+    padding:12px 16px; margin-bottom:10px;
+    display:flex; align-items:flex-start; justify-content:space-between;
+    gap:12px; flex-wrap:wrap;
+  }
+  .req-admin-info { flex:1; min-width:0; }
+  .req-admin-actions { display:flex; gap:8px; flex-shrink:0; flex-wrap:wrap; align-items:flex-start; }
   </style>
 </head>
 <body>
@@ -66,6 +74,110 @@
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button class="btn btn-sm btn-outline" onclick="closeRejectModal()">取消</button>
         <button class="btn btn-sm btn-danger" onclick="confirmReject()">確認退件</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 年度任務 Modal ── -->
+  <div id="req-modal"
+    style="position:fixed;inset:0;background:rgba(0,0,0,0.5);
+           display:none;align-items:flex-start;justify-content:center;
+           z-index:1020;padding:16px;overflow-y:auto">
+    <div style="background:#fff;border-radius:12px;padding:24px;
+                width:100%;max-width:580px;box-shadow:var(--shadow-md);margin:auto">
+      <div id="rqm-title"
+           style="font-size:1rem;font-weight:700;color:var(--primary);margin-bottom:20px">
+        新增年度任務
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">任務名稱 <span class="req">*</span></label>
+        <input id="rqm-fname" type="text" class="form-control" placeholder="例：特殊教育研習">
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">學年度 <span class="req">*</span></label>
+          <input id="rqm-fyear" type="number" min="100" max="199"
+                 class="form-control" placeholder="例：114">
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">截止日期</label>
+          <input id="rqm-fend" type="date" class="form-control">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">規定時數</label>
+          <input id="rqm-fhours" type="number" min="0" step="0.5"
+                 class="form-control" placeholder="0 = 依公文確認">
+        </div>
+        <div class="form-group" style="flex:2">
+          <label class="form-label">時數說明</label>
+          <input id="rqm-fhoursnote" type="text" class="form-control"
+                 placeholder="例：特教師18h｜普通班6h｜行政3h">
+        </div>
+      </div>
+
+      <div style="display:flex;gap:12px">
+        <div class="form-group" style="flex:1">
+          <label class="form-label">研習方式</label>
+          <select id="rqm-fdelivery" class="form-control">
+            <option value="">不限</option>
+            <option value="實體">實體</option>
+            <option value="線上">線上</option>
+            <option value="實體或線上">實體或線上</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:1">
+          <label class="form-label">分學期</label>
+          <select id="rqm-fsemester" class="form-control">
+            <option value="">否</option>
+            <option value="上學期">上學期</option>
+            <option value="下學期">下學期</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">適用對象</label>
+        <input id="rqm-faudience" type="text" class="form-control"
+               placeholder="例：全體教師、導師（留空表示全校）">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">負責處室</label>
+        <input id="rqm-fowner" type="text" class="form-control"
+               placeholder="例：研習組（留空自動帶入管理者處室）">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">備註說明</label>
+        <textarea id="rqm-fnotes" class="form-control" rows="2"
+                  placeholder="選填"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">相關公文或連結</label>
+        <input id="rqm-flinks" type="text" class="form-control"
+               placeholder="URL 或文字說明（選填）">
+      </div>
+
+      <div class="form-group" style="margin-bottom:0">
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px">
+          <input type="checkbox" id="rqm-frecurring"
+                 style="width:22px;height:22px;cursor:pointer">
+          <span style="font-size:0.88rem;font-weight:600">每學年自動延續（複製時包含此任務）</span>
+        </label>
+      </div>
+
+      <div id="rqm-err"
+           style="color:var(--danger);font-size:0.80rem;margin-top:10px;display:none"></div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px">
+        <button class="btn btn-sm btn-outline" onclick="closeReqModal()">取消</button>
+        <button class="btn btn-sm btn-primary" onclick="saveReq()">💾 儲存任務</button>
       </div>
     </div>
   </div>
@@ -191,6 +303,9 @@
       <button id="atab-notify"  class="tab-btn" onclick="switchAdminTab('notify')">
         通知預覽
       </button>
+      <button id="atab-req" class="tab-btn" onclick="switchAdminTab('req')">
+        年度任務
+      </button>
     </div>
 
     <!-- ── Tab 1：待審核 ── -->
@@ -239,6 +354,26 @@
 
       <div id="notify-preview-result" style="margin-top:16px"></div>
     </div>
+
+    <!-- ── Tab 4：年度任務 ── -->
+    <div id="panel-req" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;
+                  margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="font-size:0.86rem;color:var(--gray-700)">學年度篩選：</span>
+          <select id="req-year-filter" class="form-control" style="width:100px"
+                  onchange="filterReqByYear()">
+          </select>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-outline" onclick="renewRequirements()">📋 複製到下學年</button>
+          <button class="btn btn-sm btn-primary" onclick="openReqModal(null)">＋ 新增任務</button>
+        </div>
+      </div>
+      <div id="req-admin-list">
+        <div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -269,11 +404,12 @@
      Tab 切換
   ──────────────────────────────── */
   function switchAdminTab(tab) {
-    ['review','catalog','notify'].forEach(function(t) {
+    ['review','catalog','notify','req'].forEach(function(t) {
       document.getElementById('atab-' + t).classList.toggle('active', t === tab);
       document.getElementById('panel-' + t).style.display = (t === tab) ? '' : 'none';
     });
     if (tab === 'catalog' && _catalogRecords.length === 0) _loadCatalog();
+    if (tab === 'req'     && _reqRecords.length === 0)     _loadRequirements();
   }
 
   /* ────────────────────────────────
@@ -892,6 +1028,277 @@
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  /* ────────────────────────────────
+     Tab 4：年度任務
+  ──────────────────────────────── */
+  var _reqRecords   = [];  // 所有任務（getAllRequirements 回傳）
+  var _reqFiltered  = [];  // 目前篩選年度後的任務
+  var _editReqId    = null;
+  var _reqCurrentYear = null;
+
+  function _loadRequirements() {
+    showSpinner();
+    api('v1/admin/getAllRequirements', {})
+      .then(function(res) {
+        hideSpinner();
+        _reqRecords = (res && res.data) ? res.data : [];
+        _buildReqYearFilter();
+        _renderReqList();
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          document.getElementById('req-admin-list').innerHTML =
+            '<div class="empty-state"><div class="ei">❌</div><p>載入失敗。</p></div>';
+        }
+      });
+  }
+
+  function _buildReqYearFilter() {
+    var years = [];
+    _reqRecords.forEach(function(r) {
+      if (r.academicYear && years.indexOf(r.academicYear) === -1) years.push(r.academicYear);
+    });
+    years.sort(function(a,b){ return b - a; });
+
+    var sel = document.getElementById('req-year-filter');
+    sel.innerHTML = years.map(function(y) {
+      return '<option value="' + y + '">' + y + ' 學年度</option>';
+    }).join('');
+
+    // 預設選目前或最新學年
+    if (!_reqCurrentYear || years.indexOf(_reqCurrentYear) === -1) {
+      _reqCurrentYear = years.length ? years[0] : null;
+    }
+    sel.value = _reqCurrentYear;
+    _applyReqFilter();
+  }
+
+  function filterReqByYear() {
+    _reqCurrentYear = parseInt(document.getElementById('req-year-filter').value) || null;
+    _applyReqFilter();
+    _renderReqList();
+  }
+
+  function _applyReqFilter() {
+    _reqFiltered = _reqCurrentYear
+      ? _reqRecords.filter(function(r) { return String(r.academicYear) === String(_reqCurrentYear); })
+      : _reqRecords;
+  }
+
+  function _renderReqList() {
+    var list = document.getElementById('req-admin-list');
+    if (!_reqFiltered.length) {
+      list.innerHTML =
+        '<div class="empty-state"><div class="ei">📭</div><p>本學年尚無任務資料。</p></div>';
+      return;
+    }
+    list.innerHTML = _reqFiltered.map(function(r) {
+      var statusColor = r.status === 'ARCHIVED' ? 'var(--gray-500)' : 'var(--primary)';
+      var statusBadge = r.status === 'ARCHIVED'
+        ? '<span style="font-size:0.70rem;background:var(--gray-200);color:var(--gray-600);' +
+          'border-radius:999px;padding:1px 7px;margin-left:6px">已封存</span>'
+        : '';
+      var recurBadge = r.isRecurring
+        ? '<span style="font-size:0.70rem;background:#e8f5e9;color:#2e7d32;' +
+          'border-radius:999px;padding:1px 7px;margin-left:4px">🔄 延續</span>'
+        : '';
+      var meta = [];
+      if (r.requiredHours > 0) meta.push('⏱ ' + r.requiredHours + ' 小時');
+      else if (r.hoursNote) meta.push('⏱ ' + _e(r.hoursNote));
+      if (r.endDate) meta.push('📅 截止 ' + _e(r.endDate));
+      if (r.targetAudience) meta.push('👥 ' + _e(r.targetAudience));
+      if (r.owner) meta.push('🏢 ' + _e(r.owner));
+
+      return '<div class="req-admin-row">' +
+        '<div class="req-admin-info">' +
+          '<div style="font-size:0.92rem;font-weight:700;color:' + statusColor + ';margin-bottom:4px">' +
+            _e(r.name) + statusBadge + recurBadge +
+          '</div>' +
+          '<div style="font-size:0.78rem;color:var(--gray-700);line-height:1.9">' +
+            meta.join(' &nbsp; ') +
+            (r.notes ? '<br>📝 ' + _e(r.notes) : '') +
+          '</div>' +
+          '<div style="font-size:0.72rem;color:var(--gray-500);margin-top:2px">編號：' + _e(r.requirementId) + '</div>' +
+        '</div>' +
+        '<div class="req-admin-actions">' +
+          (r.status !== 'ARCHIVED'
+            ? '<button class="btn btn-xs btn-outline" onclick="openReqModal(\'' + r.requirementId + '\')">✏️ 編輯</button>' +
+              '<button class="btn btn-xs btn-outline" style="border-color:var(--warning);color:var(--warning)"' +
+              ' onclick="archiveReq(\'' + r.requirementId + '\')">🗃 封存</button>'
+            : '') +
+        '</div>' +
+        '</div>';
+    }).join('');
+  }
+
+  /* ── 新增 / 編輯 Modal ── */
+  function openReqModal(requirementId) {
+    var obj = null;
+    if (requirementId) {
+      for (var i = 0; i < _reqRecords.length; i++) {
+        if (_reqRecords[i].requirementId === requirementId) { obj = _reqRecords[i]; break; }
+      }
+    }
+    _editReqId = obj ? obj.requirementId : null;
+
+    document.getElementById('rqm-title').textContent = _editReqId ? '編輯年度任務' : '新增年度任務';
+    document.getElementById('rqm-fname').value       = obj ? (obj.name || '') : '';
+    document.getElementById('rqm-fyear').value       = obj ? (obj.academicYear || _reqCurrentYear || '') : (_reqCurrentYear || '');
+    document.getElementById('rqm-fhours').value      = obj ? (obj.requiredHours != null ? obj.requiredHours : '') : '';
+    document.getElementById('rqm-fhoursnote').value  = obj ? (obj.hoursNote || '') : '';
+    document.getElementById('rqm-fdelivery').value   = obj ? (obj.deliveryType || '') : '';
+    document.getElementById('rqm-fsemester').value   = obj ? (obj.semesterSplit || '') : '';
+    document.getElementById('rqm-faudience').value   = obj ? (obj.targetAudience || '') : '';
+    document.getElementById('rqm-fowner').value      = obj ? (obj.owner || '') : '';
+    document.getElementById('rqm-fnotes').value      = obj ? (obj.notes || '') : '';
+    document.getElementById('rqm-flinks').value      = obj ? (obj.links || '') : '';
+    document.getElementById('rqm-frecurring').checked= obj ? !!obj.isRecurring : true;
+    document.getElementById('rqm-err').style.display = 'none';
+
+    // 日期轉換 YYYY/M/D → YYYY-MM-DD
+    var endVal = obj ? (obj.endDate || '') : '';
+    if (endVal) {
+      var p = endVal.split('/');
+      if (p.length === 3) {
+        endVal = p[0] + '-' + String(parseInt(p[1])).padStart(2,'0') +
+                 '-' + String(parseInt(p[2])).padStart(2,'0');
+      }
+    }
+    document.getElementById('rqm-fend').value = endVal;
+
+    document.getElementById('req-modal').style.display = 'flex';
+  }
+
+  function closeReqModal() {
+    document.getElementById('req-modal').style.display = 'none';
+    _editReqId = null;
+  }
+
+  function saveReq() {
+    var name    = document.getElementById('rqm-fname').value.trim();
+    var yearStr = document.getElementById('rqm-fyear').value;
+    var errEl   = document.getElementById('rqm-err');
+
+    if (!name) { errEl.textContent = '請填寫任務名稱。'; errEl.style.display='block'; return; }
+    var year = parseInt(yearStr);
+    if (!year || year < 100) { errEl.textContent = '請填寫正確的學年度（例：114）。'; errEl.style.display='block'; return; }
+    errEl.style.display = 'none';
+
+    function toGasDate(val) {
+      if (!val) return '';
+      var p = val.split('-');
+      if (p.length !== 3) return val;
+      return parseInt(p[0]) + '/' + parseInt(p[1]) + '/' + parseInt(p[2]);
+    }
+
+    var hoursVal = document.getElementById('rqm-fhours').value;
+    var body = {
+      name:           name,
+      academicYear:   year,
+      endDate:        toGasDate(document.getElementById('rqm-fend').value),
+      requiredHours:  hoursVal !== '' ? parseFloat(hoursVal) : 0,
+      hoursNote:      document.getElementById('rqm-fhoursnote').value.trim(),
+      deliveryType:   document.getElementById('rqm-fdelivery').value,
+      semesterSplit:  document.getElementById('rqm-fsemester').value,
+      targetAudience: document.getElementById('rqm-faudience').value.trim(),
+      owner:          document.getElementById('rqm-fowner').value.trim(),
+      notes:          document.getElementById('rqm-fnotes').value.trim(),
+      links:          document.getElementById('rqm-flinks').value.trim(),
+      isRecurring:    document.getElementById('rqm-frecurring').checked
+    };
+
+    var action = _editReqId ? 'v1/admin/editRequirement' : 'v1/admin/addRequirement';
+    if (_editReqId) body.requirementId = _editReqId;
+
+    closeReqModal();
+    showSpinner();
+    api(action, body)
+      .then(function(res) {
+        hideSpinner();
+        if (res && res.success) {
+          showToast(_editReqId ? '✅ 任務已更新' : '✅ 任務已新增', 'success');
+          _reqRecords = [];
+          _loadRequirements();
+        } else {
+          showToast((res && res.error) || '儲存失敗', 'error');
+        }
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') showToast(err.message || '系統錯誤', 'error');
+      });
+  }
+
+  /* ── 封存任務 ── */
+  function archiveReq(requirementId) {
+    var name = requirementId;
+    for (var i = 0; i < _reqRecords.length; i++) {
+      if (_reqRecords[i].requirementId === requirementId) { name = _reqRecords[i].name; break; }
+    }
+    showConfirmModal(
+      '確認封存',
+      '<p>確定要封存任務 <strong>「' + _e(name) + '」</strong> 嗎？</p>' +
+      '<p style="font-size:0.82rem;color:var(--warning);margin-top:8px">封存後教師端進度頁將不再顯示此任務。</p>',
+      '確認封存',
+      function() {
+        showSpinner();
+        api('v1/admin/archiveRequirement', { requirementId: requirementId })
+          .then(function(res) {
+            hideSpinner();
+            if (res && res.success) {
+              showToast('✅ 任務已封存', 'success');
+              _reqRecords = [];
+              _loadRequirements();
+            } else {
+              showToast((res && res.error) || '封存失敗', 'error');
+            }
+          })
+          .catch(function(err) {
+            hideSpinner();
+            if (err && err.message !== 'TOKEN_EXPIRED') showToast(err.message || '系統錯誤', 'error');
+          });
+      },
+      'btn-warning'
+    );
+  }
+
+  /* ── 複製到下學年 ── */
+  function renewRequirements() {
+    var curYear = parseInt(document.getElementById('req-year-filter').value) || null;
+    if (!curYear) { showToast('請先選擇來源學年度', 'error'); return; }
+    var targetYear = curYear + 1;
+    showConfirmModal(
+      '複製到下學年',
+      '<p>確定要將 <strong>' + curYear + ' 學年度</strong>中「每學年延續」的任務複製到 ' +
+      '<strong>' + targetYear + ' 學年度</strong> 嗎？</p>' +
+      '<p style="font-size:0.82rem;color:var(--gray-700);margin-top:6px">' +
+      '系統會自動調整截止日期（順延一年），已存在的任務不會重複建立。</p>',
+      '確認複製',
+      function() {
+        showSpinner();
+        api('v1/admin/renewRequirements', { sourceYear: curYear, targetYear: targetYear })
+          .then(function(res) {
+            hideSpinner();
+            if (res && res.success) {
+              var cnt = res.data && res.data.created != null ? res.data.created : '─';
+              showToast('✅ 已複製 ' + cnt + ' 筆任務到 ' + targetYear + ' 學年度', 'success');
+              _reqCurrentYear = targetYear;
+              _reqRecords = [];
+              _loadRequirements();
+            } else {
+              showToast((res && res.error) || '複製失敗', 'error');
+            }
+          })
+          .catch(function(err) {
+            hideSpinner();
+            if (err && err.message !== 'TOKEN_EXPIRED') showToast(err.message || '系統錯誤', 'error');
+          });
+      },
+      'btn-primary'
+    );
+  }
+
   /* ── 初始化（管理者限定）── */
   document.addEventListener('DOMContentLoaded', function() {
     var ok = initPage({ adminOnly: true });
@@ -918,6 +1325,12 @@
   window.exportRecords       = exportRecords;
   window.previewNotification = previewNotification;
   window.triggerNotification = triggerNotification;
+  window.filterReqByYear     = filterReqByYear;
+  window.openReqModal        = openReqModal;
+  window.closeReqModal       = closeReqModal;
+  window.saveReq             = saveReq;
+  window.archiveReq          = archiveReq;
+  window.renewRequirements   = renewRequirements;
   </script>
 </body>
 </html>

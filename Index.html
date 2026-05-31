@@ -3,8 +3,94 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>研習登錄系統 — 公告課程</title>
+  <title>研習登錄系統 — 研習首頁</title>
   <?!= include('style') ?>
+  <style>
+  /* ── 進度卡片 ── */
+  .req-card {
+    background:#fff; border-radius:var(--radius); box-shadow:var(--shadow);
+    padding:16px; margin-bottom:12px;
+    border-left:5px solid var(--gray-300);
+    transition:box-shadow .15s;
+  }
+  .req-card.status-done     { border-left-color: #28A745; }
+  .req-card.status-urgent   { border-left-color: #DC3545; }
+  .req-card.status-warning  { border-left-color: #FFC107; }
+  .req-card.status-normal   { border-left-color: var(--primary); }
+  .req-card.status-custom   { border-left-color: var(--gray-400); }
+
+  .req-title {
+    font-size:0.95rem; font-weight:700; color:var(--gray-900);
+    margin-bottom:5px; line-height:1.4;
+  }
+  .req-meta {
+    font-size:0.78rem; color:var(--gray-600); margin-bottom:10px;
+    display:flex; flex-wrap:wrap; gap:6px; align-items:center;
+  }
+  .req-badge {
+    display:inline-block; padding:2px 8px; border-radius:99px;
+    font-size:0.72rem; font-weight:600;
+  }
+  .badge-owner  { background:#EBF8FF; color:#2B6CB0; }
+  .badge-done   { background:#F0FFF4; color:#276749; }
+  .badge-pending{ background:#FFFBEB; color:#744210; }
+  .badge-urgent { background:#FFF5F5; color:#C53030; }
+  .badge-custom { background:#F7FAFC; color:#4A5568; border:1px solid #CBD5E0; }
+  .badge-inperson{ background:#FAF5FF; color:#553C9A; }
+
+  /* 進度條 */
+  .progress-wrap {
+    background:var(--gray-200); border-radius:99px;
+    height:10px; overflow:hidden; margin:8px 0 4px;
+  }
+  .progress-bar {
+    height:100%; border-radius:99px;
+    transition:width .4s ease;
+    background:var(--primary);
+  }
+  .progress-bar.done    { background:#28A745; }
+  .progress-bar.urgent  { background:#DC3545; }
+  .progress-bar.warning { background:#FFC107; }
+
+  .progress-label {
+    font-size:0.78rem; color:var(--gray-600);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .progress-label .hrs-done { font-weight:700; color:var(--gray-800); }
+
+  /* 注意說明（時數依公文）*/
+  .req-manual-note {
+    background:#FFFBEB; border:1px solid #F6E05E;
+    border-radius:var(--radius); padding:8px 12px;
+    font-size:0.80rem; color:#744210; margin:6px 0 10px;
+  }
+
+  /* section 分隔 */
+  .section-label {
+    font-size:0.78rem; font-weight:700; color:var(--gray-500);
+    text-transform:uppercase; letter-spacing:.05em;
+    margin:20px 0 10px; padding-bottom:6px;
+    border-bottom:1px solid var(--gray-200);
+  }
+
+  /* Tab 切換 */
+  .view-tabs {
+    display:flex; gap:0; margin-bottom:16px;
+    border:2px solid var(--gray-300); border-radius:var(--radius); overflow:hidden;
+  }
+  .view-tab {
+    flex:1; padding:10px 4px; font-size:0.84rem; font-weight:600;
+    cursor:pointer; border:none; background:#fff; color:var(--gray-600);
+    min-height:44px; transition:all .15s;
+  }
+  .view-tab.active {
+    background:var(--primary); color:#fff;
+  }
+
+  /* 課程卡片（公告課程 tab 沿用）*/
+  .catalog-grid { display:grid; gap:14px; }
+  @media (min-width:1024px) { .catalog-grid { grid-template-columns:repeat(2,1fr); } }
+  </style>
 </head>
 <body>
   <?!= include('config') ?>
@@ -28,7 +114,7 @@
 
   <!-- ── 導航列 ── -->
   <nav class="app-nav">
-    <a class="nav-link active">公告課程</a>
+    <a class="nav-link active">研習首頁</a>
     <a class="nav-link" onclick="_navigate('?page=submit')">登錄研習</a>
     <a class="nav-link" onclick="_navigate('?page=records')">我的紀錄</a>
   </nav>
@@ -36,72 +122,282 @@
   <!-- ── 主內容 ── -->
   <div class="main-content">
 
-    <!-- 搜尋 + 必修篩選 -->
-    <div class="search-bar">
-      <input id="q" type="search" class="form-control"
-             placeholder="搜尋課程名稱或主辦單位…" oninput="filterCatalog()">
-      <button id="btn-required" class="btn btn-sm btn-outline"
-              onclick="toggleRequired()" style="white-space:nowrap;min-height:44px">
-        ★ 僅必修
+    <!-- Tab 切換 -->
+    <div class="view-tabs">
+      <button id="tab-btn-progress" class="view-tab active" onclick="switchTab('progress')">
+        📊 年度任務進度
+      </button>
+      <button id="tab-btn-catalog" class="view-tab" onclick="switchTab('catalog')">
+        📚 公告課程
       </button>
     </div>
 
-    <!-- 結果計數 -->
-    <div id="result-count" style="font-size:0.80rem;color:var(--gray-500);margin-bottom:10px"></div>
-
-    <!-- 課程卡片格 -->
-    <div id="catalog-grid" class="catalog-grid">
-      <div class="empty-state" style="grid-column:1/-1">
-        <div class="ei">⏳</div><p>載入中…</p>
+    <!-- ══ 任務進度 tab ══ -->
+    <div id="tab-progress">
+      <div id="req-container">
+        <div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>
+      </div>
+      <div style="text-align:center;padding:12px 0 4px">
+        <button class="btn btn-sm btn-outline"
+                onclick="_navigate('?page=submit')">
+          ✏️ 登錄研習紀錄 →
+        </button>
       </div>
     </div>
 
-    <!-- 自訂登錄入口 -->
-    <div style="text-align:center;padding:20px 0 8px">
-      <span style="font-size:0.82rem;color:var(--gray-500)">找不到您的研習課程？</span>
-      <button class="btn btn-sm btn-outline" style="margin-left:8px"
-              onclick="_navigate('?page=submit')">
-        自訂登錄研習 →
-      </button>
+    <!-- ══ 公告課程 tab ══ -->
+    <div id="tab-catalog" class="hidden">
+      <div class="search-bar">
+        <input id="q" type="search" class="form-control"
+               placeholder="搜尋課程名稱或主辦單位…" oninput="filterCatalog()">
+        <button id="btn-required" class="btn btn-sm btn-outline"
+                onclick="toggleRequired()" style="white-space:nowrap;min-height:44px">
+          ★ 僅必修
+        </button>
+      </div>
+      <div id="result-count" style="font-size:0.80rem;color:var(--gray-500);margin-bottom:10px"></div>
+      <div id="catalog-grid" class="catalog-grid">
+        <div class="empty-state" style="grid-column:1/-1">
+          <div class="ei">⏳</div><p>載入中…</p>
+        </div>
+      </div>
+      <div style="text-align:center;padding:20px 0 8px">
+        <span style="font-size:0.82rem;color:var(--gray-500)">找不到您的研習課程？</span>
+        <button class="btn btn-sm btn-outline" style="margin-left:8px"
+                onclick="_navigate('?page=submit')">
+          自訂登錄研習 →
+        </button>
+      </div>
     </div>
-  </div>
+
+  </div><!-- /main-content -->
 
   <script>
-  var _allCatalog  = [];
-  var _showReqOnly = false;
+  var _allRequirements = [];
+  var _allCatalog      = [];
+  var _showReqOnly     = false;
+  var _currentTab      = 'progress';
 
-  /* ── 登入成功後載入 ── */
-  function onLoginSuccess() { _loadCatalog(); }
-
-  function _loadCatalog() {
-    api('v1/getCatalog', {})
-      .then(function(res) {
-        _allCatalog = (res && res.data) ? res.data : [];
-        _renderCatalog();
-      })
-      .catch(function(err) {
-        if (err && err.message !== 'TOKEN_EXPIRED') {
-          document.getElementById('catalog-grid').innerHTML =
-            '<div class="empty-state" style="grid-column:1/-1">' +
-            '<div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
-        }
-      });
+  /* ── 登入後載入 ── */
+  function onLoginSuccess() {
+    _loadAll();
   }
 
+  function _loadAll() {
+    Promise.all([
+      api('v1/getRequirements', {}),
+      api('v1/getCatalog', {})
+    ]).then(function(results) {
+      _allRequirements = (results[0] && results[0].data) ? results[0].data : [];
+      _allCatalog      = (results[1] && results[1].data) ? results[1].data : [];
+      _renderRequirements();
+      _renderCatalog();
+    }).catch(function(err) {
+      if (err && err.message !== 'TOKEN_EXPIRED') {
+        document.getElementById('req-container').innerHTML =
+          '<div class="empty-state"><div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
+      }
+    });
+  }
+
+  /* ── Tab 切換 ── */
+  function switchTab(tab) {
+    _currentTab = tab;
+    document.getElementById('tab-progress').classList.toggle('hidden', tab !== 'progress');
+    document.getElementById('tab-catalog').classList.toggle('hidden', tab !== 'catalog');
+    document.getElementById('tab-btn-progress').classList.toggle('active', tab === 'progress');
+    document.getElementById('tab-btn-catalog').classList.toggle('active', tab === 'catalog');
+  }
+
+  /* ── 任務進度渲染 ── */
+  function _renderRequirements() {
+    var container = document.getElementById('req-container');
+    if (!_allRequirements.length) {
+      container.innerHTML =
+        '<div class="empty-state"><div class="ei">📭</div>' +
+        '<p>目前尚未設定年度研習任務，請聯繫管理者。</p></div>';
+      return;
+    }
+
+    var today = new Date();
+    today.setHours(0,0,0,0);
+
+    /* 分類 */
+    var urgent    = [];   // 逾期或 14 天內到期且未完成
+    var inProgress = [];  // 進行中（已有進度但未完成）
+    var notStarted = [];  // 未開始
+    var done      = [];   // 已完成
+    var manual    = [];   // 時數依公文（requiredHours === 0）
+
+    _allRequirements.forEach(function(r) {
+      r._status = _calcStatus(r, today);
+      if (r.requiredHours === 0) {
+        manual.push(r);
+      } else if (r.isCompleted) {
+        done.push(r);
+      } else if (r._status === 'urgent' || r._status === 'overdue') {
+        urgent.push(r);
+      } else if (r.approvedHours > 0 || r.pendingHours > 0) {
+        inProgress.push(r);
+      } else {
+        notStarted.push(r);
+      }
+    });
+
+    var html = '';
+
+    /* 統計摘要 */
+    var total     = _allRequirements.filter(function(r){ return r.requiredHours > 0; }).length;
+    var doneCount = done.length;
+    var pct       = total > 0 ? Math.round(doneCount / total * 100) : 0;
+    html += '<div style="background:var(--primary-bg);border-radius:var(--radius);' +
+      'padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">' +
+      '<div style="font-size:0.84rem;color:var(--gray-700)">' +
+        '<span style="font-size:1.4rem;font-weight:800;color:var(--primary)">' + doneCount + '</span>' +
+        ' / ' + total + ' 項任務完成' +
+      '</div>' +
+      '<div style="flex:1;min-width:80px">' +
+        '<div class="progress-wrap" style="height:8px">' +
+          '<div class="progress-bar done" style="width:' + pct + '%"></div>' +
+        '</div>' +
+      '</div>' +
+      '<div style="font-size:0.80rem;color:var(--gray-500)">' + pct + '%</div>' +
+    '</div>';
+
+    if (urgent.length) {
+      html += '<div class="section-label">🔴 需要注意（逾期或即將截止）</div>';
+      urgent.forEach(function(r) { html += _renderReqCard(r, today); });
+    }
+    if (inProgress.length) {
+      html += '<div class="section-label">🟡 進行中</div>';
+      inProgress.forEach(function(r) { html += _renderReqCard(r, today); });
+    }
+    if (notStarted.length) {
+      html += '<div class="section-label">⚪ 尚未開始</div>';
+      notStarted.forEach(function(r) { html += _renderReqCard(r, today); });
+    }
+    if (manual.length) {
+      html += '<div class="section-label">📄 請依公文確認時數</div>';
+      manual.forEach(function(r) { html += _renderReqCard(r, today); });
+    }
+    if (done.length) {
+      html += '<div class="section-label">✅ 已完成</div>';
+      done.forEach(function(r) { html += _renderReqCard(r, today); });
+    }
+
+    container.innerHTML = html;
+  }
+
+  function _calcStatus(r, today) {
+    if (r.requiredHours === 0) return 'manual';
+    if (r.isCompleted)        return 'done';
+    if (!r.endDate)           return 'normal';
+    var parts = String(r.endDate).replace(/-/g,'/').split('/').map(Number);
+    if (parts.length < 3 || isNaN(parts[0])) return 'normal';
+    var end = new Date(parts[0], parts[1]-1, parts[2]);
+    end.setHours(0,0,0,0);
+    var diff = Math.ceil((end - today) / 86400000);
+    if (diff < 0)  return 'overdue';
+    if (diff <= 14) return 'urgent';
+    return 'normal';
+  }
+
+  function _renderReqCard(r, today) {
+    var status = r._status || _calcStatus(r, today);
+    var cssClass = 'status-' + (
+      status === 'done'    ? 'done'   :
+      status === 'overdue' || status === 'urgent' ? 'urgent' :
+      status === 'manual'  ? 'custom' : 'normal'
+    );
+    if (r.isCompleted) cssClass = 'status-done';
+
+    /* 標籤 */
+    var badges = '<span class="req-badge badge-owner">' + _e(r.owner) + '</span> ';
+    if (r.deliveryType === 'INPERSON') {
+      badges += '<span class="req-badge badge-inperson">實體課程</span> ';
+    }
+    if (r.isCompleted) {
+      badges += '<span class="req-badge badge-done">✅ 已完成</span>';
+    } else if (status === 'overdue') {
+      badges += '<span class="req-badge badge-urgent">⚠️ 已逾期</span>';
+    } else if (status === 'urgent') {
+      // 計算剩餘天數
+      var parts2 = String(r.endDate).replace(/-/g,'/').split('/').map(Number);
+      var end2 = new Date(parts2[0], parts2[1]-1, parts2[2]);
+      end2.setHours(0,0,0,0);
+      var daysLeft = Math.ceil((end2 - today) / 86400000);
+      badges += '<span class="req-badge badge-urgent">⏰ 剩 ' + daysLeft + ' 天</span>';
+    }
+    if (r.pendingHours > 0 && !r.isCompleted) {
+      badges += ' <span class="req-badge badge-pending">待審 ' + r.pendingHours + 'h</span>';
+    }
+
+    /* 截止日 */
+    var deadline = r.endDate
+      ? '<span>📅 截止 ' + _e(r.endDate) + '</span>'
+      : '';
+
+    /* 進度區塊 */
+    var progressHtml = '';
+    if (r.requiredHours === 0) {
+      /* 時數依公文 */
+      progressHtml =
+        '<div class="req-manual-note">' +
+        '📋 本項研習所需時數依處室公文規定，請確認後自行登錄。' +
+        (r.hoursNote ? '<br><span style="color:#92400E">' + _e(r.hoursNote) + '</span>' : '') +
+        '</div>';
+    } else {
+      var pct = Math.min(100, Math.round(r.approvedHours / r.requiredHours * 100));
+      var barClass = r.isCompleted ? 'done' : (status === 'urgent' || status === 'overdue' ? 'urgent' : '');
+      progressHtml =
+        '<div class="progress-wrap">' +
+          '<div class="progress-bar ' + barClass + '" style="width:' + pct + '%"></div>' +
+        '</div>' +
+        '<div class="progress-label">' +
+          '<span><span class="hrs-done">' + r.approvedHours + '</span> / ' +
+          r.requiredHours + ' 小時已通過審核</span>' +
+          '<span>' + pct + '%</span>' +
+        '</div>';
+    }
+
+    /* 備註（推薦連結）*/
+    var linkHtml = '';
+    if (r.links) {
+      var firstLink = r.links.split('\n')[0].trim();
+      if (firstLink) {
+        linkHtml = '<a href="' + _e(firstLink) + '" target="_blank" rel="noopener"' +
+          ' class="btn btn-sm btn-outline" style="margin-top:10px">📎 推薦課程 ↗</a> ';
+      }
+    }
+
+    /* 登錄按鈕（已完成則改為「再次登錄」樣式）*/
+    var actionBtn = r.isCompleted
+      ? '<button class="btn btn-sm btn-outline" style="margin-top:10px"' +
+        ' onclick="goSubmitReq(\'' + r.requirementId + '\')">+ 再次登錄</button>'
+      : '<button class="btn btn-sm btn-primary" style="margin-top:10px"' +
+        ' onclick="goSubmitReq(\'' + r.requirementId + '\')">✏️ 登錄研習</button>';
+
+    return '<div class="req-card ' + cssClass + '">' +
+      '<div class="req-title">' + _e(r.name) + '</div>' +
+      '<div class="req-meta">' + badges + (deadline ? ' ' + deadline : '') + '</div>' +
+      progressHtml +
+      '<div>' + linkHtml + actionBtn + '</div>' +
+    '</div>';
+  }
+
+  function goSubmitReq(requirementId) {
+    _navigate('?page=submit&req=' + encodeURIComponent(requirementId));
+  }
+
+  /* ── 公告課程渲染 ── */
   function filterCatalog() { _renderCatalog(); }
 
   function toggleRequired() {
     _showReqOnly = !_showReqOnly;
     var btn = document.getElementById('btn-required');
-    if (_showReqOnly) {
-      btn.style.background = 'var(--primary)';
-      btn.style.color = '#fff';
-      btn.style.borderColor = 'var(--primary)';
-    } else {
-      btn.style.background = '';
-      btn.style.color = '';
-      btn.style.borderColor = '';
-    }
+    btn.style.background   = _showReqOnly ? 'var(--primary)' : '';
+    btn.style.color        = _showReqOnly ? '#fff'           : '';
+    btn.style.borderColor  = _showReqOnly ? 'var(--primary)' : '';
     _renderCatalog();
   }
 
@@ -110,103 +406,78 @@
     var list = _allCatalog.filter(function(c) {
       if (_showReqOnly && !c.isRequired) return false;
       if (q) {
-        var hay = ((c.title || '') + ' ' + (c.organizer || '')).toLowerCase();
+        var hay = ((c.title||'')+' '+(c.organizer||'')).toLowerCase();
         if (hay.indexOf(q) === -1) return false;
       }
       return true;
     });
 
     var countEl = document.getElementById('result-count');
-    countEl.textContent = list.length
-      ? '共 ' + list.length + ' 筆課程'
-      : '';
+    countEl.textContent = list.length ? '共 ' + list.length + ' 筆課程' : '';
 
     var grid = document.getElementById('catalog-grid');
     if (!list.length) {
-      grid.innerHTML =
-        '<div class="empty-state" style="grid-column:1/-1">' +
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1">' +
         '<div class="ei">📭</div><p>目前無符合條件的研習課程。</p></div>';
       return;
     }
-
-    grid.innerHTML = list.map(function(c) { return _renderCard(c); }).join('');
+    grid.innerHTML = list.map(_renderCatalogCard).join('');
   }
 
-  function _renderCard(c) {
-    /* 標籤列 */
+  function _renderCatalogCard(c) {
     var badges = '';
-    if (c.isRequired) {
-      badges += '<span class="badge-required">★ 必修</span> ';
-    }
-    if (c.department) {
-      badges += '<span class="badge-dept">' + _e(c.department) + '</span> ';
-    }
-    if (c.targetAudience) {
-      badges +=
-        '<span class="badge-dept" style="background:#F0FFF4;color:#276749;border:1px solid #68D391">' +
-        _e(c.targetAudience) + '</span>';
-    }
-
-    /* 日期範圍 */
-    var dateRange = '';
-    if (c.startDate && c.endDate) {
-      dateRange = '📅 ' + _e(c.startDate) + ' ～ ' + _e(c.endDate);
-    } else if (c.startDate) {
-      dateRange = '📅 ' + _e(c.startDate);
-    }
-
-    /* 說明文字 */
+    if (c.isRequired)     badges += '<span class="badge-required">★ 必修</span> ';
+    if (c.department)     badges += '<span class="badge-dept">' + _e(c.department) + '</span> ';
+    if (c.targetAudience) badges += '<span class="badge-dept" style="background:#F0FFF4;color:#276749;border:1px solid #68D391">' + _e(c.targetAudience) + '</span>';
+    var dateRange = (c.startDate && c.endDate)
+      ? '📅 ' + _e(c.startDate) + ' ～ ' + _e(c.endDate)
+      : (c.startDate ? '📅 ' + _e(c.startDate) : '');
     var desc = c.description
       ? '<div style="font-size:0.80rem;color:var(--gray-700);margin-top:8px;line-height:1.6;' +
         'display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden">' +
         _e(c.description) + '</div>'
       : '';
-
-    /* 公文連結 */
     var linkBtn = c.link
-      ? '<a href="' + _e(c.link) + '" target="_blank" rel="noopener"' +
-        ' class="btn btn-sm btn-outline">📎 研習公文 ↗</a>'
+      ? '<a href="' + _e(c.link) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline">📎 研習公文 ↗</a>'
       : '';
-
     return '<div class="catalog-card">' +
       '<div class="cc-title">' + _e(c.title) + '</div>' +
       (badges ? '<div style="margin-bottom:6px">' + badges + '</div>' : '') +
-      '<div class="cc-meta">' +
-        '⏱ <strong>' + (c.hours || '─') + ' 小時</strong>' +
+      '<div class="cc-meta">⏱ <strong>' + (c.hours||'─') + ' 小時</strong>' +
         (c.organizer ? ' &nbsp;|&nbsp; 🏛 ' + _e(c.organizer) : '') +
-        (dateRange    ? ' &nbsp;|&nbsp; ' + dateRange : '') +
+        (dateRange   ? ' &nbsp;|&nbsp; ' + dateRange : '') +
       '</div>' +
       desc +
-      '<div class="cc-actions">' +
-        linkBtn +
+      '<div class="cc-actions">' + linkBtn +
         '<button class="btn btn-sm btn-primary"' +
-        ' onclick="goSubmit(\'' + c.catalogId + '\')">📝 登錄此研習</button>' +
+        ' onclick="goSubmitCatalog(\'' + c.catalogId + '\')">📝 登錄此研習</button>' +
       '</div>' +
-      '</div>';
+    '</div>';
   }
 
-  function goSubmit(catalogId) {
+  function goSubmitCatalog(catalogId) {
     _navigate('?page=submit&catalog=' + encodeURIComponent(catalogId));
   }
 
   /* ── HTML 跳脫 ── */
   function _e(s) {
-    return String(s || '')
-      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
   /* ── 初始化 ── */
   document.addEventListener('DOMContentLoaded', function() {
     var ok = initPage();
-    if (ok) _loadCatalog();
+    if (ok) _loadAll();
   });
 
   /* ── GAS Warden 作用域隔離修正 ── */
-  window.onLoginSuccess  = onLoginSuccess;
-  window.filterCatalog   = filterCatalog;
-  window.toggleRequired  = toggleRequired;
-  window.goSubmit        = goSubmit;
+  window.onLoginSuccess    = onLoginSuccess;
+  window.switchTab         = switchTab;
+  window.filterCatalog     = filterCatalog;
+  window.toggleRequired    = toggleRequired;
+  window.goSubmitReq       = goSubmitReq;
+  window.goSubmitCatalog   = goSubmitCatalog;
   </script>
 </body>
 </html>

@@ -5,6 +5,34 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>研習登錄系統 — 登錄研習</title>
   <?!= include('style') ?>
+  <style>
+  /* 任務選擇卡片 */
+  .req-opt {
+    display:flex; align-items:flex-start; gap:12px;
+    padding:12px 14px; border:2px solid var(--gray-300);
+    border-radius:var(--radius); cursor:pointer;
+    margin-bottom:8px; transition:border-color .15s, background .15s;
+  }
+  .req-opt:hover    { border-color:var(--primary); }
+  .req-opt.selected { border-color:var(--primary); background:var(--primary-bg); }
+  .req-opt input[type="radio"] { width:20px; height:20px; cursor:pointer; flex-shrink:0; margin-top:2px; }
+  .req-opt-name  { font-size:0.90rem; font-weight:600; color:var(--gray-900); }
+  .req-opt-meta  { font-size:0.76rem; color:var(--gray-500); margin-top:2px; }
+  .req-opt-prog  { font-size:0.76rem; color:var(--primary); font-weight:600; margin-top:3px; }
+  .req-opt-done  .req-opt-name::after {
+    content: ' ✅'; font-weight:400;
+  }
+  .req-opt-urgent .req-opt-name { color:var(--danger); }
+
+  /* 步驟指示 */
+  .step-num {
+    display:inline-flex; align-items:center; justify-content:center;
+    width:24px; height:24px; border-radius:50%;
+    background:var(--primary); color:#fff;
+    font-size:0.78rem; font-weight:700; flex-shrink:0;
+    margin-right:6px;
+  }
+  </style>
 </head>
 <body>
   <?!= include('config') ?>
@@ -28,7 +56,7 @@
 
   <!-- ── 導航列 ── -->
   <nav class="app-nav">
-    <a class="nav-link" onclick="_navigate('?page=index')">公告課程</a>
+    <a class="nav-link" onclick="_navigate('?page=index')">研習首頁</a>
     <a class="nav-link active">登錄研習</a>
     <a class="nav-link" onclick="_navigate('?page=records')">我的紀錄</a>
   </nav>
@@ -43,11 +71,23 @@
       📝 <strong>重新送出模式</strong>：以下已預填原有資料，請確認後選擇是否沿用原證明檔案。
     </div>
 
-    <!-- ① 選擇課程方式 -->
+    <!-- ① 選擇年度任務 -->
     <div class="card">
-      <div class="card-title">① 選擇課程方式</div>
+      <div class="card-title">
+        <span class="step-num">1</span>這筆研習要完成哪項年度任務？
+      </div>
 
-      <!-- 模式切換 -->
+      <div id="req-opts-container">
+        <div style="font-size:0.84rem;color:var(--gray-500);padding:8px 0">載入中…</div>
+      </div>
+    </div>
+
+    <!-- ② 選擇課程方式 -->
+    <div class="card">
+      <div class="card-title">
+        <span class="step-num">2</span>選擇課程方式
+      </div>
+
       <div style="display:flex;border:2px solid var(--gray-300);border-radius:var(--radius);
                   overflow:hidden;margin-bottom:16px">
         <button id="mode-btn-catalog"
@@ -72,9 +112,11 @@
       </div>
     </div>
 
-    <!-- ② 填寫研習資料 -->
+    <!-- ③ 填寫研習資料 -->
     <div class="card">
-      <div class="card-title">② 填寫研習資料</div>
+      <div class="card-title">
+        <span class="step-num">3</span>填寫研習資料
+      </div>
 
       <div class="form-group">
         <label class="form-label">研習名稱 <span class="req">*</span></label>
@@ -86,7 +128,7 @@
         <div class="form-group" style="flex:1;min-width:0">
           <label class="form-label">研習時數 <span class="req">*</span></label>
           <input id="field-hours" type="number" min="0.5" step="0.5"
-                 class="form-control" placeholder="例：6">
+                 class="form-control" placeholder="例：3">
         </div>
         <div class="form-group" style="flex:2;min-width:0">
           <label class="form-label">研習日期 <span class="req">*</span></label>
@@ -101,9 +143,11 @@
       </div>
     </div>
 
-    <!-- ③ 上傳研習證明 -->
+    <!-- ④ 上傳研習證明 -->
     <div class="card">
-      <div class="card-title">③ 上傳研習證明</div>
+      <div class="card-title">
+        <span class="step-num">4</span>上傳研習證明
+      </div>
 
       <!-- 沿用舊檔案選項（重新送出時才顯示） -->
       <div id="reuse-section" class="hidden" style="margin-bottom:16px">
@@ -163,7 +207,7 @@
            style="color:var(--danger);font-size:0.80rem;margin-top:8px;display:none"></div>
     </div>
 
-    <!-- ④ 送出 -->
+    <!-- ⑤ 送出 -->
     <div style="margin-bottom:32px">
       <button id="submit-btn" class="btn btn-primary btn-block"
               style="font-size:1rem;padding:14px"
@@ -177,61 +221,180 @@
   </div>
 
   <script>
-  /* ── GAS 模板變數（後端於 doGet 注入，已過濾為英數字）── */
-  var INIT_CATALOG_ID  = '<?= initCatalogId ?>';
-  var INIT_RESUBMIT_ID = '<?= initResubmitId ?>';
+  /* ── GAS 模板變數（後端 doGet 注入，已過濾為英數字）── */
+  var INIT_CATALOG_ID    = '<?= initCatalogId ?>';
+  var INIT_RESUBMIT_ID   = '<?= initResubmitId ?>';
+  var INIT_REQUIREMENT_ID = '<?= initRequirementId ?>';
 
-  var _allCatalog      = [];    // 所有 ACTIVE 課程
-  var _selectedCatalog = null;  // 目前選取的課程物件（目錄模式）
-  var _currentMode     = 'catalog'; // 'catalog' | 'custom'
-  var _resubmitRec     = null;  // 退件紀錄（重新送出模式）
-  var _selectedFile    = null;  // 使用者選取的 File 物件
+  var _allCatalog        = [];
+  var _allRequirements   = [];
+  var _selectedCatalog   = null;
+  var _selectedReqId     = '';      // 選取的任務編號（空白 = 自由研習）
+  var _currentMode       = 'catalog';
+  var _resubmitRec       = null;
+  var _selectedFile      = null;
 
-  /* ── 登入成功後初始化 ── */
+  /* ── 登入後初始化 ── */
   function onLoginSuccess() { _init(); }
 
   function _init() {
-    _loadCatalog();
-  }
+    Promise.all([
+      api('v1/getCatalog', {}),
+      api('v1/getRequirements', {})
+    ]).then(function(results) {
+      _allCatalog      = (results[0] && results[0].data) ? results[0].data : [];
+      _allRequirements = (results[1] && results[1].data) ? results[1].data : [];
+      _buildReqOptions();
+      _buildCatalogSelect('');
 
-  /* ── 載入課程目錄 ── */
-  function _loadCatalog() {
-    api('v1/getCatalog', {})
-      .then(function(res) {
-        _allCatalog = (res && res.data) ? res.data : [];
-        _buildCatalogSelect();
-
-        if (INIT_RESUBMIT_ID) {
-          _loadResubmitData();   // 重新送出模式
-        } else if (INIT_CATALOG_ID) {
-          setMode('catalog');
-          _preselectCatalog(INIT_CATALOG_ID); // 從課程頁跳來
-        } else {
-          setMode('catalog');    // 預設目錄模式
-        }
-      })
-      .catch(function() {
-        showToast('課程目錄載入失敗，請重新整理頁面', 'error');
-      });
-  }
-
-  function _buildCatalogSelect() {
-    var sel = document.getElementById('catalog-select');
-    var opts = '<option value="">— 請選擇研習課程 —</option>';
-    _allCatalog.forEach(function(c) {
-      opts += '<option value="' + c.catalogId + '">' +
-        _e(c.title) + '（' + c.hours + ' 小時）</option>';
+      if (INIT_RESUBMIT_ID) {
+        _loadResubmitData();
+      } else if (INIT_REQUIREMENT_ID) {
+        // 從首頁任務卡片的「登錄研習」跳來
+        _selectReq(INIT_REQUIREMENT_ID);
+        if (INIT_CATALOG_ID) _preselectCatalog(INIT_CATALOG_ID);
+        else setMode('catalog');
+      } else if (INIT_CATALOG_ID) {
+        _preselectCatalog(INIT_CATALOG_ID);
+      } else {
+        setMode('catalog');
+      }
+    }).catch(function() {
+      showToast('課程目錄載入失敗，請重新整理頁面', 'error');
     });
+  }
+
+  /* ── 建立任務選擇清單 ── */
+  function _buildReqOptions() {
+    var container = document.getElementById('req-opts-container');
+    var today = new Date();
+    today.setHours(0,0,0,0);
+    var html = '';
+
+    // 排序：未完成在前，已完成在後
+    var sorted = _allRequirements.slice().sort(function(a, b) {
+      if (a.isCompleted && !b.isCompleted) return 1;
+      if (!a.isCompleted && b.isCompleted) return -1;
+      return 0;
+    });
+
+    sorted.forEach(function(r) {
+      var metaParts = [];
+      if (r.owner)   metaParts.push(r.owner);
+      if (r.endDate) metaParts.push('截止 ' + r.endDate);
+      var progText = '';
+      if (r.requiredHours > 0) {
+        progText = '已通過 ' + r.approvedHours + ' / ' + r.requiredHours + ' 小時';
+        if (r.pendingHours > 0) progText += '（待審 ' + r.pendingHours + 'h）';
+      } else {
+        progText = '時數請依公文確認';
+      }
+
+      var doneClass  = r.isCompleted ? ' req-opt-done'   : '';
+      var urgentClass = (!r.isCompleted && r.endDate) ? (function() {
+        var p = String(r.endDate).replace(/-/g,'/').split('/').map(Number);
+        if (p.length < 3 || isNaN(p[0])) return '';
+        var end = new Date(p[0], p[1]-1, p[2]); end.setHours(0,0,0,0);
+        var diff = Math.ceil((end - today) / 86400000);
+        return diff < 0 ? ' req-opt-urgent' : '';
+      })() : '';
+
+      html +=
+        '<label class="req-opt' + doneClass + urgentClass + '" id="reqopt-' + r.requirementId + '">' +
+          '<input type="radio" name="req-radio" value="' + r.requirementId + '"' +
+          ' onchange="onReqRadioChange(\'' + r.requirementId + '\')">' +
+          '<div style="min-width:0">' +
+            '<div class="req-opt-name">' + _e(r.name) + '</div>' +
+            '<div class="req-opt-meta">' + _e(metaParts.join('　')) + '</div>' +
+            '<div class="req-opt-prog">' + _e(progText) + '</div>' +
+          '</div>' +
+        '</label>';
+    });
+
+    // 自由研習選項（不歸屬任何任務）
+    html +=
+      '<label class="req-opt" id="reqopt-free">' +
+        '<input type="radio" name="req-radio" value=""' +
+        ' onchange="onReqRadioChange(\'\')">' +
+        '<div>' +
+          '<div class="req-opt-name" style="color:var(--gray-600)">自由研習（不歸屬年度任務）</div>' +
+          '<div class="req-opt-meta">個人進修、選修課程，不列入年度任務計算</div>' +
+        '</div>' +
+      '</label>';
+
+    container.innerHTML = html;
+  }
+
+  function onReqRadioChange(requirementId) {
+    _selectReq(requirementId);
+  }
+
+  function _selectReq(requirementId) {
+    _selectedReqId = requirementId;
+    // 視覺更新
+    document.querySelectorAll('.req-opt').forEach(function(el) {
+      el.classList.remove('selected');
+    });
+    var targetId = requirementId ? 'reqopt-' + requirementId : 'reqopt-free';
+    var targetEl = document.getElementById(targetId);
+    if (targetEl) {
+      targetEl.classList.add('selected');
+      var radio = targetEl.querySelector('input[type="radio"]');
+      if (radio) radio.checked = true;
+    }
+    // 重建課程選單（依任務篩選）
+    _buildCatalogSelect(requirementId);
+  }
+
+  /* ── 建立課程選單（可依 requirementId 篩選）── */
+  function _buildCatalogSelect(requirementId) {
+    var sel = document.getElementById('catalog-select');
+    var filtered = requirementId
+      ? _allCatalog.filter(function(c) {
+          return c.requirementId === requirementId || !c.requirementId;
+        })
+      : _allCatalog;
+
+    var opts = '<option value="">— 請選擇研習課程 —</option>';
+    // 先顯示有關聯的課程
+    var linked   = filtered.filter(function(c) { return c.requirementId === requirementId && requirementId; });
+    var unlinked = filtered.filter(function(c) { return !c.requirementId || c.requirementId !== requirementId; });
+
+    if (linked.length) {
+      opts += '<optgroup label="推薦課程（與本任務相關）">';
+      linked.forEach(function(c) {
+        opts += '<option value="' + c.catalogId + '">' + _e(c.title) + '（' + c.hours + ' 小時）</option>';
+      });
+      opts += '</optgroup>';
+    }
+    if (unlinked.length) {
+      opts += '<optgroup label="其他課程">';
+      unlinked.forEach(function(c) {
+        opts += '<option value="' + c.catalogId + '">' + _e(c.title) + '（' + c.hours + ' 小時）</option>';
+      });
+      opts += '</optgroup>';
+    }
     sel.innerHTML = opts;
+    // 若已選取課程，重置
+    _selectedCatalog = null;
+    _unlockFields();
   }
 
   function _preselectCatalog(catalogId) {
+    setMode('catalog');
     var sel = document.getElementById('catalog-select');
     sel.value = catalogId;
     onCatalogSelect();
+    // 若課程有關聯任務，自動選取
+    for (var i = 0; i < _allCatalog.length; i++) {
+      if (_allCatalog[i].catalogId === catalogId && _allCatalog[i].requirementId) {
+        _selectReq(_allCatalog[i].requirementId);
+        break;
+      }
+    }
   }
 
-  /* ── 載入退件紀錄（重新送出模式）── */
+  /* ── 退件重送：載入原紀錄 ── */
   function _loadResubmitData() {
     showSpinner();
     api('v1/getMyRecords', {})
@@ -247,9 +410,10 @@
           return;
         }
         _resubmitRec = rec;
-
-        // 顯示重新送出橫幅
         document.getElementById('resubmit-banner').classList.remove('hidden');
+
+        // 自動選取原任務
+        if (rec.requirementId) _selectReq(rec.requirementId);
 
         // 預填課程資料
         if (rec.catalogId) {
@@ -257,28 +421,25 @@
           _preselectCatalog(rec.catalogId);
         } else {
           setMode('custom');
-          document.getElementById('field-title').value    = rec.title    || '';
-          document.getElementById('field-hours').value    = rec.hours    || '';
-          document.getElementById('field-organizer').value= rec.organizer|| '';
+          document.getElementById('field-title').value     = rec.title     || '';
+          document.getElementById('field-hours').value     = rec.hours     || '';
+          document.getElementById('field-organizer').value = rec.organizer || '';
         }
 
-        // 預填日期（YYYY/M/D → YYYY-MM-DD for date input）
+        // 預填日期
         if (rec.trainingDate) {
           var parts = rec.trainingDate.split('/');
           if (parts.length === 3) {
-            var y = parts[0];
-            var m = String(parseInt(parts[1])).padStart(2, '0');
-            var d = String(parseInt(parts[2])).padStart(2, '0');
-            document.getElementById('field-date').value = y + '-' + m + '-' + d;
+            document.getElementById('field-date').value =
+              parts[0] + '-' + String(parseInt(parts[1])).padStart(2,'0') +
+              '-' + String(parseInt(parts[2])).padStart(2,'0');
           }
         }
 
-        // 顯示沿用舊檔案選項
+        // 沿用舊檔案選項
         if (rec.fileId && rec.fileName) {
           document.getElementById('reuse-section').classList.remove('hidden');
-          document.getElementById('reuse-filename').textContent =
-            '📎 ' + rec.fileName;
-          // 預設選「沿用」
+          document.getElementById('reuse-filename').textContent = '📎 ' + rec.fileName;
           document.getElementById('opt-reuse').checked  = true;
           document.getElementById('opt-upload').checked = false;
           onFileOptChange();
@@ -286,9 +447,7 @@
       })
       .catch(function(err) {
         hideSpinner();
-        if (err && err.message !== 'TOKEN_EXPIRED') {
-          showToast('載入退件資料失敗', 'error');
-        }
+        if (err && err.message !== 'TOKEN_EXPIRED') showToast('載入退件資料失敗', 'error');
       });
   }
 
@@ -296,45 +455,32 @@
   function setMode(mode) {
     _currentMode = mode;
     var isCatalog = (mode === 'catalog');
-
-    // 按鈕視覺
     var btnC = document.getElementById('mode-btn-catalog');
     var btnX = document.getElementById('mode-btn-custom');
     if (isCatalog) {
       btnC.style.background = 'var(--primary)'; btnC.style.color = '#fff';
-      btnX.style.background = '#fff'; btnX.style.color = 'var(--primary)';
+      btnX.style.background = '#fff';           btnX.style.color = 'var(--primary)';
     } else {
-      btnC.style.background = '#fff'; btnC.style.color = 'var(--primary)';
+      btnC.style.background = '#fff';           btnC.style.color = 'var(--primary)';
       btnX.style.background = 'var(--primary)'; btnX.style.color = '#fff';
     }
-
-    // 區塊顯示
     document.getElementById('section-catalog').style.display = isCatalog ? '' : 'none';
-
-    // 欄位鎖定狀態
     if (!isCatalog) {
-      // 自訂模式：解鎖所有欄位，清空目錄選擇
       _selectedCatalog = null;
       document.getElementById('catalog-select').value = '';
-      document.getElementById('field-title').disabled    = false;
-      document.getElementById('field-hours').disabled    = false;
-      document.getElementById('field-organizer').disabled= false;
+      _unlockFields();
       document.getElementById('hint-title-auto').classList.add('hidden');
-    } else {
-      // 目錄模式：若已選課程則鎖定
-      if (_selectedCatalog) {
-        _lockCatalogFields(_selectedCatalog);
-      }
+    } else if (_selectedCatalog) {
+      _lockCatalogFields(_selectedCatalog);
     }
   }
 
   function onCatalogSelect() {
     var catalogId = document.getElementById('catalog-select').value;
     if (!catalogId) {
-      _selectedCatalog = null;
-      _unlockFields();
-      document.getElementById('field-title').value     = '';
-      document.getElementById('field-hours').value     = '';
+      _selectedCatalog = null; _unlockFields();
+      document.getElementById('field-title').value = '';
+      document.getElementById('field-hours').value = '';
       document.getElementById('field-organizer').value = '';
       document.getElementById('hint-title-auto').classList.add('hidden');
       return;
@@ -357,7 +503,6 @@
     document.getElementById('field-organizer').disabled= true;
     document.getElementById('hint-title-auto').classList.remove('hidden');
   }
-
   function _unlockFields() {
     document.getElementById('field-title').disabled    = false;
     document.getElementById('field-hours').disabled    = false;
@@ -368,32 +513,20 @@
   function onFileOptChange() {
     var reuseChecked = document.getElementById('opt-reuse').checked;
     document.getElementById('upload-section').style.display = reuseChecked ? 'none' : '';
-    document.getElementById('opt-reuse-box').style.borderColor =
-      reuseChecked ? 'var(--primary)' : 'var(--gray-300)';
-    document.getElementById('opt-upload-box').style.borderColor =
-      reuseChecked ? 'var(--gray-300)' : 'var(--primary)';
+    document.getElementById('opt-reuse-box').style.borderColor  = reuseChecked ? 'var(--primary)' : 'var(--gray-300)';
+    document.getElementById('opt-upload-box').style.borderColor = reuseChecked ? 'var(--gray-300)' : 'var(--primary)';
     if (reuseChecked) _selectedFile = null;
   }
 
   /* ── 檔案上傳互動 ── */
-  function triggerFileInput() {
-    document.getElementById('file-input').click();
-  }
+  function triggerFileInput() { document.getElementById('file-input').click(); }
 
   function onFileSelected() {
     var input = document.getElementById('file-input');
     if (input.files && input.files[0]) _setFile(input.files[0]);
   }
-
-  function onDragOver(e) {
-    e.preventDefault();
-    document.getElementById('upload-area').classList.add('dragover');
-  }
-
-  function onDragLeave(e) {
-    document.getElementById('upload-area').classList.remove('dragover');
-  }
-
+  function onDragOver(e)  { e.preventDefault(); document.getElementById('upload-area').classList.add('dragover'); }
+  function onDragLeave()  { document.getElementById('upload-area').classList.remove('dragover'); }
   function onDrop(e) {
     e.preventDefault();
     document.getElementById('upload-area').classList.remove('dragover');
@@ -404,30 +537,25 @@
   function _setFile(f) {
     var allowed = ['application/pdf','image/jpeg','image/png','image/gif'];
     if (allowed.indexOf(f.type) === -1) {
-      _showUploadError('僅支援 PDF、JPG、PNG、GIF 格式，請重新選擇。');
-      return;
+      _showUploadError('僅支援 PDF、JPG、PNG、GIF 格式，請重新選擇。'); return;
     }
     _selectedFile = f;
     _clearUploadError();
     var area = document.getElementById('upload-area');
-    area.classList.add('has-file');
-    area.classList.remove('dragover');
+    area.classList.add('has-file'); area.classList.remove('dragover');
     document.getElementById('upload-hint').classList.add('hidden');
     document.getElementById('upload-preview').classList.remove('hidden');
     document.getElementById('upload-filename').textContent =
-      f.name + '（' + (f.size / 1024 / 1024).toFixed(2) + ' MB）';
+      f.name + '（' + (f.size/1024/1024).toFixed(2) + ' MB）';
   }
 
   function _showUploadError(msg) {
     var el = document.getElementById('upload-error');
-    el.textContent = msg;
-    el.style.display = 'block';
+    el.textContent = msg; el.style.display = 'block';
   }
-
   function _clearUploadError() {
     var el = document.getElementById('upload-error');
-    el.style.display = 'none';
-    el.textContent = '';
+    el.style.display = 'none'; el.textContent = '';
   }
 
   /* ── 表單送出 ── */
@@ -439,58 +567,49 @@
     var organizer = document.getElementById('field-organizer').value.trim();
     var hours     = parseFloat(hoursStr);
 
-    // 基本驗證
-    if (!title)                        { showToast('請填寫研習名稱', 'error'); return; }
-    if (!hoursStr || isNaN(hours) || hours <= 0) { showToast('請填寫正確的研習時數（正整數或 0.5 倍數）', 'error'); return; }
-    if (!dateStr)                      { showToast('請選擇研習日期', 'error'); return; }
-    if (!organizer)                    { showToast('請填寫主辦單位', 'error'); return; }
+    if (!title)                              { showToast('請填寫研習名稱', 'error');           return; }
+    if (!hoursStr || isNaN(hours) || hours <= 0) { showToast('請填寫正確的研習時數', 'error'); return; }
+    if (!dateStr)                            { showToast('請選擇研習日期', 'error');           return; }
+    if (!organizer)                          { showToast('請填寫主辦單位', 'error');           return; }
 
-    // 日期轉換：YYYY-MM-DD → YYYY/M/D
     var dp = dateStr.split('-');
     var trainingDate = parseInt(dp[0]) + '/' + parseInt(dp[1]) + '/' + parseInt(dp[2]);
 
-    // 判斷沿用舊檔案
     var reuseChecked = false;
     var reuseEl = document.getElementById('opt-reuse');
-    if (reuseEl && document.getElementById('reuse-section') &&
-        !document.getElementById('reuse-section').classList.contains('hidden')) {
+    if (reuseEl && !document.getElementById('reuse-section').classList.contains('hidden')) {
       reuseChecked = reuseEl.checked;
     }
 
     var body = {
-      catalogId:    (_currentMode === 'catalog' && _selectedCatalog)
-                    ? _selectedCatalog.catalogId : '',
-      title:        title,
-      hours:        hours,
-      isCustom:     _currentMode === 'custom',
-      trainingDate: trainingDate,
-      organizer:    organizer
+      catalogId:     (_currentMode === 'catalog' && _selectedCatalog) ? _selectedCatalog.catalogId : '',
+      title:         title,
+      hours:         hours,
+      isCustom:      _currentMode === 'custom',
+      trainingDate:  trainingDate,
+      organizer:     organizer,
+      requirementId: _selectedReqId || ''
     };
 
     if (_resubmitRec) body.resubmitOf = _resubmitRec.recordId;
 
     if (reuseChecked && _resubmitRec && _resubmitRec.fileId) {
-      // 沿用舊檔案：直接送出（不需壓縮 / base64）
       body.reuseFileId = _resubmitRec.fileId;
       body.fileName    = _resubmitRec.fileName;
       _doSubmit(body);
     } else {
-      // 新上傳檔案：壓縮後轉 base64
-      if (!_selectedFile) {
-        _showUploadError('請選擇研習證明檔案。');
-        return;
-      }
+      if (!_selectedFile) { _showUploadError('請選擇研習證明檔案。'); return; }
       showSpinner();
       prepareFileForUpload(_selectedFile)
         .then(function(fileObj) {
-          body.base64    = fileObj.base64;
-          body.mimeType  = fileObj.mimeType;
-          body.fileName  = fileObj.fileName;
+          body.base64   = fileObj.base64;
+          body.mimeType = fileObj.mimeType;
+          body.fileName = fileObj.fileName;
           _doSubmit(body);
         })
         .catch(function(err) {
           hideSpinner();
-          _showUploadError(err && err.message ? err.message : '檔案處理失敗，請重試或換一個檔案。');
+          _showUploadError(err && err.message ? err.message : '檔案處理失敗，請重試。');
         });
     }
   }
@@ -498,40 +617,31 @@
   function _doSubmit(body) {
     showSpinner();
     var btn = document.getElementById('submit-btn');
-    btn.disabled = true;
-    btn.textContent = '送出中…';
+    btn.disabled = true; btn.textContent = '送出中…';
 
     api('v1/submitRecord', body)
       .then(function(res) {
         hideSpinner();
-        btn.disabled = false;
-        btn.textContent = '📤 送出研習登錄';
         if (res && res.success) {
           showToast('✅ 登錄成功！請等候管理者審核。', 'success');
-          // GAS iframe sandbox 限制：setTimeout 內的 window.top 導覽被瀏覽器以
-          // 「無使用者手勢」為由封鎖（allow-top-navigation-by-user-activation）
-          // 解法：將按鈕直接變成跳轉入口，由使用者點擊觸發（符合 user activation）
           btn.disabled = false;
           btn.textContent = '📋 前往我的紀錄 →';
           btn.style.background = 'var(--success)';
           btn.onclick = function() { _navigate('?page=records'); };
         } else {
+          btn.disabled = false; btn.textContent = '📤 送出研習登錄';
           showToast((res && res.error) || '送出失敗，請稍後再試', 'error');
         }
       })
       .catch(function(err) {
         hideSpinner();
-        btn.disabled = false;
-        btn.textContent = '📤 送出研習登錄';
-        if (err && err.message !== 'TOKEN_EXPIRED') {
-          showToast(err.message || '系統錯誤，請稍後再試', 'error');
-        }
+        btn.disabled = false; btn.textContent = '📤 送出研習登錄';
+        if (err && err.message !== 'TOKEN_EXPIRED') showToast(err.message || '系統錯誤，請稍後再試', 'error');
       });
   }
 
   function _e(s) {
-    return String(s || '')
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;')
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
@@ -542,16 +652,17 @@
   });
 
   /* ── GAS Warden 作用域隔離修正 ── */
-  window.onLoginSuccess  = onLoginSuccess;
-  window.setMode         = setMode;
-  window.onCatalogSelect = onCatalogSelect;
-  window.onFileOptChange = onFileOptChange;
-  window.triggerFileInput= triggerFileInput;
-  window.onFileSelected  = onFileSelected;
-  window.onDragOver      = onDragOver;
-  window.onDragLeave     = onDragLeave;
-  window.onDrop          = onDrop;
-  window.submitRecord    = submitRecord;
+  window.onLoginSuccess   = onLoginSuccess;
+  window.onReqRadioChange = onReqRadioChange;
+  window.setMode          = setMode;
+  window.onCatalogSelect  = onCatalogSelect;
+  window.onFileOptChange  = onFileOptChange;
+  window.triggerFileInput = triggerFileInput;
+  window.onFileSelected   = onFileSelected;
+  window.onDragOver       = onDragOver;
+  window.onDragLeave      = onDragLeave;
+  window.onDrop           = onDrop;
+  window.submitRecord     = submitRecord;
   </script>
 </body>
 </html>

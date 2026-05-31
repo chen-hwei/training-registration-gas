@@ -56,20 +56,21 @@ function submitRecord(userId, body) {
     const newRecord = {
       recordId,
       userId,
-      catalogId:    String(body.catalogId    || ''),
-      title:        String(body.title),
-      hours:        Number(body.hours)        || 0,
-      isCustom:     body.isCustom === true || body.isCustom === 'TRUE',
-      trainingDate: String(body.trainingDate),
-      organizer:    String(body.organizer     || ''),
+      catalogId:     String(body.catalogId     || ''),
+      title:         String(body.title),
+      hours:         Number(body.hours)         || 0,
+      isCustom:      body.isCustom === true || body.isCustom === 'TRUE',
+      trainingDate:  String(body.trainingDate),
+      organizer:     String(body.organizer      || ''),
       fileId,
       fileName,
-      status:       'PENDING',
-      reviewedBy:   '',
-      reviewNote:   '',
-      reviewedAt:   '',
-      submittedAt:  _now(),
-      resubmitOf:   String(body.resubmitOf || '')
+      status:        'PENDING',
+      reviewedBy:    '',
+      reviewNote:    '',
+      reviewedAt:    '',
+      submittedAt:   _now(),
+      resubmitOf:    String(body.resubmitOf    || ''),
+      requirementId: String(body.requirementId || '')
     };
 
     const newRow = schema.keys.map(k => newRecord[k] !== undefined ? newRecord[k] : '');
