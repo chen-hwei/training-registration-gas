@@ -180,7 +180,7 @@
 ├── Submit.html      # 選課與上傳頁面（Step ① 任務選擇 → Step ② 研習資訊）
 ├── Records.html     # 教師端個人研習紀錄查詢（PENDING / APPROVED / REJECTED 分頁）
 ├── Admin.html       # 管理者後台（待審核 + 研習目錄 + 通知預覽 + 年度任務管理）
-├── style.html       # 共用 CSS（狀態色彩 / RWD / 字型縮放）
+├── style.html       # 系統識別色 3 個變數 + SchoolPortalLib.getSharedCSS() 注入共用 CSS + 系統專屬 CSS
 └── config.html      # 共用 JS（api() bridge / Token / Base64 工具）
 ```
 
@@ -199,6 +199,7 @@
 | **UAT** | 端對端驗收測試（T1–T9）— 全部通過 ✅ | ✅ 完成（2026-05-31） |
 | **Phase 5A** | 年度任務後端（Requirement.gs + Schema 擴充 + 8 支 API） | ✅ 完成（2026-05-31） |
 | **Phase 5B** | 年度任務前端（Index 改版 + Submit 任務選擇 + Admin 第四分頁） | ✅ 完成（2026-05-31） |
+| **共用 CSS 抽離** | SchoolPortalLib.getSharedCSS() + style.html 精簡（458 → 86 行） | ✅ 完成（2026-05-31） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
