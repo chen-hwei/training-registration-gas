@@ -18,7 +18,11 @@ function _saveFileToDrive(userId, base64, mimeType, originalName, trainingDate, 
   // 授予本人唯讀（失敗不中斷，僅記錄）
   try {
     const email = SchoolPortalLib.getUser(userId).email;
-    if (email) file.addViewer(email);
+    if (email) Drive.Permissions.insert(
+      { role: 'reader', type: 'user', value: email },
+      file.getId(),
+      { sendNotificationEmails: false }
+    );
   } catch (e) {
     console.warn('授予教師唯讀失敗，userId=' + userId + '，原因：' + e.message);
   }

@@ -46,7 +46,9 @@ function syncTrainingStats() {
   ]);
 
   const allData    = [headers, ...dataRows];
-  const statsSheet = hub.getSheetByName('TrainingStats');
+  // 若 Hub 試算表尚未建立 TrainingStats 工作表，自動建立
+  let statsSheet = hub.getSheetByName('TrainingStats');
+  if (!statsSheet) statsSheet = hub.insertSheet('TrainingStats');
   statsSheet.clearContents();
   statsSheet.getRange(1, 1, allData.length, allData[0].length).setValues(allData);
 

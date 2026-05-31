@@ -175,7 +175,7 @@
 | Phase 2 | 審核流程（Review.gs + 管理者 Catalog API）— **MVP 完成** | ✅ 完成（2026-05-30） |
 | Phase 3 | 前端介面（Index / Submit / Records / Admin）— 擴展 | ✅ 完成（2026-05-30） |
 | Phase 4 | 整合收尾（Hub 同步 / 觸發器 / 通知系統）— 維運就緒 | ✅ 完成（2026-05-30） |
-| **UAT** | 端對端驗收測試（T1–T9）— T1–T4 ✅ | 🔲 進行中 |
+| **UAT** | 端對端驗收測試（T1–T9）— 全部通過 ✅ | ✅ 完成（2026-05-31） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
@@ -194,18 +194,23 @@ https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF3
 
 > **必須使用含 `/a/macros/zlsh.tp.edu.tw/` 的 Workspace 域 URL**，才能讓頁面導覽（`?page=admin` 等相對路徑）停在 `script.google.com` 域下，避免被轉址至 `googleusercontent.com` 造成 localStorage Token 失效（白屏問題）。
 
-### 🐛 UAT 環境修復紀錄（2026-05-30）
+### 🐛 UAT 修復紀錄（2026-05-30 ~ 2026-05-31）
 
-UAT 啟動時發現並修復下列 GAS 環境地雷，**這些問題不會出現在一般 Web 開發，但在 GAS iframe 沙箱中必定踩到**：
+UAT 期間發現並修復下列問題：
 
 | 症狀 | 根本原因 | 修復位置 |
 |---|---|---|
-| 點選導覽連結後白屏，URL 變 `googleusercontent.com` | 所有 `window.top.location.href = '?page=X'` 使用相對路徑；當 `window.top` 在 `googleusercontent.com` 時，相對路徑仍留在錯誤域 | `config.html` 新增 `_navigate()` 函式，從 `doGet()` 注入絕對 `APP_BASE_URL` 至各頁面 |
-| 頁面完全白屏（無藍色頁首），API 靜默失敗 | `getValues()` 對日期格式儲存格回傳 JS `Date` 物件；`google.script.run` postMessage 無法序列化 `Date`，`withSuccessHandler` 收到 `null`，例外無法被 `.catch()` 攔截 | `Schema.gs` `parseSheetData` 加入 `instanceof Date` 檢查，以 `Utilities.formatDate()` 轉為字串 |
-| 管理後台「待審核」頁面回傳 FORBIDDEN | `SchoolPortalLib.getUser().systemAccess` 可能已是解析後的 JS Object；`JSON.parse(Object)` 拋 SyntaxError，catch 後 `access={}` → `training_admin` 為 `undefined` → 誤判無權限 | `程式碼.gs` Level 2 檢查改為先判斷 `typeof sa === 'object'`，再決定是否需要 `JSON.parse` |
-| 導覽列出現兩個「管理後台」連結 | `Admin.html` 靜態 `<a>` 缺少 `data-admin-link="1"` 屬性；`_renderAdminNav()` 未偵測到已存在的連結，重複插入 | `Admin.html` 靜態連結加入 `data-admin-link="1"` |
-| 送出成功後頁面不跳轉（console 報 sandbox navigation 錯誤） | GAS iframe 具 `allow-top-navigation-by-user-activation` 沙箱屬性，`setTimeout` 回呼屬非同步，無使用者手勢，瀏覽器封鎖 `window.top.location.href` | `Submit.html` 改為成功後將按鈕變為「前往我的紀錄 →」，由使用者點擊觸發；`config.html` `initPage` adminOnly 跳轉改為同步呼叫 |
-| 刪除 / 核准 / 退件 / 編輯等按鈕點擊報 `SyntaxError: Unexpected end of input` | `JSON.stringify('R202600001')` 產生帶雙引號字串，嵌入 `onclick="..."` 屬性後 HTML 解析截斷 | `Records.html`、`Admin.html`、`Index.html` 所有 inline onclick 改用單引號包裹純 ID；含任意字元的 title / 完整物件改為只傳 ID，函式內從全域陣列查詢 |
+| 點選導覽連結後白屏，URL 變 `googleusercontent.com` | `window.top.location.href = '?page=X'` 使用相對路徑，當 `window.top` 在 `googleusercontent.com` 時仍留在錯誤域 | `config.html` 新增 `_navigate()`，從 `doGet()` 注入絕對 `APP_BASE_URL` |
+| 資料載入後內容空白，API 靜默失敗 | `getValues()` 對日期格式儲存格回傳 JS `Date`，`google.script.run` postMessage 無法序列化，`withSuccessHandler` 收到 `null` | `Schema.gs` `parseSheetData` 加入 `instanceof Date` 檢查，以 `Utilities.formatDate()` 轉字串 |
+| 管理後台回傳 FORBIDDEN | `SchoolPortalLib.getUser().systemAccess` 可能已是 JS Object，`JSON.parse(Object)` 拋 SyntaxError，catch 後誤判無權限 | `程式碼.gs` Level 2 改為先 `typeof sa === 'object'` 判斷再決定是否 parse |
+| 導覽列出現兩個「管理後台」連結 | `Admin.html` 靜態 `<a>` 缺 `data-admin-link="1"`，`_renderAdminNav()` 重複插入 | `Admin.html` 靜態連結補上屬性 |
+| 送出成功後頁面不跳轉 | GAS iframe `allow-top-navigation-by-user-activation` 屬性，`setTimeout` 非同步回呼無使用者手勢，瀏覽器封鎖導覽 | `Submit.html` 改為成功後按鈕變「前往我的紀錄 →」由使用者點擊觸發 |
+| 按鈕點擊報 `SyntaxError: Unexpected end of input` | `JSON.stringify(id)` 產生帶雙引號字串嵌入 `onclick=""` 屬性，HTML 解析截斷 | 所有 inline onclick 改用單引號包純 ID；複雜物件改從全域陣列查詢 |
+| 退件後靜默失敗 | `confirmReject()` 先呼叫 `closeRejectModal()` 清空了 `_rejectTargetId`，再讀取時已為空 | 先儲存 `var targetId = _rejectTargetId` 再關 Modal |
+| Hub.TrainingStats 工作表不存在時 null pointer | `getSheetByName()` 回傳 null，直接 `clearContents()` 爆錯 | `Sync.gs` 改為工作表不存在時自動建立 |
+| 管理者信箱收到大量 Drive 共用通知 | `file.addViewer(email)` 預設寄送共用通知信 | `Drive.gs` 改用 Drive API v2 `Permissions.insert`，傳入 `sendNotificationEmails:false` |
+| 通知系統不發信（N2 靜默失敗） | `TRAINING_CATALOG` 日期欄位儲存格格式為日期型，`parseSheetData` 轉出 `YYYY-MM-DD`，但 `Notify.gs` 用 `/` 做 split | 解析前加 `.replace(/-/g, '/')` 統一格式 |
+| 通知預覽前端永遠空白 | `previewNotification()` 回傳平面陣列，前端期望 `{ n1:[], n2:[], n3:[] }` 分組格式，且欄位名稱不符 | 後端改為分組回傳，欄位統一為 `userId`、`title` |
 
 ---
 

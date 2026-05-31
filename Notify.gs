@@ -47,7 +47,7 @@ function _buildNotificationList() {
 
   catalog.forEach(course => {
     // 日期解析：禁用 new Date("YYYY/M/D")，改用數字拆分
-    const [y, m, d]  = String(course.endDate).split('/').map(Number);
+    const [y, m, d]  = String(course.endDate).replace(/-/g, '/').split('/').map(Number);
     if (!y || !m || !d) return;
     const endDate  = new Date(y, m - 1, d);
     const daysLeft = Math.ceil((endDate - today) / 86400000);
@@ -94,16 +94,19 @@ function _buildNotificationList() {
 /** 預覽通知名單（不發送，供管理者確認後再手動觸發）*/
 function previewNotification() {
   const list = _buildNotificationList();
-  const preview = list.map(item => ({
-    type:         item.type,
-    teacherId:    item.teacher.userId,
-    teacherName:  item.teacher.name,
-    department:   item.teacher.department,
-    courseName:   item.course ? item.course.title : (item.record ? item.record.title : ''),
-    daysLeft:     item.daysLeft || null,
-    adminEmails:  item.adminEmails || []
-  }));
-  return { success: true, data: preview, count: preview.length };
+  const grouped = { n1: [], n2: [], n3: [] };
+  list.forEach(item => {
+    const key = item.type.toLowerCase(); // 'N1' → 'n1'
+    grouped[key].push({
+      userId:      item.teacher ? item.teacher.userId     : '',
+      teacherName: item.teacher ? item.teacher.name       : '',
+      department:  item.teacher ? item.teacher.department : '',
+      title:       item.course  ? item.course.title       : (item.record ? item.record.title : ''),
+      daysLeft:    item.daysLeft || null,
+      adminEmails: item.adminEmails || []
+    });
+  });
+  return { success: true, data: grouped, count: list.length };
 }
 
 /** 實際發送通知並回傳發送封數（供定時觸發器與手動 API 共用） */
@@ -240,6 +243,54 @@ function _getAdminEmailsByDept(department) {
     })
     .map(row => row[emailCol])
     .filter(Boolean);
+}
+
+/** 除錯用：逐步印出通知邏輯各關卡的狀態，不發送任何信件 */
+function debugNotify() {
+  const today   = new Date();
+  console.log('=== debugNotify 開始，today=' + today.toISOString() + ' ===');
+
+  // 1. 必修 ACTIVE 課程
+  const catalog = parseSheetData(_getCatalogSheet())
+    .filter(c => c.status === 'ACTIVE' && (c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE'));
+  console.log('必修 ACTIVE 課程數：' + catalog.length);
+  catalog.forEach(c => console.log('  課程: ' + c.catalogId + ' / ' + c.title + ' / endDate=' + c.endDate + ' / isRequired=' + c.isRequired));
+
+  // 2. 在職教師
+  const teachers = _getActiveTeachers();
+  console.log('在職教師數：' + teachers.length);
+  teachers.slice(0, 5).forEach(t => console.log('  教師: ' + t.userId + ' / ' + t.name + ' / email=' + t.email + ' / dept=' + t.department));
+
+  // 3. 各課程日期解析與 daysLeft
+  catalog.forEach(course => {
+    const [y, m, d] = String(course.endDate).replace(/-/g, '/').split('/').map(Number);
+    if (!y || !m || !d) { console.log('  ⚠️ 日期解析失敗: ' + course.endDate); return; }
+    const endDate  = new Date(y, m - 1, d);
+    const daysLeft = Math.ceil((endDate - today) / 86400000);
+    console.log('  ' + course.title + ' → daysLeft=' + daysLeft + '（endDate=' + endDate.toDateString() + '）');
+
+    // 4. 每位教師的 statusMap
+    const records = parseSheetData(_getRecordSheet());
+    const statusPriority = { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 };
+    const statusMap = {};
+    records.forEach(r => {
+      const key = r.userId + '_' + r.catalogId;
+      if (!statusMap[key] || (statusPriority[r.status] || 0) > (statusPriority[statusMap[key]] || 0)) {
+        statusMap[key] = r.status;
+      }
+    });
+
+    teachers.forEach(teacher => {
+      const key       = teacher.userId + '_' + course.catalogId;
+      const topStatus = statusMap[key] || '(無紀錄)';
+      const cached    = _hasNotifiedToday('N2', teacher.userId, course.catalogId);
+      if (daysLeft <= 0) {
+        console.log('    N2候選: ' + teacher.userId + ' status=' + topStatus + ' cached=' + cached);
+      }
+    });
+  });
+
+  console.log('=== debugNotify 結束 ===');
 }
 
 /** 建立定時觸發器（一次性執行，部署時呼叫） */
