@@ -16,16 +16,26 @@ const TRAIN_TOKEN_PREFIX  = 'train_';
 const TRAIN_TOKEN_TTL     = 21600;   // 6 小時
 const TRAIN_ACTIVE_STATUSES = ['在職', '轉調'];
 
-// Hub UserStatusCache 中文標題 → 英文 key 對照（動態查找用）
+// Hub UserStatusCache 標題 → 英文 key 對照（動態查找用）
+// 同時支援中文標題（規範）與英文標題（Hub 現行實際欄名）
 const HUB_USC_HEADER_MAP = {
-  '教師ID':     'userId',
-  '姓名':       'name',
-  '所屬處室':   'department',
-  'Email':      'email',
-  '在職狀態':   'status',
+  // 中文標題（未來標準化後的規範格式）
+  '教師ID':       'userId',
+  '姓名':         'name',
+  '所屬處室':     'department',
+  'Email':        'email',
+  '在職狀態':     'status',
   '狀態異動時間': 'statusChangedAt',
-  '系統存取權': 'systemAccess',
+  '系統存取權':   'systemAccess',
   '身分驗證雜湊': 'idHash',
+  // 英文標題（Hub 現行實際欄名）
+  'userId':          'userId',
+  'name':            'name',
+  'department':      'department',
+  'schoolEmail':     'email',     // G欄 schoolEmail 視為主要 email
+  'status':          'status',
+  'statusChangedAt': 'statusChangedAt',
+  'systemAccess':    'systemAccess',
 };
 
 // ── Token 發行 ────────────────────────────────────────────────

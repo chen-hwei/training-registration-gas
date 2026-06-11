@@ -41,7 +41,7 @@
 | 後端 | Google Apps Script（clasp 管理） |
 | 資料庫 | Google Sheets（2 個工作表） |
 | 檔案儲存 | Google Drive（依年份 / 教師 ID 分層管理） |
-| 身分驗證 | SchoolPortalLib（共用函式庫，`txxxx` + PIN，CacheService Token） |
+| 身分驗證 | TRAIN 原生 Token（`txxxx` + 身分證後六碼，SHA-256 雜湊，CacheService `train_` Token）；向後相容 SchoolPortalLib |
 | 前端 | HTML / CSS / Vanilla JS（GAS HtmlService） |
 | 檔案上傳 | FileReader → Base64 → `google.script.run`（單次上傳，上限 8MB） |
 | 圖片壓縮 | Canvas API 前端壓縮（JPG/PNG 自動壓縮至 2MB 以下再上傳，防手機大圖逾時） |
