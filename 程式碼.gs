@@ -45,18 +45,30 @@ function handleRequest(payload) {
 
   // ── 公開路由（無需 Token）──
   if (action === 'login') {
+    // 保留舊版共用 PIN 登入（向後相容，未來可移除）
     return SchoolPortalLib.login((body || {}).userId, (body || {}).pin);
+  }
+  if (action === 'train/getUserName') {
+    // 新版登入步驟 1：查工號對應姓名
+    return trainGetUserName_(body || {});
+  }
+  if (action === 'train/loginWithIdSuffix') {
+    // 新版登入步驟 2：身分證後六碼驗證
+    return trainLoginWithIdSuffix_(body || {});
   }
   if (action === 'getTeachers') {
     return { success: true, data: SchoolPortalLib.getTeachers() };
   }
   if (action === 'logout') {
-    SchoolPortalLib.revokeToken(token);
+    // train_ token 靠 CacheService TTL 自然過期，SPL token 呼叫 revokeToken
+    if (!token || !token.startsWith(TRAIN_TOKEN_PREFIX)) {
+      try { SchoolPortalLib.revokeToken(token); } catch (_) {}
+    }
     return { success: true };
   }
 
-  // ── Level 1：驗證 Token ──
-  const session = SchoolPortalLib.verifyToken(token);
+  // ── Level 1：驗證 Token（train_ 原生優先，降級 SchoolPortalLib）──
+  const session = verifyTrainSession_(token);
   if (!session || !session.valid) return _err('TOKEN_EXPIRED');
   const userId = session.userId;
 
@@ -69,15 +81,12 @@ function handleRequest(payload) {
   }
 
   // ── Level 2：驗證管理者身分 ──
-  // ⚠️ SchoolPortalLib.getUser() 的 systemAccess 可能是已解析的 Object（非字串）
-  // 若直接 JSON.parse(Object) 會拋 SyntaxError → catch → access={} → 誤判 FORBIDDEN
-  const user = SchoolPortalLib.getUser(userId);
   let access = {};
   try {
-    const sa = user ? user.systemAccess : undefined;
+    const sa = session.systemAccess;
     access = (typeof sa === 'object' && sa !== null)
-      ? sa                            // Library 已解析為物件，直接使用
-      : JSON.parse(String(sa || '{}')); // Library 回傳字串，需解析
+      ? sa
+      : JSON.parse(String(sa || '{}'));
   } catch (_) {}
   if (!access.training_admin) return _err('FORBIDDEN');
 

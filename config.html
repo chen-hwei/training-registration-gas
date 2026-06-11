@@ -1,25 +1,43 @@
-<!-- ==================== 登入 Modal ==================== -->
+<!-- ==================== 登入 Modal（兩步驟）==================== -->
 <div id="login-overlay" class="modal-overlay hidden">
   <div class="modal-box">
     <div class="modal-title">🏫 中崙高中研習登錄系統</div>
 
-    <div class="form-group">
-      <label class="form-label">您的姓名<span class="req">*</span></label>
-      <select id="login-user-select" class="form-control">
-        <option value="">— 載入中，請稍候 —</option>
-      </select>
+    <!-- 步驟 1：輸入帳號 -->
+    <div id="login-step1">
+      <div class="form-group">
+        <label class="form-label">您的帳號<span class="req">*</span></label>
+        <input type="text" id="login-userId" class="form-control"
+               placeholder="請輸入帳號（如 t1234）"
+               autocomplete="username" autocapitalize="none">
+      </div>
+      <!-- 確認姓名提示（查詢成功後顯示）-->
+      <div id="login-name-confirm"
+           style="display:none;padding:8px 12px;margin-bottom:12px;background:#EBF5FB;border-radius:6px;border-left:3px solid #2E86C1;font-size:0.88rem;">
+      </div>
+      <div id="login-error1"
+           style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;padding:8px 10px;background:var(--danger-bg);border-radius:6px;"></div>
+      <button id="login-step1-btn" class="btn btn-primary btn-block" onclick="doCheckUserId()">確認帳號</button>
     </div>
 
-    <div class="form-group">
-      <label class="form-label">系統密碼<span class="req">*</span></label>
-      <input type="password" id="login-pin" class="form-control"
-             placeholder="請輸入共用密碼" autocomplete="current-password">
+    <!-- 步驟 2：輸入身分證後六碼 -->
+    <div id="login-step2" style="display:none;">
+      <div id="login-step2-name"
+           style="padding:8px 12px;margin-bottom:14px;background:#EBF5FB;border-radius:6px;border-left:3px solid #2E86C1;font-size:0.88rem;"></div>
+      <div class="form-group">
+        <label class="form-label">身分證後六碼<span class="req">*</span></label>
+        <input type="password" id="login-idSuffix" class="form-control"
+               placeholder="請輸入身分證後六碼" maxlength="6"
+               autocomplete="current-password">
+      </div>
+      <div id="login-error2"
+           style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;padding:8px 10px;background:var(--danger-bg);border-radius:6px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-outline btn-block" onclick="doBackToStep1()" style="flex:0 0 72px;">← 返回</button>
+        <button id="login-step2-btn" class="btn btn-primary btn-block" onclick="doLoginWithIdSuffix()">登入</button>
+      </div>
     </div>
 
-    <div id="login-error"
-         style="color:var(--danger);font-size:0.82rem;margin-bottom:12px;display:none;padding:8px 10px;background:var(--danger-bg);border-radius:6px;"></div>
-
-    <button id="login-btn" class="btn btn-primary btn-block" onclick="doLogin()">登入</button>
   </div>
 </div>
 
@@ -92,72 +110,112 @@ function apiPublic(action, body) {
   });
 }
 
-// ── 登入流程 ──
+// ── 登入流程（兩步驟：帳號 → 身分證後六碼）──────────────────
+var _pendingUserId   = '';
+var _pendingUserName = '';
+
 function _showLoginOverlay() {
   document.getElementById('login-overlay').classList.remove('hidden');
-  _loadTeachersDropdown();
+  // 重置為步驟 1
+  _showStep(1);
+  var idEl = document.getElementById('login-userId');
+  if (idEl) { idEl.value = ''; idEl.focus(); }
 }
 function _hideLoginOverlay() {
   document.getElementById('login-overlay').classList.add('hidden');
 }
+function _showStep(n) {
+  document.getElementById('login-step1').style.display = n === 1 ? '' : 'none';
+  document.getElementById('login-step2').style.display = n === 2 ? '' : 'none';
+  // 清除錯誤提示
+  ['login-error1','login-error2','login-name-confirm'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+}
+function doBackToStep1() { _showStep(1); }
 
-function _loadTeachersDropdown() {
-  var sel = document.getElementById('login-user-select');
-  sel.innerHTML = '<option value="">— 載入中 —</option>';
+/* 步驟 1：確認帳號 */
+function doCheckUserId() {
+  var userId = (document.getElementById('login-userId').value || '').trim().toLowerCase();
+  var errEl  = document.getElementById('login-error1');
+  var btn    = document.getElementById('login-step1-btn');
+  errEl.style.display = 'none';
+
+  if (!userId) {
+    errEl.textContent = '請輸入帳號。'; errEl.style.display = 'block'; return;
+  }
+  if (!/^t\d+$/i.test(userId)) {
+    errEl.textContent = '帳號格式錯誤，應為英文字母 t 加數字（如 t1234）。';
+    errEl.style.display = 'block'; return;
+  }
+
+  btn.disabled = true; btn.textContent = '查詢中…';
+
   google.script.run
     .withSuccessHandler(function(res) {
-      if (!res || !res.data || !res.data.length) {
-        sel.innerHTML = '<option value="">（找不到教師資料）</option>';
-        return;
+      btn.disabled = false; btn.textContent = '確認帳號';
+      if (!res || !res.success) {
+        errEl.textContent = res && res.message ? res.message : '查詢失敗，請稍後再試。';
+        errEl.style.display = 'block'; return;
       }
-      var opts = '<option value="">— 請選擇您的姓名 —</option>';
-      res.data.forEach(function(t) {
-        opts += '<option value="' + t.userId + '">' + t.name + '（' + t.userId + '）</option>';
-      });
-      sel.innerHTML = opts;
+      // 顯示確認姓名
+      _pendingUserId   = res.userId;
+      _pendingUserName = res.name;
+      var confirmEl = document.getElementById('login-name-confirm');
+      confirmEl.textContent = '✅ 確認為：' + res.name + ' 老師（' + res.userId + '）';
+      confirmEl.style.display = 'block';
+
+      // 短暫停頓後切換至步驟 2
+      setTimeout(function() {
+        document.getElementById('login-step2-name').textContent =
+          '👤 ' + _pendingUserName + ' 老師，請輸入身分證後六碼';
+        document.getElementById('login-idSuffix').value = '';
+        _showStep(2);
+        document.getElementById('login-idSuffix').focus();
+      }, 600);
     })
     .withFailureHandler(function() {
-      sel.innerHTML = '<option value="">載入失敗，請重新整理頁面</option>';
+      btn.disabled = false; btn.textContent = '確認帳號';
+      errEl.textContent = '系統連線失敗，請重新整理頁面。'; errEl.style.display = 'block';
     })
-    .handleRequest({ action: 'getTeachers', body: {} });
+    .handleRequest({ action: 'train/getUserName', body: { userId: userId } });
 }
 
-function doLogin() {
-  var userId = document.getElementById('login-user-select').value;
-  var pin    = document.getElementById('login-pin').value;
-  var errEl  = document.getElementById('login-error');
-  var btn    = document.getElementById('login-btn');
-
+/* 步驟 2：身分證後六碼登入 */
+function doLoginWithIdSuffix() {
+  var suffix = (document.getElementById('login-idSuffix').value || '').trim();
+  var errEl  = document.getElementById('login-error2');
+  var btn    = document.getElementById('login-step2-btn');
   errEl.style.display = 'none';
-  if (!userId) { errEl.textContent = '請選擇您的姓名。'; errEl.style.display = 'block'; return; }
-  if (!pin)    { errEl.textContent = '請輸入系統密碼。'; errEl.style.display = 'block'; return; }
+
+  if (!suffix || suffix.length !== 6) {
+    errEl.textContent = '請輸入身分證後六碼（共 6 碼）。'; errEl.style.display = 'block'; return;
+  }
 
   btn.disabled = true; btn.textContent = '驗證中…';
 
   google.script.run
     .withSuccessHandler(function(res) {
       btn.disabled = false; btn.textContent = '登入';
+      document.getElementById('login-idSuffix').value = '';
       if (!res || !res.success) {
-        var msgs = {
-          WRONG_PIN: '密碼錯誤，請再試一次。',
-          USER_NOT_FOUND: '找不到此帳號，請聯繫管理員。',
-          USER_INACTIVE: '您的帳號目前非在職狀態，請聯繫管理員。',
-          PIN_NOT_CONFIGURED: '系統尚未設定完成，請聯繫資訊組。'
-        };
-        var msg = msgs[res && res.error] || ('登入失敗：' + (res && res.error));
-        errEl.textContent = msg; errEl.style.display = 'block'; return;
+        errEl.textContent = res && res.message ? res.message : '驗證失敗，請確認後再試。';
+        errEl.style.display = 'block'; return;
       }
       saveSession(res);
       _hideLoginOverlay();
-      document.getElementById('login-pin').value = '';
       if (typeof onLoginSuccess === 'function') onLoginSuccess();
     })
     .withFailureHandler(function() {
       btn.disabled = false; btn.textContent = '登入';
       errEl.textContent = '系統連線失敗，請重新整理頁面。'; errEl.style.display = 'block';
     })
-    .handleRequest({ action: 'login', body: { userId: userId, pin: pin } });
+    .handleRequest({ action: 'train/loginWithIdSuffix', body: { userId: _pendingUserId, idSuffix: suffix } });
 }
+
+// 保留舊版 doLogin（向後相容，舊版書籤可繼續運作）
+function doLogin() { doCheckUserId(); }
 
 // ── 導覽輔助（防止 googleusercontent.com 相對路徑錯誤）──
 // window.top.location.href 可能是 googleusercontent.com，
@@ -331,7 +389,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── 掛載至 window（GAS Warden 作用域隔離必要措施）──
 window.api               = api;
 window.apiPublic         = apiPublic;
-window.doLogin           = doLogin;
+window.doLogin           = doLogin;           // 舊版入口（指向 doCheckUserId）
+window.doCheckUserId     = doCheckUserId;     // 步驟 1
+window.doLoginWithIdSuffix = doLoginWithIdSuffix; // 步驟 2
+window.doBackToStep1     = doBackToStep1;
 window.initPage          = initPage;
 window.setFontSize       = setFontSize;
 window.showToast         = showToast;
