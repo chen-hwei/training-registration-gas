@@ -210,7 +210,7 @@ function _getActiveTeachers() {
   const hdr   = data[0];
   const uidCol    = hdr.indexOf('userId');
   const nameCol   = hdr.indexOf('name');
-  const emailCol  = hdr.indexOf('email');
+  const emailCol  = hdr.indexOf('schoolEmail');
   const statusCol = hdr.indexOf('status');
   const deptCol   = hdr.indexOf('department');
   const ACTIVE    = ['在職', '轉調'];
@@ -231,7 +231,7 @@ function _getAdminEmailsByDept(department) {
   const hdr   = data[0];
   const deptCol   = hdr.indexOf('department');
   const accessCol = hdr.indexOf('systemAccess');
-  const emailCol  = hdr.indexOf('email');
+  const emailCol  = hdr.indexOf('schoolEmail');
   const statusCol = hdr.indexOf('status');
   const ACTIVE    = ['在職', '轉調'];
   return data.slice(1)

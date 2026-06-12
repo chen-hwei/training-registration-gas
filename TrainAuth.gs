@@ -36,6 +36,7 @@ const HUB_USC_HEADER_MAP = {
   'status':          'status',
   'statusChangedAt': 'statusChangedAt',
   'systemAccess':    'systemAccess',
+  'idHash':          'idHash',
 };
 
 // ── Token 發行 ────────────────────────────────────────────────
