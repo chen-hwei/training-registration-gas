@@ -306,6 +306,9 @@
       <button id="atab-req" class="tab-btn" onclick="switchAdminTab('req')">
         年度任務
       </button>
+      <button id="atab-report" class="tab-btn" onclick="switchAdminTab('report')">
+        研習統計
+      </button>
     </div>
 
     <!-- ── Tab 1：待審核 ── -->
@@ -374,6 +377,273 @@
         <div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>
       </div>
     </div>
+
+    <!-- ── Tab 5：研習統計 ── -->
+    <div id="panel-report" style="display:none">
+
+      <!-- 催辦名單 Modal -->
+      <div id="pending-modal"
+        style="position:fixed;inset:0;background:rgba(0,0,0,0.5);
+               display:none;align-items:flex-start;justify-content:center;
+               z-index:1030;padding:16px;overflow-y:auto">
+        <div style="background:#fff;border-radius:12px;padding:24px;
+                    width:100%;max-width:480px;box-shadow:var(--shadow-md);margin:auto">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+            <div id="pending-modal-title"
+                 style="font-size:1rem;font-weight:700;color:var(--danger)"></div>
+            <button class="btn btn-sm btn-outline" onclick="closePendingModal()">✕</button>
+          </div>
+          <div id="pending-modal-body" style="font-size:0.88rem;line-height:2"></div>
+        </div>
+      </div>
+
+      <!-- S1a：人事室名冊管理 -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:0.95rem;font-weight:700;color:var(--primary);margin-bottom:4px">
+          👥 人事室名冊管理
+        </div>
+        <div style="font-size:0.80rem;color:var(--gray-600);margin-bottom:14px">
+          選填。未上傳名冊的年度將以 Hub 當前名冊替代，可日後補錄更精確的歷史名冊。<br>
+          CSV 必要欄位：<b>學年度、姓名、部別</b>（選填：聘任本職）
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            歷史名冊 CSV
+            <span style="font-size:0.78rem;color:var(--gray-600);font-weight:400">（可含多個學年度）</span>
+          </label>
+          <input id="rpt-roster-file" type="file" class="form-control" accept=".csv">
+        </div>
+
+        <!-- 解析後的年度勾選區 -->
+        <div id="rpt-roster-breakdown" style="display:none;margin-bottom:12px;
+             padding:12px 14px;background:#f0f4ff;border-radius:var(--radius);font-size:0.84rem">
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-sm btn-outline" onclick="rptParseRoster()">📂 解析名冊</button>
+          <button id="rpt-roster-batch-btn" class="btn btn-sm btn-primary"
+                  style="display:none" onclick="rptBatchImportRoster()">👥 批次匯入選取年度</button>
+        </div>
+        <div id="rpt-roster-progress" style="font-size:0.84rem;color:var(--primary);margin-bottom:4px;display:none"></div>
+        <div id="rpt-roster-result"   style="font-size:0.84rem;margin-top:4px;color:var(--success)"></div>
+
+        <!-- 各年度名冊來源摘要 -->
+        <div id="rpt-roster-sources" style="margin-top:16px;display:none">
+          <div style="font-size:0.84rem;font-weight:600;margin-bottom:8px;
+                      border-top:1px solid var(--gray-200);padding-top:12px">
+            📋 各學年度名冊來源
+          </div>
+          <div id="rpt-roster-sources-list"></div>
+        </div>
+      </div>
+
+      <!-- S1b：匯入研習資料 -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:0.95rem;font-weight:700;color:var(--primary);margin-bottom:4px">
+          📥 匯入研習資料
+        </div>
+        <div style="font-size:0.80rem;color:var(--gray-600);margin-bottom:14px">
+          支援同時選取多個 CSV（如：全國進修網 + 臺北市研習網），系統自動合併去重。
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">
+            研習資料 CSV <span class="req">*</span>
+            <span style="font-size:0.78rem;color:var(--gray-600);font-weight:400">
+              （可多選｜XLSX 請先另存為 CSV）
+            </span>
+          </label>
+          <input id="rpt-file" type="file" class="form-control" accept=".csv" multiple>
+        </div>
+
+        <div id="rpt-import-warning"
+          style="display:none;background:var(--warning-bg);border:1px solid var(--warning);
+                 border-radius:var(--radius);padding:10px 14px;font-size:0.84rem;margin-bottom:12px">
+        </div>
+
+        <div id="rpt-preview-area" style="display:none;margin-bottom:12px">
+          <div style="font-size:0.84rem;font-weight:600;margin-bottom:6px">預覽（前 5 筆）</div>
+          <div id="rpt-preview-table" style="overflow-x:auto;font-size:0.80rem"></div>
+        </div>
+
+        <!-- 年度偵測結果 -->
+        <div id="rpt-year-breakdown" style="display:none;margin-bottom:12px;
+             padding:12px 14px;background:#f0f4ff;border-radius:var(--radius);font-size:0.84rem">
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <button class="btn btn-sm btn-outline" onclick="rptParseFile()">📂 解析檔案</button>
+          <button id="rpt-batch-all-btn" class="btn btn-sm btn-primary"
+                  style="display:none" onclick="rptBatchImportAll()">⚡ 批次匯入全部年度</button>
+        </div>
+        <div id="rpt-batch-progress" style="font-size:0.84rem;color:var(--primary);margin-bottom:4px;display:none"></div>
+        <div id="rpt-import-result" style="font-size:0.84rem;margin-top:4px;color:var(--success)"></div>
+      </div>
+
+      <!-- S2：達成率儀表板 -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;align-items:center;justify-content:space-between;
+                    margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div style="font-size:0.95rem;font-weight:700;color:var(--primary)">📊 達成率儀表板</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="rpt-dash-year" class="form-control"
+                    style="width:auto;font-size:0.84rem"
+                    onchange="rptLoadStats()">
+            </select>
+            <button class="btn btn-sm btn-outline" onclick="rptLoadStats(true)">重新計算</button>
+            <button class="btn btn-sm btn-outline" onclick="rptToggleBatchPanel()"
+                    title="預先計算多個年度與模式，結果跨裝置共用">批次預計算 ▾</button>
+            <span id="rpt-cache-info"
+                  style="display:none;font-size:0.76rem;color:var(--gray-500);white-space:nowrap"></span>
+          </div>
+        </div>
+
+        <!-- 批次預計算展開面板 -->
+        <div id="rpt-batch-panel" style="display:none;margin-bottom:14px;
+             padding:14px 16px;background:#f8f9ff;border:1px solid var(--gray-200);
+             border-radius:var(--radius);font-size:0.85rem">
+          <div style="font-weight:600;margin-bottom:10px">
+            選擇要預計算的年度與模式：
+            <span style="font-weight:400;color:var(--gray-600);font-size:0.78rem;margin-left:6px">
+              計算結果將存入伺服器，任何電腦開啟後直接顯示
+            </span>
+          </div>
+          <div style="overflow-x:auto">
+            <table id="rpt-batch-combo-table"
+                   style="border-collapse:collapse;font-size:0.83rem;min-width:340px">
+              <thead>
+                <tr>
+                  <th style="padding:4px 12px 4px 0;text-align:left;
+                             border-bottom:2px solid var(--gray-200)">年度</th>
+                  <th style="padding:4px 16px;text-align:center;
+                             border-bottom:2px solid var(--gray-200)">
+                    累積<br><span style="font-size:0.72rem;font-weight:400;color:var(--gray-600)">（終身有效）</span>
+                  </th>
+                  <th style="padding:4px 16px;text-align:center;
+                             border-bottom:2px solid var(--gray-200)">
+                    當年度<br><span style="font-size:0.72rem;font-weight:400;color:var(--gray-600)">（年度重算）</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody id="rpt-batch-combo-body">
+                <!-- 由 JS 動態填入 -->
+              </tbody>
+            </table>
+          </div>
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <button id="rpt-batch-calc-btn" class="btn btn-sm btn-primary"
+                    onclick="rptBatchCalc()">開始批次預計算</button>
+            <button class="btn btn-sm btn-outline" onclick="rptBatchSelectAll(true)">全選</button>
+            <button class="btn btn-sm btn-outline" onclick="rptBatchSelectAll(false)">取消全選</button>
+          </div>
+          <div id="rpt-batch-calc-progress"
+               style="margin-top:10px;font-size:0.82rem;color:var(--primary);display:none"></div>
+          <div id="rpt-batch-calc-result"
+               style="margin-top:6px;font-size:0.82rem;color:var(--success);display:none"></div>
+        </div>
+
+        <!-- 部別 Tab + 計算模式切換 -->
+        <div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+          <button id="dtab-school" class="btn btn-sm btn-primary"
+                  onclick="rptSwitchDept('school')">全校</button>
+          <button id="dtab-hs" class="btn btn-sm btn-outline"
+                  onclick="rptSwitchDept('hs')">高中部</button>
+          <button id="dtab-jh" class="btn btn-sm btn-outline"
+                  onclick="rptSwitchDept('jh')">國中部</button>
+          <span style="width:1px;background:var(--gray-200);height:20px;margin:0 4px"></span>
+          <button id="cmode-cumulative" class="btn btn-sm btn-primary"
+                  onclick="rptSwitchCalcMode('cumulative')"
+                  title="終身有效型：只要曾完成即達成（跨年累積）">累積</button>
+          <button id="cmode-year" class="btn btn-sm btn-outline"
+                  onclick="rptSwitchCalcMode('year')"
+                  title="年度有效型：只計算當學年度的研習紀錄">當年度</button>
+          <span id="rpt-totals-label"
+                style="font-size:0.82rem;color:var(--gray-600);line-height:2.2;margin-left:4px"></span>
+        </div>
+
+        <div id="rpt-stats-list">
+          <div class="empty-state"><div class="ei">📊</div><p>請選擇學年度後點擊「重新計算」</p></div>
+        </div>
+
+        <!-- 未達成總覽 -->
+        <div style="margin-top:16px;border-top:1px solid var(--gray-200);padding-top:12px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">
+            <button class="btn btn-sm btn-outline" onclick="rptTogglePendingMatrix()"
+                    id="rpt-matrix-toggle-btn">📋 未達成總覽 ▾</button>
+            <button class="btn btn-sm btn-outline" onclick="rptExportPendingCSV()"
+                    id="rpt-matrix-export-btn" style="display:none">⬇ 匯出 CSV</button>
+          </div>
+          <!-- 指標篩選列（展開後才顯示） -->
+          <div id="rpt-ind-filter-bar"
+               style="display:none;margin-top:8px;padding:10px 12px;
+                      background:#f8f9ff;border-radius:8px;border:1px solid #e0e7ff">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-size:0.82rem;font-weight:600;color:var(--primary)">
+                篩選：顯示在以下任一指標有未達成的教師
+              </span>
+              <button class="btn btn-sm btn-outline" style="padding:2px 8px;font-size:0.76rem"
+                      onclick="rptFilterSelectAll(true)">全選</button>
+              <button class="btn btn-sm btn-outline" style="padding:2px 8px;font-size:0.76rem"
+                      onclick="rptFilterSelectAll(false)">取消全選</button>
+            </div>
+            <div id="rpt-ind-filter-checks"
+                 style="display:flex;flex-wrap:wrap;gap:6px 12px;font-size:0.82rem">
+              <!-- 動態填入：每個指標一個 checkbox，展開矩陣時由 JS 產生 -->
+            </div>
+          </div>
+          <div id="rpt-pending-matrix"
+               style="display:none;margin-top:10px;overflow-x:auto;font-size:0.82rem">
+          </div>
+        </div>
+      </div>
+
+      <!-- S3：指標管理 -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="font-size:0.95rem;font-weight:700;color:var(--primary);margin-bottom:14px">
+          🏷️ 政策指標管理
+        </div>
+        <div id="rpt-indicators-list" style="margin-bottom:14px"></div>
+
+        <div style="border-top:1px solid var(--gray-200);padding-top:14px;margin-top:4px">
+          <div style="font-size:0.86rem;font-weight:600;margin-bottom:10px">新增 / 編輯指標</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+            <div class="form-group" style="flex:0 0 80px;margin:0">
+              <input id="ind-id" type="text" class="form-control" placeholder="如 A1">
+            </div>
+            <div class="form-group" style="flex:0 0 120px;margin:0">
+              <input id="ind-label" type="text" class="form-control" placeholder="顯示名稱">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">
+              Regex 關鍵字
+              <span style="font-size:0.78rem;color:var(--gray-600);font-weight:400">（每行一條）</span>
+            </label>
+            <textarea id="ind-patterns" class="form-control" rows="4"
+                      placeholder="A1&#10;數位學習工作坊[（(]一[）)]"></textarea>
+          </div>
+          <button class="btn btn-sm btn-primary" onclick="rptSaveIndicator()">儲存指標</button>
+        </div>
+      </div>
+
+      <!-- S4：匯出 -->
+      <div class="card">
+        <div style="font-size:0.95rem;font-weight:700;color:var(--primary);margin-bottom:14px">
+          📤 匯出報表
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-sm btn-primary" onclick="rptExportCSV()">
+            ⬇ 雙欄審查 CSV
+          </button>
+          <button class="btn btn-sm btn-outline" onclick="rptExportDoc()">
+            📄 產生 Google 簽呈文件
+          </button>
+        </div>
+        <div id="rpt-export-result" style="font-size:0.84rem;margin-top:10px"></div>
+      </div>
+
+    </div><!-- /panel-report -->
   </div>
 
   <script>
@@ -404,12 +674,13 @@
      Tab 切換
   ──────────────────────────────── */
   function switchAdminTab(tab) {
-    ['review','catalog','notify','req'].forEach(function(t) {
+    ['review','catalog','notify','req','report'].forEach(function(t) {
       document.getElementById('atab-' + t).classList.toggle('active', t === tab);
       document.getElementById('panel-' + t).style.display = (t === tab) ? '' : 'none';
     });
     if (tab === 'catalog' && _catalogRecords.length === 0) _loadCatalog();
     if (tab === 'req'     && _reqRecords.length === 0)     _loadRequirements();
+    if (tab === 'report') _rptInit();
   }
 
   /* ────────────────────────────────
@@ -1299,6 +1570,1241 @@
     );
   }
 
+  /* ════════════════════════════════════════
+     研習統計分析模組（TRAIN-REPORT）JS
+  ════════════════════════════════════════ */
+
+  var _rptParsedRows   = [];   // 前端解析後的研習資料列（多檔合併）
+  var _rptParsedHdrs   = [];   // 研習資料標題列（第一個有效檔案的標題）
+  var _rptYearGroups   = {};   // 依日期偵測學年度分組 { 113: [rows], 114: [rows] }
+  var _rptRosterGroups = {};   // 人事室名冊依學年度分組 { 110: [rows], 111: [rows] }
+  var _rptStatsCache   = null; // calcStats 回傳的快取（記憶體層）
+  var _rptCurrentDept  = 'school';
+  var _rptCalcMode     = 'cumulative';  // 'year' | 'cumulative'（預設累積）
+  var _RPT_CACHE_PFX   = 'rpt_stats_';  // localStorage key 前綴（後綴含 mode）
+  var _rptBatchRunning = false;          // 防止批次重複執行
+
+  /* ── 學年度計算 ── */
+  function _rptCurrentYear() {
+    var d = new Date(), m = d.getMonth() + 1, y = d.getFullYear() - 1911;
+    return m >= 8 ? y : y - 1;
+  }
+
+  /* ── 從日期字串推算學年度（民國年）── */
+  function _detectAcaYear_(dateStr) {
+    var m = String(dateStr || '').match(/(\d{4})[\/\-](\d{1,2})/);
+    if (!m) return null;
+    var yr = parseInt(m[1], 10), mo = parseInt(m[2], 10);
+    if (yr < 1990) return null;
+    return mo >= 8 ? yr - 1911 : yr - 1912;
+  }
+
+  /* ── 從標題列找日期欄位索引 ── */
+  var _DATE_COL_ALIASES_ = ['課程日期','研習日期','課程結束時間','辦理日期'];
+  function _findDateColIdx_(hdrs) {
+    for (var i = 0; i < hdrs.length; i++) {
+      if (_DATE_COL_ALIASES_.indexOf(hdrs[i].trim()) >= 0) return i;
+    }
+    return -1;
+  }
+
+  /* ── 確保年度存在於儀表板下拉（匯入超過 10 年前資料時動態新增）── */
+  function _rptEnsureYearInDropdown_(yr) {
+    var sel = document.getElementById('rpt-dash-year');
+    var found = false;
+    for (var i = 0; i < sel.options.length; i++) {
+      if (Number(sel.options[i].value) === yr) { found = true; break; }
+    }
+    if (!found) {
+      var opt = document.createElement('option');
+      opt.value = yr;
+      opt.textContent = yr + ' 學年度';
+      // 插入到正確排序位置（從大到小）
+      var inserted = false;
+      for (var j = 0; j < sel.options.length; j++) {
+        if (Number(sel.options[j].value) < yr) {
+          sel.insertBefore(opt, sel.options[j]);
+          inserted = true;
+          break;
+        }
+      }
+      if (!inserted) sel.appendChild(opt);
+    }
+  }
+
+  /* ── localStorage 快取讀寫 ── */
+  function _rptCacheKey_(yr, mode) {
+    return _RPT_CACHE_PFX + yr + '_' + (mode || _rptCalcMode);
+  }
+  function _rptSaveCache_(yr, data) {
+    try {
+      var ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+      localStorage.setItem(_rptCacheKey_(yr), JSON.stringify({ data: data, cachedAt: ts }));
+    } catch(e) {}
+  }
+  function _rptLoadCache_(yr) {
+    try {
+      var raw = localStorage.getItem(_rptCacheKey_(yr));
+      return raw ? JSON.parse(raw) : null;
+    } catch(e) { return null; }
+  }
+  function _rptClearCache_(yr) {
+    // 清除該年度兩種模式的快取
+    try { localStorage.removeItem(_rptCacheKey_(yr, 'year')); } catch(e) {}
+    try { localStorage.removeItem(_rptCacheKey_(yr, 'cumulative')); } catch(e) {}
+  }
+
+  /* ── 初始化：設定預設學年度、載入指標、還原快取、載入名冊來源 ── */
+  function _rptInit() {
+    var yr = _rptCurrentYear();
+    var sel = document.getElementById('rpt-dash-year');
+    sel.innerHTML = '';
+    for (var i = 0; i <= 9; i++) {
+      var opt = document.createElement('option');
+      opt.value = yr - i;
+      opt.textContent = (yr - i) + ' 學年度';
+      sel.appendChild(opt);
+    }
+    _rptLoadIndicators();
+    rptLoadStats();
+    // 載入名冊來源摘要
+    api('report_get_roster_sources', {}).then(function(res) {
+      if (res.success) _rptRenderRosterSources(res.data);
+    }).catch(function(){});
+  }
+
+  /* ── CSV 解析（含 BOM 清除）── */
+  function _parseCSV(text) {
+    var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(Boolean);
+    return lines.map(function(line, idx) {
+      // 簡易 CSV 解析（支援引號欄位）
+      var cols = [], cur = '', inQ = false;
+      for (var i = 0; i < line.length; i++) {
+        var c = line[i];
+        if (c === '"') { inQ = !inQ; }
+        else if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
+        else { cur += c; }
+      }
+      cols.push(cur.trim());
+      // 第一列 BOM 清除
+      if (idx === 0) cols[0] = cols[0].replace(/^﻿/, '').trim();
+      return cols;
+    });
+  }
+
+  /* ── S1b：解析多個研習 CSV，合併後依日期分年度 ── */
+  function rptParseFile() {
+    var files = document.getElementById('rpt-file').files;
+    if (!files || files.length === 0) { showToast('請先選擇研習資料檔案', 'error'); return; }
+
+    var fileArray = Array.prototype.slice.call(files);
+    var pending   = fileArray.length;
+    var allRows   = [];     // 合併後所有資料列（已正規化為相同 headers）
+    var firstHdrs = null;
+
+    fileArray.forEach(function(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        var parsed = _parseCSV(e.target.result);
+        if (parsed.length >= 2) {
+          var hdrs = parsed[0];
+          var dataRows = parsed.slice(1).filter(function(r) { return r.some(Boolean); });
+          if (!firstHdrs) firstHdrs = hdrs;
+          // 若標題不同（來自不同平台），以各自 headers 傳入，後端 normalizeRow_ 負責對映
+          dataRows.forEach(function(r) {
+            allRows.push({ row: r, headers: hdrs });
+          });
+        }
+        pending--;
+        if (pending === 0) _rptOnAllFilesParsed_(allRows, firstHdrs);
+      };
+      reader.readAsText(file, 'UTF-8');
+    });
+  }
+
+  function _rptOnAllFilesParsed_(allRowObjs, firstHdrs) {
+    if (allRowObjs.length === 0) { showToast('所有檔案均無有效資料', 'error'); return; }
+    // 為了預覽與年度偵測，把 row + headers 分開存
+    _rptParsedHdrs = firstHdrs || [];
+    _rptParsedRows = allRowObjs;   // [{ row, headers }]
+
+    // 預覽（前 5 筆，使用第一個檔案的 headers）
+    var preview5 = [firstHdrs].concat(allRowObjs.slice(0, 5).map(function(o){ return o.row; }));
+    var html = '<table style="border-collapse:collapse;width:100%">';
+    preview5.forEach(function(r, i) {
+      html += '<tr>';
+      r.forEach(function(c) {
+        var tag = i === 0 ? 'th' : 'td';
+        html += '<' + tag + ' style="border:1px solid #ddd;padding:4px 8px;white-space:nowrap;' +
+                (i === 0 ? 'background:#f0f4ff;font-weight:600' : '') + '">' +
+                (c || '') + '</' + tag + '>';
+      });
+      html += '</tr>';
+    });
+    html += '</table>';
+    document.getElementById('rpt-preview-table').innerHTML = html;
+    document.getElementById('rpt-preview-area').style.display = '';
+
+    // 年度偵測：依每列自己的 headers 找日期欄
+    _rptYearGroups = {};
+    allRowObjs.forEach(function(obj) {
+      var dateColIdx = _findDateColIdx_(obj.headers);
+      var dateVal    = dateColIdx >= 0 ? (obj.row[dateColIdx] || '') : '';
+      var yr  = _detectAcaYear_(dateVal);
+      var key = yr ? String(yr) : 'unknown';
+      if (!_rptYearGroups[key]) _rptYearGroups[key] = [];
+      _rptYearGroups[key].push(obj);
+    });
+
+    var years = Object.keys(_rptYearGroups)
+      .filter(function(y) { return y !== 'unknown'; })
+      .map(Number).sort(function(a,b){ return a - b; });
+
+    var bdHtml = '';
+    if (_rptYearGroups['unknown'] && _rptYearGroups['unknown'].length > 0) {
+      bdHtml += '<div style="color:var(--danger);margin-bottom:8px">⚠️ ' +
+        _rptYearGroups['unknown'].length + ' 筆無法辨識日期，將被略過</div>';
+    }
+    if (years.length === 0) {
+      bdHtml += '<div style="color:var(--danger)">無法偵測有效年度，請確認日期欄位格式（YYYY/MM/DD 或 YYYY-MM-DD）</div>';
+    } else {
+      bdHtml += '<div style="margin-bottom:10px;font-weight:600">偵測到 ' + years.length +
+        ' 個學年度，共 ' + allRowObjs.length + ' 筆，請勾選要匯入的年度：</div>';
+      // 全選 / 取消全選快捷列
+      bdHtml += '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+        '<button class="btn btn-sm btn-outline" style="font-size:0.78rem;padding:2px 10px" onclick="rptToggleAllYears(true)">全選</button>' +
+        '<button class="btn btn-sm btn-outline" style="font-size:0.78rem;padding:2px 10px" onclick="rptToggleAllYears(false)">取消全選</button>' +
+        '</div>';
+      // 勾選框列表
+      bdHtml += '<div style="display:flex;flex-direction:column;gap:6px;margin-bottom:4px">';
+      years.forEach(function(y) {
+        var grp = _rptYearGroups[String(y)] || [];
+        bdHtml += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;' +
+          'padding:6px 10px;border-radius:var(--radius);border:1px solid var(--gray-200);background:#fff">' +
+          '<input type="checkbox" class="rpt-year-chk" value="' + y + '" checked>' +
+          '<span><b>' + y + ' 學年度</b>　' + grp.length + ' 筆</span>' +
+          '</label>';
+      });
+      bdHtml += '</div>';
+    }
+    var bdEl = document.getElementById('rpt-year-breakdown');
+    bdEl.innerHTML = bdHtml;
+    bdEl.style.display = '';
+
+    // 顯示「匯入選取年度」按鈕
+    document.getElementById('rpt-batch-all-btn').style.display = years.length > 0 ? '' : 'none';
+    document.getElementById('rpt-batch-all-btn').textContent = '⚡ 匯入選取年度';
+
+    showToast('解析完成：共 ' + allRowObjs.length + ' 筆，偵測到 ' + years.length + ' 個學年度', 'success');
+  }
+
+  /* ── S1b：執行單一年度快照 + 匯入（yr 由按鈕帶入或批次呼叫）── */
+  function rptDoImport(yr, isBatch) {
+    yr = Number(yr);
+    if (!yr || yr < 100) { showToast('學年度無效', 'error'); return Promise.resolve(false); }
+    var targetObjs = _rptYearGroups[String(yr)] || [];
+    if (targetObjs.length === 0) { showToast(yr + ' 學年度無可匯入的資料', 'error'); return Promise.resolve(false); }
+
+    if (!isBatch) showSpinner();
+
+    // Step A：快照（已存在 → appendMode 追加，不再詢問）
+    return api('report_snapshot', { academicYear: yr, rosterRows: [], overwrite: false })
+    .then(function(res) {
+      if (!res.success && res.conflict) {
+        // 快照已存在：改用 appendMode 追加，保留現有名冊資料
+        return api('report_snapshot', { academicYear: yr, rosterRows: [], appendMode: true });
+      }
+      return res;
+    }).then(function(snapRes) {
+      if (!snapRes || !snapRes.success) {
+        if (!isBatch) { hideSpinner(); showToast((snapRes && snapRes.error) || '快照失敗', 'error'); }
+        return null;
+      }
+      // Step B：匯入（快照已存在代表可能已有同來源資料 → appendMode 追加去重）
+      var appendMode = snapRes.appended || false;
+      return api('report_import', { academicYear: yr, rows: targetObjs, appendMode: appendMode });
+    }).then(function(impRes) {
+      if (!isBatch) hideSpinner();
+      if (!impRes) return false;
+      if (!impRes.success) {
+        if (!isBatch) showToast(impRes.error || '匯入失敗', 'error');
+        return false;
+      }
+      var d = impRes.data;
+      var msg = yr + ' 學年度：' + d.imported + ' 筆';
+      if (d.duplicatesResolved) msg += '（去重 ' + d.duplicatesResolved + '）';
+      if (d.skipped)            msg += '（略過 ' + d.skipped + '）';
+      if (!isBatch) {
+        document.getElementById('rpt-import-result').textContent = msg + ' ✅';
+        showToast(msg, 'success');
+        var warnEl = document.getElementById('rpt-import-warning');
+        if (d.unmatchedNames && d.unmatchedNames.length > 0) {
+          warnEl.innerHTML = '⚠️ 以下 ' + d.unmatchedNames.length +
+            ' 位人員未能比對到教師名冊：<br><b>' + d.unmatchedNames.join('、') + '</b>';
+          warnEl.style.display = '';
+        } else { warnEl.style.display = 'none'; }
+      }
+      _rptClearCache_(yr);
+      delete _rptYearGroups[String(yr)];
+      _rptEnsureYearInDropdown_(yr);
+      if (!isBatch) {
+        document.getElementById('rpt-dash-year').value = yr;
+        _rptRefreshBreakdownUI_();
+      }
+      return { yr: yr, msg: msg, unmatched: d.unmatchedNames || [] };
+    }).catch(function(err) {
+      if (!isBatch) { hideSpinner(); showToast('發生錯誤：' + err.message, 'error'); }
+      return false;
+    });
+  }
+
+  /* ── S1b：全選 / 取消全選勾選框 ── */
+  function rptToggleAllYears(checked) {
+    var chks = document.querySelectorAll('.rpt-year-chk');
+    chks.forEach(function(c){ c.checked = checked; });
+  }
+
+  /* ── S1b：批次匯入勾選的年度（依序 Promise chain）── */
+  function rptBatchImportAll() {
+    if (_rptBatchRunning) return;
+    var chks = document.querySelectorAll('.rpt-year-chk:checked');
+    if (chks.length === 0) { showToast('請至少勾選一個年度', 'error'); return; }
+    var years = [];
+    chks.forEach(function(c){ years.push(Number(c.value)); });
+    years.sort(function(a,b){ return a - b; });
+    if (years.length === 0) { showToast('沒有可匯入的年度', 'error'); return; }
+
+    _rptBatchRunning = true;
+    document.getElementById('rpt-batch-all-btn').disabled = true;
+    var progEl    = document.getElementById('rpt-batch-progress');
+    var resultEl  = document.getElementById('rpt-import-result');
+    var total     = years.length;
+    var done      = 0;
+    var allMsgs   = [];
+    var allUnmatched = [];
+
+    progEl.style.display = '';
+    showSpinner();
+
+    function runNext(i) {
+      if (i >= years.length) {
+        hideSpinner();
+        _rptBatchRunning = false;
+        document.getElementById('rpt-batch-all-btn').disabled = false;
+        document.getElementById('rpt-batch-all-btn').style.display = 'none';
+        progEl.style.display = 'none';
+        resultEl.innerHTML = '✅ 批次匯入完成：' + allMsgs.join('；');
+        if (allUnmatched.length > 0) {
+          var warnEl = document.getElementById('rpt-import-warning');
+          warnEl.innerHTML = '⚠️ 部分人員未能比對到名冊：<b>' + allUnmatched.join('、') + '</b>';
+          warnEl.style.display = '';
+        }
+        _rptRefreshBreakdownUI_();
+        showToast('批次匯入完成', 'success');
+        return;
+      }
+      var yr = years[i];
+      progEl.innerHTML = '正在匯入 <b>' + yr + ' 學年度</b>... (' + (i+1) + '/' + total + ')　' +
+        years.map(function(y, j) {
+          if (j < i)  return '<span style="color:var(--success)">✅' + y + '</span>';
+          if (j === i) return '<span style="color:var(--primary)">⏳' + y + '</span>';
+          return '<span style="color:var(--gray-400)">○' + y + '</span>';
+        }).join('　');
+
+      rptDoImport(yr, true).then(function(result) {
+        if (result && result.msg) {
+          allMsgs.push(result.msg);
+          result.unmatched.forEach(function(n) {
+            if (allUnmatched.indexOf(n) < 0) allUnmatched.push(n);
+          });
+        }
+        done++;
+        runNext(i + 1);
+      });
+    }
+    runNext(0);
+  }
+
+  /* ── 重新渲染年度偵測區（批次後更新剩餘年度）── */
+  function _rptRefreshBreakdownUI_() {
+    var remaining = Object.keys(_rptYearGroups).filter(function(y){ return y !== 'unknown'; });
+    var bdEl = document.getElementById('rpt-year-breakdown');
+    if (remaining.length === 0) {
+      bdEl.style.display = 'none';
+      document.getElementById('rpt-preview-area').style.display = 'none';
+      document.getElementById('rpt-batch-all-btn').style.display = 'none';
+      _rptParsedRows = []; _rptParsedHdrs = []; _rptYearGroups = {};
+    } else {
+      var btns = bdEl.querySelectorAll('button');
+      var doneKeys = {};
+      Object.keys(_rptYearGroups).forEach(function(k){ doneKeys[k] = true; });
+      btns.forEach(function(btn) {
+        var match = btn.textContent.match(/^(\d{3})/);
+        if (match && !doneKeys[match[1]]) btn.remove();
+      });
+      document.getElementById('rpt-batch-all-btn').style.display = remaining.length > 1 ? '' : 'none';
+    }
+  }
+
+  /* ── S1a：解析人事室名冊 CSV（含學年度欄，多年度）── */
+  function rptParseRoster() {
+    var file = document.getElementById('rpt-roster-file').files[0];
+    if (!file) { showToast('請先選擇名冊 CSV', 'error'); return; }
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      var rows = _parseCSV(e.target.result);
+      if (rows.length < 2) { showToast('名冊檔案內容不足', 'error'); return; }
+      var hdrs = rows[0];
+      // 找各欄索引（支援別名）
+      function findIdx(aliases) {
+        for (var i = 0; i < aliases.length; i++) {
+          var idx = hdrs.indexOf(aliases[i]);
+          if (idx >= 0) return idx;
+        }
+        return -1;
+      }
+      var yrIdx = findIdx(['學年度','academicYear','年度']);
+      var nIdx  = findIdx(['姓名','教師姓名','教職員姓名','teacherName']);
+      var dIdx  = findIdx(['部別','所屬部別','department']);
+      var jIdx  = findIdx(['聘任本職','jobPrimary']);
+
+      if (nIdx < 0 || dIdx < 0) {
+        showToast('找不到必要欄位（姓名、部別），請確認 CSV 標題列', 'error'); return;
+      }
+
+      _rptRosterGroups = {};
+      rows.slice(1).filter(function(r){ return r[nIdx]; }).forEach(function(r) {
+        var yr  = yrIdx >= 0 ? parseInt(r[yrIdx], 10) : null;
+        var key = (yr && yr >= 100) ? String(yr) : 'noYear';
+        if (!_rptRosterGroups[key]) _rptRosterGroups[key] = [];
+        _rptRosterGroups[key].push({
+          teacherName: String(r[nIdx] || '').trim(),
+          department:  String(r[dIdx] || '').trim(),
+          jobPrimary:  jIdx >= 0 ? String(r[jIdx] || '').trim() : ''
+        });
+      });
+
+      var years = Object.keys(_rptRosterGroups)
+        .filter(function(y){ return y !== 'noYear'; })
+        .map(Number).sort(function(a,b){ return a - b; });
+
+      var bdHtml = '';
+      if (_rptRosterGroups['noYear']) {
+        bdHtml += '<div style="color:var(--warning);margin-bottom:8px">⚠️ ' +
+          _rptRosterGroups['noYear'].length + ' 筆無學年度欄位，將略過</div>';
+      }
+      if (years.length === 0) {
+        bdHtml += '<div style="color:var(--danger)">找不到含學年度的名冊資料，請確認 CSV 有「學年度」欄位</div>';
+      } else {
+        bdHtml += '<div style="margin-bottom:10px;font-weight:600">偵測到 ' + years.length +
+          ' 個學年度，請勾選要匯入的年度：</div>';
+        bdHtml += '<div style="display:flex;flex-direction:column;gap:8px">';
+        years.forEach(function(y) {
+          var cnt = (_rptRosterGroups[String(y)] || []).length;
+          bdHtml += '<label style="display:flex;align-items:center;gap:8px;cursor:pointer">' +
+            '<input type="checkbox" class="rpt-roster-chk" value="' + y + '" checked>' +
+            '<span>' + y + ' 學年度（' + cnt + ' 人）</span></label>';
+        });
+        bdHtml += '</div>';
+        bdHtml += '<div style="margin-top:10px;font-size:0.80rem;color:var(--gray-600)">' +
+          '匯入模式：<b>追加</b>（保留現有快照中的 Hub 資料，以 CSV 資料更新或補充教師資訊）</div>';
+      }
+      var bdEl = document.getElementById('rpt-roster-breakdown');
+      bdEl.innerHTML = bdHtml;
+      bdEl.style.display = years.length > 0 ? '' : 'none';
+      document.getElementById('rpt-roster-batch-btn').style.display = years.length > 0 ? '' : 'none';
+      showToast('名冊解析完成：共 ' + (rows.length - 1) + ' 筆，偵測到 ' + years.length + ' 個學年度', 'success');
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  /* ── S1a：批次匯入勾選的人事名冊年度 ── */
+  function rptBatchImportRoster() {
+    var chks = document.querySelectorAll('.rpt-roster-chk:checked');
+    if (chks.length === 0) { showToast('請至少勾選一個年度', 'error'); return; }
+
+    var years = [];
+    chks.forEach(function(c){ years.push(Number(c.value)); });
+    years.sort(function(a,b){ return a - b; });
+
+    var fileName = (document.getElementById('rpt-roster-file').files[0] || {}).name || '';
+    var yearGroups = {};
+    years.forEach(function(y){ yearGroups[String(y)] = _rptRosterGroups[String(y)] || []; });
+
+    var progEl   = document.getElementById('rpt-roster-progress');
+    var resultEl = document.getElementById('rpt-roster-result');
+    progEl.style.display = '';
+    progEl.textContent   = '正在匯入名冊...';
+    document.getElementById('rpt-roster-batch-btn').disabled = true;
+    showSpinner();
+
+    api('report_snapshot_batch', {
+      yearGroups:  yearGroups,
+      years:       years,
+      appendMode:  true,
+      fileName:    fileName
+    }).then(function(res) {
+      hideSpinner();
+      document.getElementById('rpt-roster-batch-btn').disabled = false;
+      progEl.style.display = 'none';
+      if (!res.success) { showToast(res.error || '名冊批次匯入失敗', 'error'); return; }
+      var d = res.data;
+      var msgs = d.results.map(function(r) {
+        return r.academicYear + ' 學年（' + (r.success ? r.count + ' 人' : '失敗') + ')';
+      });
+      resultEl.textContent = '✅ 名冊匯入完成：' + msgs.join('、');
+      showToast('名冊批次匯入完成', 'success');
+      // 重新載入來源摘要
+      api('report_get_roster_sources', {}).then(function(r2) {
+        if (r2.success) _rptRenderRosterSources(r2.data);
+      });
+    }).catch(function(err) {
+      hideSpinner();
+      document.getElementById('rpt-roster-batch-btn').disabled = false;
+      progEl.style.display = 'none';
+      showToast('發生錯誤：' + err.message, 'error');
+    });
+  }
+
+  /* ── S1a：渲染各學年度名冊來源摘要 ── */
+  function _rptRenderRosterSources(sourcesMap) {
+    var years = Object.keys(sourcesMap).map(Number).sort(function(a,b){ return b - a; });
+    if (years.length === 0) return;
+    var html = '';
+    years.forEach(function(yr) {
+      var info = sourcesMap[String(yr)] || {};
+      var isCsv = info.source === 'csv';
+      var badge = isCsv
+        ? '<span style="color:var(--success);font-weight:600">✅ 歷史名冊 CSV</span>' +
+          (info.fileName ? ' <span style="color:var(--gray-600);font-size:0.78rem">(' + info.fileName + ')</span>' : '')
+        : '<span style="color:var(--warning);font-weight:600">⚠️ Hub 當前名冊</span>';
+      var supplement = isCsv ? '' :
+        ' <button class="btn btn-sm btn-outline" style="font-size:0.76rem;padding:2px 8px" ' +
+        'onclick="rptSupplementRoster(' + yr + ')">補錄名冊</button>';
+      html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;' +
+        'border-bottom:1px solid var(--gray-100);flex-wrap:wrap">' +
+        '<span style="min-width:80px;font-weight:600">' + yr + ' 學年度</span>' +
+        badge + supplement +
+        '<span style="color:var(--gray-500);font-size:0.78rem;margin-left:auto">' +
+        (info.count || '?') + ' 人｜' + (info.at || '') + '</span>' +
+        '</div>';
+    });
+    var listEl = document.getElementById('rpt-roster-sources-list');
+    listEl.innerHTML = html;
+    document.getElementById('rpt-roster-sources').style.display = '';
+  }
+
+  /* ── S1a：補錄單一年度名冊（由「補錄名冊」按鈕觸發）── */
+  function rptSupplementRoster(yr) {
+    yr = Number(yr);
+    // 動態建立隱藏 input，觸發選檔
+    var inp = document.createElement('input');
+    inp.type   = 'file';
+    inp.accept = '.csv';
+    inp.style.display = 'none';
+    document.body.appendChild(inp);
+    inp.onchange = function() {
+      var file = inp.files[0];
+      if (!file) { document.body.removeChild(inp); return; }
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        document.body.removeChild(inp);
+        var rows = _parseCSV(e.target.result);
+        if (rows.length < 2) { showToast('名冊檔案內容不足', 'error'); return; }
+        var hdrs = rows[0];
+        function findIdx(aliases) {
+          for (var i = 0; i < aliases.length; i++) {
+            var idx = hdrs.indexOf(aliases[i]); if (idx >= 0) return idx;
+          }
+          return -1;
+        }
+        var nIdx = findIdx(['姓名','教師姓名','教職員姓名','teacherName']);
+        var dIdx = findIdx(['部別','所屬部別','department']);
+        var jIdx = findIdx(['聘任本職','jobPrimary']);
+        if (nIdx < 0 || dIdx < 0) { showToast('找不到必要欄位（姓名、部別）', 'error'); return; }
+        var rosterRows = rows.slice(1).filter(function(r){ return r[nIdx]; }).map(function(r) {
+          return { teacherName: String(r[nIdx]||'').trim(), department: String(r[dIdx]||'').trim(),
+                   jobPrimary: jIdx >= 0 ? String(r[jIdx]||'').trim() : '' };
+        });
+        showSpinner();
+        api('report_snapshot', {
+          academicYear: yr, rosterRows: rosterRows, overwrite: true, fileName: file.name
+        }).then(function(res) {
+          hideSpinner();
+          if (!res.success) { showToast(res.error || '補錄失敗', 'error'); return; }
+          _rptClearCache_(yr);
+          showToast(yr + ' 學年度名冊補錄完成：' + res.data.snapshotCount + ' 人', 'success');
+          api('report_get_roster_sources', {}).then(function(r2) {
+            if (r2.success) _rptRenderRosterSources(r2.data);
+          });
+        });
+      };
+      reader.readAsText(file, 'UTF-8');
+    };
+    inp.click();
+  }
+
+  /* ── S2：載入達成率統計（三層快取：localStorage → 伺服器 → 重算）── */
+  function rptLoadStats(forceRefresh) {
+    var yr          = Number(document.getElementById('rpt-dash-year').value);
+    var cacheInfoEl = document.getElementById('rpt-cache-info');
+
+    // 強制重新計算：跳過所有快取
+    if (forceRefresh) {
+      cacheInfoEl.style.display = 'none';
+      showSpinner();
+      api('report_calc', { academicYear: yr, mode: _rptCalcMode }).then(function(res) {
+        hideSpinner();
+        if (!res.success) { showToast(res.error || '計算失敗', 'error'); return; }
+        _rptStatsCache = res.data;
+        _rptSaveCache_(yr, res.data);
+        var ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+        cacheInfoEl.textContent = '上次計算：' + ts;
+        cacheInfoEl.style.display = '';
+        _rptRenderStats();
+      });
+      return;
+    }
+
+    // 第 1 層：localStorage（毫秒級，同瀏覽器）
+    var lsCache = _rptLoadCache_(yr);
+    if (lsCache) {
+      _rptStatsCache = lsCache.data;
+      cacheInfoEl.textContent = '上次計算：' + lsCache.cachedAt;
+      cacheInfoEl.style.display = '';
+      _rptRenderStats();
+      return;
+    }
+
+    // 第 2 層：伺服器 StatsCache 試算表（跨瀏覽器、跨電腦）
+    cacheInfoEl.textContent = '載入快取中...';
+    cacheInfoEl.style.display = '';
+    api('report_get_stats_cache', { academicYear: yr, mode: _rptCalcMode }).then(function(res) {
+      if (res.success && res.data) {
+        _rptStatsCache = res.data.statsData;
+        // 同時回存 localStorage，下次不再呼叫 GAS
+        _rptSaveCache_(yr, res.data.statsData);
+        cacheInfoEl.textContent = '上次計算：' + res.data.cachedAt + '（跨裝置快取）';
+        cacheInfoEl.style.display = '';
+        _rptRenderStats();
+        return;
+      }
+      // 第 3 層：無任何快取 → 顯示空狀態，提示手動計算
+      _rptStatsCache = null;
+      cacheInfoEl.textContent = '尚無計算結果，請點「重新計算」';
+      cacheInfoEl.style.display = '';
+      _rptRenderStats();
+    }).catch(function() {
+      _rptStatsCache = null;
+      cacheInfoEl.style.display = 'none';
+      _rptRenderStats();
+    });
+  }
+
+  /* ── S2：批次預計算面板 ── */
+
+  function rptToggleBatchPanel() {
+    var panel = document.getElementById('rpt-batch-panel');
+    var open  = panel.style.display === 'none' || panel.style.display === '';
+    if (open) {
+      panel.style.display = '';
+      _rptBuildBatchTable_();
+    } else {
+      panel.style.display = 'none';
+    }
+  }
+
+  // 依儀表板下拉的年度清單動態建立勾選表格
+  function _rptBuildBatchTable_() {
+    var sel   = document.getElementById('rpt-dash-year');
+    var tbody = document.getElementById('rpt-batch-combo-body');
+    var html  = '';
+    for (var i = 0; i < sel.options.length; i++) {
+      var yr = sel.options[i].value;
+      html += '<tr>' +
+        '<td style="padding:5px 12px 5px 0;white-space:nowrap">' + yr + ' 學年度</td>' +
+        '<td style="padding:5px 16px;text-align:center">' +
+          '<input type="checkbox" class="rpt-bc" data-year="' + yr + '" data-mode="cumulative" checked></td>' +
+        '<td style="padding:5px 16px;text-align:center">' +
+          '<input type="checkbox" class="rpt-bc" data-year="' + yr + '" data-mode="year"></td>' +
+        '</tr>';
+    }
+    tbody.innerHTML = html;
+    _rptUpdateBatchBtn_();
+    // 勾選變動時即時更新按鈕文字
+    tbody.querySelectorAll('.rpt-bc').forEach(function(c) {
+      c.addEventListener('change', _rptUpdateBatchBtn_);
+    });
+  }
+
+  function _rptUpdateBatchBtn_() {
+    var count = document.querySelectorAll('.rpt-bc:checked').length;
+    var btn   = document.getElementById('rpt-batch-calc-btn');
+    btn.textContent = '開始批次預計算（' + count + ' 個組合）';
+    btn.disabled    = count === 0;
+  }
+
+  function rptBatchSelectAll(checked) {
+    document.querySelectorAll('.rpt-bc').forEach(function(c) { c.checked = checked; });
+    _rptUpdateBatchBtn_();
+  }
+
+  function rptBatchCalc() {
+    var chks = document.querySelectorAll('.rpt-bc:checked');
+    if (chks.length === 0) { showToast('請至少勾選一個組合', 'error'); return; }
+
+    var combinations = [];
+    chks.forEach(function(c) {
+      combinations.push({ academicYear: Number(c.dataset.year), mode: c.dataset.mode });
+    });
+    // 依年度升冪、累積優先排序（確保先算小年度，符合人類閱讀習慣）
+    combinations.sort(function(a, b) {
+      if (a.academicYear !== b.academicYear) return a.academicYear - b.academicYear;
+      return a.mode === 'cumulative' ? -1 : 1;
+    });
+
+    var progEl   = document.getElementById('rpt-batch-calc-progress');
+    var resultEl = document.getElementById('rpt-batch-calc-result');
+    var btn      = document.getElementById('rpt-batch-calc-btn');
+
+    btn.disabled       = true;
+    progEl.textContent = '正在送出批次計算請求，請稍候（共 ' + combinations.length + ' 個組合）...';
+    progEl.style.display = '';
+    resultEl.style.display = 'none';
+    showSpinner();
+
+    api('report_batch_calc', { combinations: combinations }).then(function(res) {
+      hideSpinner();
+      btn.disabled = false;
+      progEl.style.display = 'none';
+
+      if (!res.success) {
+        showToast(res.error || '批次計算失敗', 'error');
+        return;
+      }
+
+      var d = res.data;
+      // 計算完成後同步更新 localStorage 快取，避免馬上開儀表板還需等待
+      // （實際 statsData 不在 batch 回傳中，由下次 getStatsCache 帶回，故僅清除舊 ls 快取讓它重新抓）
+      combinations.forEach(function(c) {
+        try {
+          localStorage.removeItem('rpt_stats_' + c.academicYear + '_' + c.mode);
+        } catch(e) {}
+      });
+
+      var okCount   = d.results.filter(function(r){ return r.success; }).length;
+      var failItems = d.results.filter(function(r){ return !r.success; });
+
+      var msg = '✅ 批次預計算完成：' + okCount + ' 個組合已存入伺服器快取';
+      if (failItems.length > 0) {
+        msg += '；' + failItems.length + ' 個失敗（' +
+          failItems.map(function(r){ return r.academicYear + '/' + r.mode; }).join('、') + '）';
+      }
+      resultEl.textContent   = msg;
+      resultEl.style.display = '';
+      showToast('批次預計算完成', 'success');
+
+      // 若當前儀表板年度+模式在計算範圍內，立刻重新讀取伺服器快取顯示
+      var curYr   = Number(document.getElementById('rpt-dash-year').value);
+      var curMode = _rptCalcMode;
+      var hit = combinations.some(function(c){ return c.academicYear === curYr && c.mode === curMode; });
+      if (hit) rptLoadStats();
+    }).catch(function(err) {
+      hideSpinner();
+      btn.disabled = false;
+      progEl.style.display = 'none';
+      showToast('發生錯誤：' + err.message, 'error');
+    });
+  }
+
+  /* ── S2：切換計算模式（累積 / 當年度）── */
+  function rptSwitchCalcMode(mode) {
+    if (mode === _rptCalcMode) return;
+    _rptCalcMode = mode;
+    // 更新按鈕樣式
+    document.getElementById('cmode-cumulative').className =
+      'btn btn-sm ' + (mode === 'cumulative' ? 'btn-primary' : 'btn-outline');
+    document.getElementById('cmode-year').className =
+      'btn btn-sm ' + (mode === 'year' ? 'btn-primary' : 'btn-outline');
+    // 清除記憶體快取，嘗試讀新模式的 localStorage 快取
+    _rptStatsCache = null;
+    rptLoadStats();
+  }
+
+  /* ── S2：部別切換 ── */
+  function rptSwitchDept(dept) {
+    _rptCurrentDept = dept;
+    ['school','hs','jh'].forEach(function(d) {
+      var btn = document.getElementById('dtab-' + d);
+      btn.className = 'btn btn-sm ' + (d === dept ? 'btn-primary' : 'btn-outline');
+    });
+    _rptRenderStats();
+    if (_rptMatrixOpen) rptRenderPendingMatrix();
+  }
+
+  /* ── S2：渲染儀表板 ── */
+  function _rptRenderStats() {
+    var listEl = document.getElementById('rpt-stats-list');
+    if (!_rptStatsCache) {
+      listEl.innerHTML = '<div class="empty-state"><div class="ei">📊</div><p>尚無資料</p></div>';
+      return;
+    }
+    var stats  = _rptStatsCache.stats;
+    var totals = _rptStatsCache.totals;
+    var dept   = _rptCurrentDept;
+    var totalN = dept === 'school' ? totals.school : dept === 'hs' ? totals.hs : totals.jh;
+    document.getElementById('rpt-totals-label').textContent =
+      '全校 ' + totals.school + ' 人｜高中部 ' + totals.hs + ' 人｜國中部 ' + totals.jh + ' 人';
+
+    var html = '';
+    stats.forEach(function(s) {
+      var g       = s[dept];
+      var pending = g.total - g.passed;
+      var barW    = g.total ? Math.round(g.passed / g.total * 100) : 0;
+      var isWarn  = pending > 0;
+      html += '<div style="padding:10px 0;border-bottom:1px solid var(--gray-100)">' +
+        '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' +
+        '<span style="min-width:52px;font-weight:700;font-size:0.92rem;' +
+              (isWarn ? 'color:var(--danger);text-decoration:underline;cursor:pointer' : 'color:var(--primary)') + '"' +
+              (isWarn ? ' onclick="rptShowPending(\'' + s.id + '\',\'' + s.label + '\')"' : '') + '>' +
+              s.label + '</span>' +
+        '<div style="flex:1;min-width:120px;background:#e5e7eb;border-radius:99px;height:12px">' +
+          '<div style="width:' + barW + '%;background:' + (isWarn ? 'var(--warning)' : 'var(--success)') +
+               ';border-radius:99px;height:12px;transition:width 0.4s"></div></div>' +
+        '<span style="white-space:nowrap;font-size:0.84rem;color:var(--gray-700)">' +
+              g.passed + ' / ' + g.total + '（' + g.rate + '%）</span>' +
+        (isWarn ? '<span style="font-size:0.78rem;color:var(--danger);cursor:pointer" ' +
+                  'onclick="rptShowPending(\'' + s.id + '\',\'' + s.label + '\')">' +
+                  '未通過 ' + pending + ' 人 ›</span>' : '') +
+        '</div></div>';
+    });
+    listEl.innerHTML = html || '<div class="empty-state"><div class="ei">✅</div><p>無資料</p></div>';
+    // 若未達成總覽已展開，同步更新矩陣
+    if (_rptMatrixOpen) rptRenderPendingMatrix();
+  }
+
+  /* ── S2：催辦 Modal ── */
+  function rptShowPending(id, label) {
+    if (!_rptStatsCache) return;
+    var s = _rptStatsCache.stats.find(function(x) { return x.id === id; });
+    if (!s) return;
+    document.getElementById('pending-modal-title').textContent = '【' + label + '】未通過人員';
+    var list = s.pendingList.filter(function(p) {
+      if (_rptCurrentDept === 'hs') return p.department === '高中部';
+      if (_rptCurrentDept === 'jh') return p.department === '國中部';
+      return true;
+    });
+    var html = list.length === 0 ? '（無未通過人員）' :
+      list.map(function(p) {
+        return '<div style="padding:4px 0;border-bottom:1px solid #f0f0f0">' +
+               '<span style="display:inline-block;width:60px;font-size:0.78rem;' +
+               'color:var(--gray-600)">' + p.department + '</span>' + p.name + '</div>';
+      }).join('');
+    document.getElementById('pending-modal-body').innerHTML = html;
+    document.getElementById('pending-modal').style.display = 'flex';
+  }
+
+  function closePendingModal() {
+    document.getElementById('pending-modal').style.display = 'none';
+  }
+
+  /* ══════════════════════════════════════════
+     S2：未達成總覽矩陣
+  ══════════════════════════════════════════ */
+
+  var _rptMatrixOpen = false;
+
+  /* ── 展開 / 收合切換 ── */
+  function rptTogglePendingMatrix() {
+    _rptMatrixOpen = !_rptMatrixOpen;
+    var matrixEl  = document.getElementById('rpt-pending-matrix');
+    var filterBar = document.getElementById('rpt-ind-filter-bar');
+    var btn       = document.getElementById('rpt-matrix-toggle-btn');
+    if (_rptMatrixOpen) {
+      matrixEl.style.display  = '';
+      filterBar.style.display = '';
+      btn.textContent = '📋 未達成總覽 ▴';
+      _rptBuildIndicatorFilterBar_();
+      rptRenderPendingMatrix();
+    } else {
+      matrixEl.style.display  = 'none';
+      filterBar.style.display = 'none';
+      btn.textContent = '📋 未達成總覽 ▾';
+      document.getElementById('rpt-matrix-export-btn').style.display = 'none';
+    }
+  }
+
+  /* ── 依 _rptStatsCache 動態產生指標 checkbox 列 ── */
+  function _rptBuildIndicatorFilterBar_() {
+    if (!_rptStatsCache || !_rptStatsCache.stats) return;
+    var container = document.getElementById('rpt-ind-filter-checks');
+    // 已建立過且指標數量相同則不重建（避免清掉使用者已勾的選項）
+    var existing = container.querySelectorAll('.rpt-ind-chk');
+    if (existing.length === _rptStatsCache.stats.length) return;
+    var html = '';
+    _rptStatsCache.stats.forEach(function(s) {
+      html += '<label style="display:flex;align-items:center;gap:4px;cursor:pointer;' +
+              'padding:3px 8px;border-radius:6px;border:1px solid #c7d2fe;background:#fff;' +
+              'white-space:nowrap;user-select:none">' +
+        '<input type="checkbox" class="rpt-ind-chk" value="' + s.id + '" checked ' +
+               'onchange="rptFilterIndicator()">' +
+        '<span style="font-size:0.8rem;font-weight:600;color:var(--primary)">' + s.label + '</span>' +
+        '</label>';
+    });
+    container.innerHTML = html;
+  }
+
+  /* ── 指標 checkbox 變動 → 即時重繪矩陣 ── */
+  function rptFilterIndicator() {
+    rptRenderPendingMatrix();
+  }
+
+  /* ── 全選 / 取消全選指標篩選 ── */
+  function rptFilterSelectAll(checked) {
+    document.querySelectorAll('.rpt-ind-chk').forEach(function(c) { c.checked = checked; });
+    rptRenderPendingMatrix();
+  }
+
+  /* ── 建立矩陣資料並渲染 ── */
+  function rptRenderPendingMatrix() {
+    var matrixEl = document.getElementById('rpt-pending-matrix');
+    if (!_rptMatrixOpen) return;
+
+    if (!_rptStatsCache || !_rptStatsCache.stats) {
+      matrixEl.innerHTML = '<div style="color:var(--gray-500);padding:8px 0">' +
+        '請先計算達成率後再開啟總覽</div>';
+      return;
+    }
+
+    var stats = _rptStatsCache.stats;
+    var dept  = _rptCurrentDept;
+
+    // 讀取被勾選的指標 ID（空集合 = 全選邏輯：顯示所有有未達成者）
+    var checkedIds = {};
+    var anyChecked = false;
+    document.querySelectorAll('.rpt-ind-chk:checked').forEach(function(c) {
+      checkedIds[c.value] = true;
+      anyChecked = true;
+    });
+
+    // ── Step 1：建立「教師 → 未達成指標 Set」Map ──
+    // pendingList 已是未達成清單，直接反推
+    var pendingMap = {};   // { name: { dept, failSet: { id: true } } }
+    var passedMap  = {};   // { name: { id: true } }
+
+    stats.forEach(function(s) {
+      // 取得有達成的名單（全體 - 未達成）
+      var allInDept = [];
+      s.pendingList.forEach(function(p) {
+        var inFilter = dept === 'school' ? true
+                     : dept === 'hs'     ? p.department === '高中部'
+                                         : p.department === '國中部';
+        if (!inFilter) return;
+        if (!pendingMap[p.name]) pendingMap[p.name] = { dept: p.department, failSet: {} };
+        pendingMap[p.name].failSet[s.id] = true;
+      });
+    });
+
+    // 取得全體教師清單（從 totals 推不出名字，改從 pendingList union 所有指標推）
+    // 方法：pendingList 包含未達成者；達成者 = 出現在任一 pendingList 之外的人
+    // names = pendingMap 內所有有未達成記錄的教師
+    var names = Object.keys(pendingMap);
+
+    // ── 部別篩選 ──
+    if (dept !== 'school') {
+      var deptLabel = dept === 'hs' ? '高中部' : '國中部';
+      names = names.filter(function(n) { return pendingMap[n].dept === deptLabel; });
+    }
+
+    // ── 指標篩選：只保留「在所勾選指標中至少一項未達成」的教師 ──
+    // anyChecked=false（全部取消勾選）= 顯示全部有未達成者（不套指標篩選）
+    if (anyChecked) {
+      names = names.filter(function(n) {
+        return Object.keys(checkedIds).some(function(id) {
+          return pendingMap[n].failSet[id];
+        });
+      });
+    }
+
+    // ── 依「符合篩選條件的未達成數」降冪排序 ──
+    names.sort(function(a, b) {
+      var fa = anyChecked
+        ? Object.keys(checkedIds).filter(function(id){ return pendingMap[a].failSet[id]; }).length
+        : Object.keys(pendingMap[a].failSet).length;
+      var fb = anyChecked
+        ? Object.keys(checkedIds).filter(function(id){ return pendingMap[b].failSet[id]; }).length
+        : Object.keys(pendingMap[b].failSet).length;
+      if (fb !== fa) return fb - fa;
+      if (pendingMap[a].dept !== pendingMap[b].dept)
+        return pendingMap[a].dept < pendingMap[b].dept ? -1 : 1;
+      return a < b ? -1 : 1;
+    });
+
+    // ── 計算總人數與全達成人數（用於提示列） ──
+    var totalInScope = dept === 'school' ? _rptStatsCache.totals.school
+                     : dept === 'hs'     ? _rptStatsCache.totals.hs
+                                         : _rptStatsCache.totals.jh;
+    // pendingMap 全體（部別已篩）中不在 names 裡的人 = 對本次篩選指標全達成
+    var allPendingInDept = Object.keys(pendingMap).filter(function(n) {
+      if (dept === 'school') return true;
+      return pendingMap[n].dept === (dept === 'hs' ? '高中部' : '國中部');
+    });
+    var filteredOutCnt = allPendingInDept.length - names.length;  // 有未達成但不符指標篩選
+    var trueAllPassCnt = totalInScope - allPendingInDept.length;  // 全部指標都達成的人
+
+    if (names.length === 0) {
+      var msg = anyChecked
+        ? '✅ 所勾選的指標範圍內，目前篩選部別所有教師均已達成！'
+        : '✅ 目前篩選條件下所有教師均已達成所有指標！';
+      matrixEl.innerHTML = '<div style="color:var(--success);font-weight:600;padding:8px 0">' + msg + '</div>';
+      document.getElementById('rpt-matrix-export-btn').style.display = 'none';
+      return;
+    }
+
+    // ── Step 2：建立 HTML 表格 ──
+    var indIds = stats.map(function(s) { return s.id; });
+
+    // 表頭（被勾選的指標標題加底色強調）
+    var thHtml = '<tr style="background:#f0f4ff">' +
+      '<th style="padding:6px 10px;text-align:left;white-space:nowrap;' +
+          'border:1px solid var(--gray-200);min-width:80px">教師</th>';
+    stats.forEach(function(s) {
+      var g          = s[dept];
+      var isFiltered = anyChecked && checkedIds[s.id];
+      thHtml += '<th style="padding:6px 8px;text-align:center;white-space:nowrap;' +
+        'border:1px solid var(--gray-200);' +
+        (isFiltered ? 'background:#e0e7ff;' : '') + '">' +
+        s.label + '<br>' +
+        '<span style="font-size:0.72rem;font-weight:400;color:var(--gray-600)">' +
+        g.passed + '/' + g.total + '</span></th>';
+    });
+    thHtml += '<th style="padding:6px 8px;text-align:center;' +
+      'border:1px solid var(--gray-200);white-space:nowrap">未達成數</th></tr>';
+
+    // 資料列
+    var rowsHtml = '';
+    names.forEach(function(name) {
+      var info    = pendingMap[name];
+      var failCnt = Object.keys(info.failSet).length;
+      // 符合篩選條件的未達成數（用於粗體判斷）
+      var filteredFailCnt = anyChecked
+        ? Object.keys(checkedIds).filter(function(id){ return info.failSet[id]; }).length
+        : failCnt;
+      var isCritical = filteredFailCnt >= 3;
+      var deptBadge  = '<span style="font-size:0.72rem;color:var(--gray-500);' +
+        'background:#f0f0f0;border-radius:4px;padding:0 4px;margin-right:4px">' +
+        (info.dept === '高中部' ? '高' : '國') + '</span>';
+      rowsHtml += '<tr style="' + (isCritical ? 'font-weight:700;' : '') + '">' +
+        '<td style="padding:5px 10px;border:1px solid var(--gray-200);white-space:nowrap">' +
+        deptBadge + name + '</td>';
+      indIds.forEach(function(id) {
+        var fail       = info.failSet[id];
+        var inFilter   = anyChecked && checkedIds[id];
+        // 篩選外的指標欄位淡化顯示
+        var bgColor = fail
+          ? (inFilter || !anyChecked ? '#FEE2E2' : '#FFF0F0')
+          : (inFilter || !anyChecked ? '#D1FAE5' : '#F0FFF4');
+        var opacity = (!anyChecked || inFilter) ? '' : 'opacity:0.4;';
+        rowsHtml += '<td style="text-align:center;padding:4px 8px;' +
+          'border:1px solid var(--gray-200);background:' + bgColor + ';' + opacity + '">' +
+          (fail ? '❌' : '✅') + '</td>';
+      });
+      rowsHtml += '<td style="text-align:center;padding:4px 8px;' +
+        'border:1px solid var(--gray-200);font-weight:700;' +
+        'color:' + (isCritical ? 'var(--danger)' : 'var(--warning)') + '">' +
+        failCnt + '</td></tr>';
+    });
+
+    // 全達成人數提示列（對所有指標全達成的人）
+    if (trueAllPassCnt > 0) {
+      rowsHtml += '<tr style="color:var(--gray-500);background:#f9fafb">' +
+        '<td style="padding:5px 10px;border:1px solid var(--gray-200);font-style:italic" colspan="' +
+        (indIds.length + 2) + '">（另有 ' + trueAllPassCnt + ' 人全部指標均達成，未列入）</td></tr>';
+    }
+    if (filteredOutCnt > 0 && anyChecked) {
+      rowsHtml += '<tr style="color:var(--gray-500);background:#f9fafb">' +
+        '<td style="padding:5px 10px;border:1px solid var(--gray-200);font-style:italic" colspan="' +
+        (indIds.length + 2) + '">（另有 ' + filteredOutCnt + ' 人在所勾選指標均已達成，因篩選條件不顯示）</td></tr>';
+    }
+
+    var yr       = _rptStatsCache.academicYear;
+    var mode     = _rptStatsCache.mode === 'year' ? '當年度' : '累積';
+    var filterDesc = anyChecked
+      ? '（篩選指標：' + Object.keys(checkedIds).join('、') + '）'
+      : '';
+    matrixEl.innerHTML =
+      '<div style="font-size:0.78rem;color:var(--gray-500);margin-bottom:6px">' +
+      yr + ' 學年度 / ' + mode + filterDesc +
+      '　共 <b>' + names.length + '</b> 人符合篩選條件' +
+      '　<span style="color:var(--danger);font-weight:600">加粗</span> = 篩選指標未達成 ≥ 3 項</div>' +
+      '<table style="border-collapse:collapse;width:100%">' + thHtml + rowsHtml + '</table>';
+
+    document.getElementById('rpt-matrix-export-btn').style.display = '';
+  }
+
+  /* ── 矩陣 CSV 匯出（純前端 Blob 下載）── */
+  function rptExportPendingCSV() {
+    if (!_rptStatsCache) return;
+    var stats     = _rptStatsCache.stats;
+    var dept      = _rptCurrentDept;
+    var yr        = _rptStatsCache.academicYear;
+    var mode      = _rptStatsCache.mode === 'year' ? '當年度' : '累積';
+
+    // 重建 pendingMap（與 render 相同邏輯）
+    var pendingMap = {};
+    stats.forEach(function(s) {
+      s.pendingList.forEach(function(p) {
+        var inFilter = dept === 'school' ? true
+                     : dept === 'hs'     ? p.department === '高中部'
+                                         : p.department === '國中部';
+        if (!inFilter) return;
+        if (!pendingMap[p.name]) pendingMap[p.name] = { dept: p.department, failSet: {} };
+        pendingMap[p.name].failSet[s.id] = true;
+      });
+    });
+
+    var indIds    = stats.map(function(s) { return s.id; });
+    var indLabels = stats.map(function(s) { return s.label; });
+
+    // CSV 標題列
+    var lines = ['﻿部別,教師姓名,' + indLabels.join(',') + ',未達成數'];
+
+    // 有未達成的教師（依未達成數降冪）
+    var names = Object.keys(pendingMap).sort(function(a, b) {
+      return Object.keys(pendingMap[b].failSet).length - Object.keys(pendingMap[a].failSet).length;
+    });
+    names.forEach(function(name) {
+      var info = pendingMap[name];
+      var cols = indIds.map(function(id) { return info.failSet[id] ? '✗' : '✓'; });
+      var cnt  = Object.keys(info.failSet).length;
+      lines.push('"' + info.dept + '","' + name + '",' + cols.join(',') + ',' + cnt);
+    });
+
+    // 全達成教師（依部別）
+    var totalInScope = dept === 'school' ? _rptStatsCache.totals.school
+                     : dept === 'hs'     ? _rptStatsCache.totals.hs
+                                         : _rptStatsCache.totals.jh;
+    var allPassCnt = totalInScope - names.length;
+    if (allPassCnt > 0) {
+      var allTick = indIds.map(function(){ return '✓'; }).join(',');
+      lines.push('"（全達成）","共 ' + allPassCnt + ' 人",' + allTick + ',0');
+    }
+
+    var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href     = url;
+    a.download = '未達成總覽_' + yr + '學年_' + mode + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('CSV 已下載', 'success');
+  }
+
+  /* ── S3：載入指標列表 ── */
+  function _rptLoadIndicators() {
+    api('get_indicators', {}).then(function(res) {
+      if (!res.success) return;
+      var listEl = document.getElementById('rpt-indicators-list');
+      if (!res.data || res.data.length === 0) {
+        listEl.innerHTML = '<div style="color:var(--gray-500);font-size:0.84rem">尚無指標規則</div>';
+        return;
+      }
+      var html = '<table style="width:100%;border-collapse:collapse;font-size:0.84rem">' +
+        '<tr style="background:#f0f4ff"><th style="padding:6px 8px;text-align:left">ID</th>' +
+        '<th style="padding:6px 8px;text-align:left">名稱</th>' +
+        '<th style="padding:6px 8px;text-align:left">關鍵字（Regex）</th>' +
+        '<th style="padding:6px 8px;width:80px"></th></tr>';
+      res.data.forEach(function(r) {
+        var dataAttr = 'data-ind=\'' + encodeURIComponent(JSON.stringify(r)) + '\'';
+        html += '<tr style="border-bottom:1px solid #eee">' +
+          '<td style="padding:6px 8px;font-weight:700;color:var(--primary)">' + r.id + '</td>' +
+          '<td style="padding:6px 8px">' + r.label + '</td>' +
+          '<td style="padding:6px 8px;color:var(--gray-600);font-size:0.78rem">' +
+               r.patterns.join('<br>') + '</td>' +
+          '<td style="padding:6px 8px">' +
+          '<button class="btn btn-sm btn-outline" style="padding:2px 8px;font-size:0.76rem" ' +
+               dataAttr + ' onclick="rptEditIndicator(this)">編輯</button> ' +
+          '<button class="btn btn-sm btn-danger" style="padding:2px 8px;font-size:0.76rem" ' +
+               'onclick="rptDeleteIndicator(\'' + r.id + '\')">刪除</button>' +
+          '</td></tr>';
+      });
+      html += '</table>';
+      listEl.innerHTML = html;
+    });
+  }
+
+  /* ── S3：儲存指標 ── */
+  function rptSaveIndicator() {
+    var id       = document.getElementById('ind-id').value.trim().toUpperCase();
+    var label    = document.getElementById('ind-label').value.trim();
+    var patterns = document.getElementById('ind-patterns').value
+                     .split('\n').map(function(p) { return p.trim(); }).filter(Boolean);
+    if (!id || !label || patterns.length === 0) {
+      showToast('ID、名稱與關鍵字均為必填', 'error'); return;
+    }
+    showSpinner();
+    api('save_indicator', { id: id, label: label, patterns: patterns }).then(function(res) {
+      hideSpinner();
+      if (res.success) {
+        showToast('指標【' + id + '】已儲存', 'success');
+        document.getElementById('ind-id').value = '';
+        document.getElementById('ind-label').value = '';
+        document.getElementById('ind-patterns').value = '';
+        _rptLoadIndicators();
+      } else {
+        showToast(res.error || '儲存失敗', 'error');
+      }
+    });
+  }
+
+  /* ── S3：點「編輯」時帶入表單 ── */
+  function rptEditIndicator(btn) {
+    var r = JSON.parse(decodeURIComponent(btn.getAttribute('data-ind')));
+    document.getElementById('ind-id').value       = r.id;
+    document.getElementById('ind-label').value    = r.label;
+    document.getElementById('ind-patterns').value = r.patterns.join('\n');
+    document.getElementById('ind-id').focus();
+  }
+
+  /* ── S3：刪除指標 ── */
+  function rptDeleteIndicator(id) {
+    if (!confirm('確定刪除指標【' + id + '】？')) return;
+    showSpinner();
+    api('delete_indicator', { id: id }).then(function(res) {
+      hideSpinner();
+      if (res.success) { showToast('已刪除【' + id + '】', 'success'); _rptLoadIndicators(); }
+      else showToast(res.error || '刪除失敗', 'error');
+    });
+  }
+
+  /* ── S4：匯出 CSV ── */
+  function rptExportCSV() {
+    var yr = Number(document.getElementById('rpt-dash-year').value);
+    showSpinner();
+    api('report_export_csv', { academicYear: yr }).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '匯出失敗', 'error'); return; }
+      var el = document.getElementById('rpt-export-result');
+      el.innerHTML = '✅ CSV 已產生：<a href="' + res.data.downloadUrl +
+                     '" target="_blank">' + res.data.fileName + '</a>';
+    });
+  }
+
+  /* ── S4：產生 Google 文件 ── */
+  function rptExportDoc() {
+    var yr = Number(document.getElementById('rpt-dash-year').value);
+    showSpinner();
+    api('report_export_doc', { academicYear: yr }).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '產生失敗', 'error'); return; }
+      var el = document.getElementById('rpt-export-result');
+      el.innerHTML = '✅ 文件已產生：<a href="' + res.data.docUrl +
+                     '" target="_blank">' + res.data.docName + '</a>';
+    });
+  }
+
   /* ── 初始化（管理者限定）── */
   document.addEventListener('DOMContentLoaded', function() {
     var ok = initPage({ adminOnly: true });
@@ -1331,6 +2837,32 @@
   window.saveReq             = saveReq;
   window.archiveReq          = archiveReq;
   window.renewRequirements   = renewRequirements;
+  // 研習統計模組
+  window.rptParseFile           = rptParseFile;
+  window.rptDoImport            = rptDoImport;
+  window.rptBatchImportAll      = rptBatchImportAll;
+  window.rptToggleAllYears      = rptToggleAllYears;
+  window.rptParseRoster         = rptParseRoster;
+  window.rptBatchImportRoster   = rptBatchImportRoster;
+  window.rptSupplementRoster    = rptSupplementRoster;
+  window.rptLoadStats           = rptLoadStats;
+  window.rptToggleBatchPanel    = rptToggleBatchPanel;
+  window.rptBatchCalc           = rptBatchCalc;
+  window.rptBatchSelectAll      = rptBatchSelectAll;
+  window.rptTogglePendingMatrix = rptTogglePendingMatrix;
+  window.rptRenderPendingMatrix = rptRenderPendingMatrix;
+  window.rptExportPendingCSV    = rptExportPendingCSV;
+  window.rptFilterIndicator     = rptFilterIndicator;
+  window.rptFilterSelectAll     = rptFilterSelectAll;
+  window.rptSwitchDept          = rptSwitchDept;
+  window.rptSwitchCalcMode      = rptSwitchCalcMode;
+  window.rptShowPending         = rptShowPending;
+  window.closePendingModal      = closePendingModal;
+  window.rptSaveIndicator       = rptSaveIndicator;
+  window.rptEditIndicator       = rptEditIndicator;
+  window.rptDeleteIndicator     = rptDeleteIndicator;
+  window.rptExportCSV           = rptExportCSV;
+  window.rptExportDoc           = rptExportDoc;
   </script>
 </body>
 </html>

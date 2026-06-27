@@ -22,6 +22,7 @@
 - 批次審核教師上傳的研習證明（核准 / 退件並附理由）
 - 匯出研習紀錄報表（CSV）
 - 預覽並手動觸發通知（即時掌握待通知教師名單）
+- **研習統計分析**：多來源研習資料匯入（全國進修網 + 臺北市研習網）、人事名冊多學年管理、政策指標達成率儀表板（累積/當年度，跨裝置快取）、未達成教師矩陣總覽（指標 checkbox 篩選 + CSV 匯出）、批次預計算
 
 ### 自動通知（學校 Gmail）
 系統透過 GAS `MailApp` 使用管理者的學校 Gmail 自動寄送三種通知信：
@@ -176,6 +177,7 @@
 ├── Drive.gs         # Google Drive 資料夾與授權管理
 ├── Sync.gs          # 每晚同步 TrainingStats → Portal Hub
 ├── Notify.gs        # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
+├── TrainingReport.gs # 研習統計分析模組（匯入/名冊快照/指標計算/StatsCache/匯出）
 ├── Index.html       # 教師端首頁（年度任務進度儀表板 + 公告課程列表）
 ├── Submit.html      # 選課與上傳頁面（Step ① 任務選擇 → Step ② 研習資訊）
 ├── Records.html     # 教師端個人研習紀錄查詢（PENDING / APPROVED / REJECTED 分頁）
@@ -200,6 +202,8 @@
 | **Phase 5A** | 年度任務後端（Requirement.gs + Schema 擴充 + 8 支 API） | ✅ 完成（2026-05-31） |
 | **Phase 5B** | 年度任務前端（Index 改版 + Submit 任務選擇 + Admin 第四分頁） | ✅ 完成（2026-05-31） |
 | **共用 CSS 抽離** | SchoolPortalLib.getSharedCSS() + style.html 精簡（458 → 86 行） | ✅ 完成（2026-05-31） |
+| **Phase 6** | 個人身分證後六碼登入（TRAIN 原生 Token，SHA-256，防暴力破解） | ✅ 完成（2026-06-11） |
+| **Phase 7** | 研習統計分析模組（多來源匯入 / 人事名冊快照 / 儀表板 / 未達成矩陣） | ✅ 完成（2026-06-27） |
 
 ### 已部署系統常數
 | 常數 | 說明 |

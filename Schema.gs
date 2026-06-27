@@ -136,6 +136,17 @@ function initSheetHeaders() {
   Logger.log('initSheetHeaders 完成，三張工作表已就緒。');
 }
 
+// ==================== 研習統計分析模組常數 ====================
+
+const IMPORTED_DATA_SHEET    = 'ImportedData';
+const TEACHER_SNAPSHOT_SHEET = 'TeacherSnapshot';
+const INDICATOR_RULES_KEY    = 'indicatorRules';
+const ROSTER_SOURCES_KEY     = 'rosterSources';   // 各學年度名冊來源記錄（PropertiesService）
+const STATS_CACHE_SHEET      = 'StatsCache';       // 伺服器端統計快取工作表
+const REPORT_DOC_TEMPLATE_ID = '';        // 建立 Google 文件範本後填入
+const SCHOOL_NAME            = '臺北市立中崙高級中學';
+const PRINCIPAL_NAME         = '';        // 校長姓名
+
 // ==================== ID 產生器（需在 LockService 內呼叫） ====================
 
 /**

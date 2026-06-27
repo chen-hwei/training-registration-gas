@@ -105,6 +105,21 @@ function handleRequest(payload) {
     case 'v1/admin/editRequirement':      return editRequirement(userId, body || {});
     case 'v1/admin/archiveRequirement':   return archiveRequirement(userId, body || {});
     case 'v1/admin/renewRequirements':    return renewRequirements(userId, body || {});
+
+    // ── 研習統計分析模組（TRAIN-REPORT）──
+    case 'report_import':              return importTrainingData(body || {});
+    case 'report_snapshot':            return snapshotTeacherRoster(body || {});
+    case 'report_snapshot_batch':      return snapshotRosterBatch(body || {});
+    case 'report_get_roster_sources':  return getRosterSources();
+    case 'report_get_stats_cache':     return getStatsCache((body||{}).academicYear, (body||{}).mode);
+    case 'report_batch_calc':          return batchCalcStats(body || {});
+    case 'report_calc':                return calcStats((body || {}).academicYear, (body || {}).mode);
+    case 'report_export_csv':          return exportDoubleColumnCSV((body || {}).academicYear);
+    case 'report_export_doc':          return generateGoogleDoc((body || {}).academicYear);
+    case 'get_indicators':             return getIndicators();
+    case 'save_indicator':             return saveIndicator(body || {});
+    case 'delete_indicator':           return deleteIndicator((body || {}).id);
+
     default: return _err('UNKNOWN_ACTION');
   }
 }
