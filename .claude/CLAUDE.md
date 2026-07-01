@@ -39,34 +39,12 @@
 收到您「確認」或「對」之後，才開始寫程式碼。
 若理解有誤，請直接指正，我重新確認。
 
-## 收工流程（說「收工」後 Claude 直接執行，您只做確認）
+## 收工補充（專案專屬）
+> 收工流程主體見全域 `~/.claude/CLAUDE.md` 第 5 節。
 
-說「**收工**」時，Claude 依序執行下列步驟，每步驟先預覽再等您說「確認」：
+| 步驟 | 路徑 |
+|---|---|
+| 步驟 2 latest_status | `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\latest_status\training_latest.md` |
+| 步驟 2.5 知識卡片 | `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\training.md` |
 
-### 步驟 1｜預覽 Commit Message
-Claude 先顯示：
-```
-即將執行：
-git add [這次動過的檔案]
-git commit -m "類型(範疇): 摘要
-- 修改點1
-- 修改點2"
-```
-您說「確認」→ Claude 直接執行 git commit。
-
-### 步驟 2｜覆寫 latest_status
-Claude 先顯示新的 latest_status 內容預覽，
-您說「確認」→ Claude 直接覆寫
-`G:\我的雲端硬碟\Obsidian\Claude專案\_projects\latest_status\[系統]_latest.md`
-
-### 步驟 3｜接口變更通知信（僅在有對外 API 異動時）
-Claude 先顯示通知信內容，
-您說「確認」→ Claude 直接寫入
-`G:\我的雲端硬碟\Obsidian\Claude專案\_log\YYYY-MM-DD-[系統]-interface-change.md`
-
-### 步驟 4｜提醒手動執行（Claude 無法代勞）
-```
-請您手動執行：
-1. clasp push（需在專案資料夾執行）
-2. git push origin main
-```
+**步驟 3 接口通知信觸發前提**：Hub.TrainingStats 的欄位結構或寫入邏輯有異動才需通知（影響主門戶儀表板）。

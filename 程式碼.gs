@@ -73,11 +73,13 @@ function handleRequest(payload) {
   const userId = session.userId;
 
   switch (action) {
-    case 'v1/getCatalog':       return { success: true, data: getCatalog() };
-    case 'v1/getMyRecords':     return { success: true, data: getMyRecords(userId) };
-    case 'v1/submitRecord':     return submitRecord(userId, body || {});
-    case 'v1/deleteRecord':     return deleteRecord(userId, body || {});
-    case 'v1/getRequirements':  return { success: true, data: getRequirements(userId) };
+    case 'v1/getCatalog':                    return { success: true, data: getCatalog() };
+    case 'v1/getMyRecords':                  return { success: true, data: getMyRecords(userId) };
+    case 'v1/submitRecord':                  return submitRecord(userId, body || {});
+    case 'v1/deleteRecord':                  return deleteRecord(userId, body || {});
+    case 'v1/getRequirements':               return { success: true, data: getRequirements(userId) };
+    case 'v1/getMyImportedRecords':          return getMyImportedRecords(userId, body || {});
+    case 'v1/checkImportedBeforeSubmit':     return checkImportedBeforeSubmit(userId, body || {});
   }
 
   // ── Level 2：驗證管理者身分 ──
@@ -119,6 +121,9 @@ function handleRequest(payload) {
     case 'get_indicators':             return getIndicators();
     case 'save_indicator':             return saveIndicator(body || {});
     case 'delete_indicator':           return deleteIndicator((body || {}).id);
+    case 'get_identity_rules':              return getIdentityRules();
+    case 'save_identity_rules':             return saveIdentityRules(body || {});
+    case 'report_req_stats':                return calcRequirementStats(body || {});
 
     default: return _err('UNKNOWN_ACTION');
   }

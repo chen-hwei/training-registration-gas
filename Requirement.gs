@@ -26,15 +26,55 @@ function getRequirements(userId) {
     if (r.status === 'PENDING')  pendingMap[rid]  = (pendingMap[rid]  || 0) + h;
   });
 
+  // 若有分眾任務（audienceRules），從 Hub.UserStatusCache 取得使用者身分
+  let userIdentityGroup = null;
+  const hasAudienceRules = requirements.some(r => r.audienceRules && String(r.audienceRules).trim() !== '');
+  if (hasAudienceRules) {
+    try {
+      const hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+      const uscSheet = hub.getSheetByName('UserStatusCache');
+      if (uscSheet) {
+        const uscData = uscSheet.getDataRange().getValues();
+        const hdr     = uscData[0];
+        const idCol   = hdr.indexOf('userId');
+        const jpCol   = hdr.indexOf('jobPrimary');
+        const ttCol   = hdr.indexOf('title');
+        const jtCol   = hdr.indexOf('jobTask');
+        const userRow = uscData.slice(1).find(r => String(r[idCol] || '').trim() === userId);
+        if (userRow) {
+          const identityRules = _loadIdentityRules_();
+          userIdentityGroup   = _classifyIdentity_({
+            jobPrimary: jpCol >= 0 ? String(userRow[jpCol] || '').trim() : '',
+            title:      ttCol >= 0 ? String(userRow[ttCol] || '').trim() : '',
+            jobTask:    jtCol >= 0 ? String(userRow[jtCol] || '').trim() : ''
+          }, identityRules);
+        }
+      }
+    } catch (e) {
+      Logger.log('getRequirements: identity lookup failed: ' + e.message);
+    }
+  }
+
   return requirements.map(req => {
-    const required = Number(req.requiredHours) || 0;
+    let required = Number(req.requiredHours) || 0;
+
+    // audienceRules 分眾：依使用者身分覆寫 requiredHours
+    if (required === 0 && req.audienceRules && String(req.audienceRules).trim() !== '') {
+      try {
+        const rules = JSON.parse(req.audienceRules);
+        if (userIdentityGroup) {
+          const match = rules.find(ar => ar.group === userIdentityGroup);
+          if (match) required = Number(match.hours) || 0;
+        }
+      } catch (e) {}
+    }
+
     const approved = approvedMap[req.requirementId] || 0;
     return {
       ...req,
       requiredHours: required,
       approvedHours: approved,
       pendingHours:  pendingMap[req.requirementId] || 0,
-      // requiredHours === 0 代表「請依公文確認時數」，不計算完成狀態
       isCompleted:   required > 0 && approved >= required
     };
   });
@@ -133,7 +173,8 @@ function editRequirement(adminId, body) {
     if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
 
     const EDITABLE = ['name', 'startDate', 'endDate', 'requiredHours', 'hoursNote',
-                      'deliveryType', 'semesterSplit', 'notes', 'links', 'isRecurring'];
+                      'deliveryType', 'semesterSplit', 'notes', 'links', 'isRecurring',
+                      'audienceRules', 'matchKeywords'];
     EDITABLE.forEach(key => {
       if (body[key] === undefined) return;
       const colIdx = schema.keys.indexOf(key);
@@ -524,4 +565,138 @@ function seed114Requirements() {
   sheet.getRange(1, 1, allRows.length, allRows[0].length).setValues(allRows);
 
   Logger.log('✅ seed114Requirements 完成，已寫入 ' + data.length + ' 筆 114 學年度研習任務。');
+}
+
+/**
+ * 一次性更新 RQ114001（資通安全）與 RQ114002（特教研習）的分眾時數規則
+ * 在 GAS 編輯器直接執行此函式即可；執行後可刪除或保留備查。
+ *
+ * audienceRules 格式（JSON 字串）：
+ *   空字串  = 全員套用 requiredHours，不分眾
+ *   JSON 陣列 = [{ "group": "身分類別", "hours": 數字 }, ...]
+ *   若某人的身分不在清單內，該任務不計入其達標檢查。
+ */
+function updateAudienceRules114() {
+  const sheet  = _getRequirementSheet();
+  const schema = SHEET_SCHEMA.TRAINING_REQUIREMENT;
+  const data   = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  // 標題列為中文，用 Schema keys 陣列的位置索引定位欄號（0-based）
+  const keys   = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
+  const idCol  = keys.indexOf('requirementId');
+  const audCol = keys.indexOf('audienceRules');
+
+  if (audCol === -1) {
+    throw new Error('Schema.gs 的 TRAINING_REQUIREMENT.keys 中找不到 audienceRules，請確認 Schema.gs 已更新。');
+  }
+
+  // 特教研習分眾規則
+  const specialEdRules = JSON.stringify([
+    { group: '特教教師',      hours: 18 },
+    { group: '普通班教師',    hours: 6  },
+    { group: '相關行政人員',  hours: 3  },
+    { group: '教保員及助理員',hours: 3  },
+    { group: '相關專業人員',  hours: 6  }
+  ]);
+
+  let updated = 0;
+  for (let i = 1; i < data.length; i++) {
+    const rid = String(data[i][idCol] || '');
+    if (rid === 'RQ114001') {
+      // 資通安全：全員 3h，audienceRules 留空（沿用 requiredHours），但確認 targetAudience
+      data[i][audCol] = '';
+      updated++;
+    } else if (rid === 'RQ114002') {
+      data[i][audCol] = specialEdRules;
+      updated++;
+    }
+  }
+
+  // 只寫入 audienceRules 欄，不用 clearContents（避免寫回失敗時資料遺失）
+  for (let i = 1; i < data.length; i++) {
+    const rid = String(data[i][idCol] || '');
+    if (rid === 'RQ114001' || rid === 'RQ114002') {
+      sheet.getRange(i + 1, audCol + 1).setValue(data[i][audCol]);
+    }
+  }
+  Logger.log('✅ updateAudienceRules114 完成，已更新 ' + updated + ' 筆任務。');
+}
+
+/**
+ * 一次性修正 114 學年度分學期任務的 endDate，改為標準學期結束日
+ * 上學期 endDate → 2026/1/31；下學期 endDate → 2026/7/31
+ * 執行後可刪除此函式。
+ */
+function fixSemesterEndDates114() {
+  const sheet  = _getRequirementSheet();
+  const keys   = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
+  const idCol  = keys.indexOf('requirementId');
+  const edCol  = keys.indexOf('endDate');
+
+  if (edCol === -1) throw new Error('找不到 endDate 欄，請確認 Schema.gs 已定義。');
+
+  // { requirementId: newEndDate }
+  const FIX_MAP = {
+    'RQ114006': '2026/1/31',   // 交通安全（上學期）
+    'RQ114008': '2026/1/31',   // 愛滋（上學期）
+    'RQ114013': '2026/7/31',   // 交通安全（下學期）
+    'RQ114009': '2026/7/31'    // 愛滋（下學期）
+  };
+
+  const data = sheet.getDataRange().getValues();
+  let updated = 0;
+  for (let i = 1; i < data.length; i++) {
+    const rid = String(data[i][idCol] || '');
+    if (FIX_MAP[rid]) {
+      sheet.getRange(i + 1, edCol + 1).setValue(FIX_MAP[rid]);
+      updated++;
+      Logger.log('✅ 已更新 ' + rid + ' → endDate: ' + FIX_MAP[rid]);
+    }
+  }
+  Logger.log('fixSemesterEndDates114 完成，共更新 ' + updated + ' 筆。');
+}
+
+/**
+ * 一次性寫入 114 學年度所有任務的比對關鍵字（matchKeywords）
+ * 執行前請確認已執行 initSheetHeaders()（使試算表有「比對關鍵字」欄）
+ */
+function seedMatchKeywords114() {
+  const sheet  = _getRequirementSheet();
+  const keys   = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
+  const idCol  = keys.indexOf('requirementId');
+  const kwCol  = keys.indexOf('matchKeywords');
+
+  if (kwCol === -1) throw new Error('找不到 matchKeywords 欄，請先執行 initSheetHeaders()。');
+
+  const KEYWORD_MAP = {
+    'RQ114001': ['資通安全', '資訊安全', '網路安全', '個資保護', '資安'],
+    'RQ114002': ['特殊教育', '特教', '融合教育', '身心障礙', '資源班', '巡迴輔導'],
+    'RQ114003': ['家庭教育', '親職教育', '家庭暴力'],
+    'RQ114004': ['性別平等', '性別主流', '性騷擾防治', '性別意識'],
+    'RQ114005': ['多元性別', '性別認同', 'LGBTQ', '同志'],
+    'RQ114006': ['交通安全', '道路安全', '行車安全'],
+    'RQ114007': ['急救', 'CPR', '心肺復甦', 'AED', '緊急救護'],
+    'RQ114008': ['愛滋', 'HIV', '愛滋病防治', '性病防治'],
+    'RQ114009': ['愛滋', 'HIV', '愛滋病防治', '性病防治'],
+    'RQ114010': ['失智', '阿茲海默', '認知障礙', '失智症'],
+    'RQ114011': ['環境教育', '氣候變遷', '溫室氣體', '淨零', '永續', '環境素養'],
+    'RQ114012': ['兒童權利', 'CRC', '兒童人權', '兒童權利公約'],
+    'RQ114013': ['交通安全', '道路安全', '行車安全']
+  };
+
+  const data = sheet.getDataRange().getValues();
+  if (data.length <= 1) throw new Error('TRAINING_REQUIREMENT 工作表無資料列，請先確認年度任務已建立。');
+
+  let updated = 0;
+  // 只寫入 matchKeywords 那一欄，不碰整張表（避免 clearContents 後 setValues 失敗導致資料遺失）
+  for (let i = 1; i < data.length; i++) {
+    const rid = String(data[i][idCol] || '');
+    if (KEYWORD_MAP[rid]) {
+      // 直接寫入單一儲存格，安全且不影響其他欄位
+      sheet.getRange(i + 1, kwCol + 1).setValue(JSON.stringify(KEYWORD_MAP[rid]));
+      updated++;
+    }
+  }
+  Logger.log('✅ seedMatchKeywords114 完成，已更新 ' + updated + ' 筆任務關鍵字。');
 }

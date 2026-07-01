@@ -47,10 +47,37 @@
       <button id="tab-REJECTED" class="tab-btn" onclick="switchTab('REJECTED')">
         已退件 <span id="cnt-rejected" class="tab-count" style="background:var(--danger)">0</span>
       </button>
+      <button id="tab-IMPORTED" class="tab-btn" onclick="switchTab('IMPORTED')">
+        📥 已匯入 <span id="cnt-imported" class="tab-count" style="background:#6366f1">0</span>
+      </button>
+      <button id="tab-PROGRESS" class="tab-btn" onclick="switchTab('PROGRESS')">
+        📊 年度進度
+      </button>
+    </div>
+
+    <!-- 年度選擇器（已匯入 / 年度進度 Tab 共用，緊接在 Tab 列下方） -->
+    <div id="year-selector-bar" style="display:none;margin-bottom:12px;align-items:center;gap:8px;flex-wrap:wrap">
+      <span style="font-size:0.84rem;color:var(--gray-600)">顯示學年度：</span>
+      <select id="year-selector" class="form-control"
+              style="width:auto;padding:6px 12px;font-size:0.84rem"
+              onchange="onYearChange()">
+        <option value="">全部年度</option>
+        <option value="114" selected>114 學年度</option>
+        <option value="113">113 學年度</option>
+        <option value="112">112 學年度</option>
+        <option value="111">111 學年度</option>
+        <option value="110">110 學年度</option>
+      </select>
     </div>
 
     <!-- 紀錄列表 -->
     <div id="records-container"></div>
+
+    <!-- 已匯入紀錄面板（獨立區塊，不走分頁） -->
+    <div id="imported-panel" style="display:none"></div>
+
+    <!-- 年度進度面板 -->
+    <div id="progress-panel" style="display:none"></div>
 
     <!-- 分頁 -->
     <div id="pagination-container" class="pagination"></div>
@@ -123,10 +150,220 @@
   function switchTab(tab) {
     _activeTab = tab;
     _curPage   = 1;
-    ['PENDING','APPROVED','REJECTED'].forEach(function(t) {
-      document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    ['PENDING','APPROVED','REJECTED','IMPORTED','PROGRESS'].forEach(function(t) {
+      var el = document.getElementById('tab-' + t);
+      if (el) el.classList.toggle('active', t === tab);
     });
-    _renderTab();
+    var isImported = (tab === 'IMPORTED');
+    var isProgress = (tab === 'PROGRESS');
+    var needYear   = isImported || isProgress;
+    document.getElementById('records-container').style.display    = (!isImported && !isProgress) ? '' : 'none';
+    document.getElementById('imported-panel').style.display       = isImported ? ''   : 'none';
+    document.getElementById('progress-panel').style.display       = isProgress ? ''   : 'none';
+    document.getElementById('pagination-container').style.display = (!isImported && !isProgress) ? '' : 'none';
+    document.getElementById('year-selector-bar').style.display    = needYear ? 'flex' : 'none';
+    if (isImported)      { _loadImportedRecords(); }
+    else if (isProgress) { _loadProgress(); }
+    else                 { _renderTab(); }
+  }
+
+  /* ── 年度選擇器變更 ── */
+  var _importedLoaded = false;
+  var _progressLoaded = false;   // 宣告移至此處，與 imported 並列管理
+
+  function onYearChange() {
+    _importedLoaded = false;
+    _progressLoaded = false;
+    if (_activeTab === 'IMPORTED')  _loadImportedRecords();
+    if (_activeTab === 'PROGRESS')  _loadProgress();
+  }
+
+  function _selectedYear() {
+    var sel = document.getElementById('year-selector');
+    return sel ? sel.value : '114';
+  }
+
+  /* ── 載入已匯入紀錄 ── */
+  function _loadImportedRecords() {
+    var panel = document.getElementById('imported-panel');
+    if (_importedLoaded) return;
+    panel.innerHTML = '<div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>';
+    api('v1/getMyImportedRecords', { academicYear: _selectedYear() })
+      .then(function(res) {
+        _importedLoaded = true;
+        var data = (res && res.data) ? res.data : {};
+        var records = data.records || [];
+        var hasSameName = !!data.hasSameName;
+        document.getElementById('cnt-imported').textContent = records.length;
+        panel.innerHTML = _renderImportedPanel(records, hasSameName);
+      })
+      .catch(function(err) {
+        if (err && err.message !== 'TOKEN_EXPIRED') {
+          panel.innerHTML = '<div class="empty-state"><div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
+        }
+      });
+  }
+
+  function _renderImportedPanel(records, hasSameName) {
+    var html = '';
+    if (hasSameName) {
+      html += '<div style="background:#FFF3CD;border-left:4px solid #FFC107;border-radius:8px;' +
+        'padding:12px 16px;margin-bottom:16px;font-size:0.85rem;">' +
+        '⚠️ <strong>注意：</strong>系統偵測到與您同名的其他教師，以下紀錄可能混入他人資料，' +
+        '如有疑問請聯絡管理員確認。</div>';
+    }
+    if (!records.length) {
+      return html + '<div class="empty-state"><div class="ei">📥</div>' +
+        '<p>目前無已匯入的研習紀錄。</p>' +
+        '<p style="font-size:0.82rem;color:var(--gray-500)">系統會自動從全國進修網及臺北市研習網匯入您的研習資料。</p></div>';
+    }
+    html += '<p style="font-size:0.82rem;color:var(--gray-500);margin-bottom:12px">' +
+      '以下紀錄由全國進修網及臺北市研習網自動匯入，達成率計算已自動計入，無需重複登錄。</p>';
+    records.forEach(function(r) {
+      var reqTags = (r.matchedReqs && r.matchedReqs.length)
+        ? r.matchedReqs.map(function(rq) {
+            return '<span style="display:inline-block;font-size:0.72rem;background:#EEF2FF;' +
+              'color:#3730A3;border-radius:999px;padding:2px 8px;margin:2px 2px 0 0">' +
+              _e(rq.name || rq) + '</span>';
+          }).join('')
+        : '<span style="font-size:0.72rem;color:var(--gray-400)">未符合年度任務</span>';
+
+      html += '<div class="record-card" style="border-left-color:#6366f1">' +
+        '<div class="rc-title">' + _e(r.title || '（無標題）') + '</div>' +
+        '<div class="rc-meta">' +
+          '📅 ' + _e(r.date || '─') +
+          ' &nbsp; ⏱ ' + (r.hours != null ? r.hours : '─') + ' 小時' +
+          (r.organizer ? ' &nbsp; 🏛 ' + _e(r.organizer) : '') +
+          (r.source    ? ' &nbsp; 📡 ' + _e(r.source)    : '') +
+        '</div>' +
+        '<div style="margin-top:8px">' + reqTags + '</div>' +
+        '</div>';
+    });
+    return html;
+  }
+
+  /* ── 年度進度 ── */
+  function _loadProgress() {
+    var panel = document.getElementById('progress-panel');
+    if (_progressLoaded) return;
+    var year = _selectedYear();
+    panel.innerHTML = '<div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>';
+    Promise.all([
+      api('v1/getRequirements', {}),
+      api('v1/getMyImportedRecords', { academicYear: year })
+    ]).then(function(results) {
+      _progressLoaded = true;
+      var reqs    = (results[0] && results[0].data) ? results[0].data : [];
+      var impData = (results[1] && results[1].data) ? results[1].data : {};
+      var impRecs = impData.records || [];
+
+      // 統計每個任務的匯入時數
+      var importedByReq = {};
+      impRecs.forEach(function(r) {
+        (r.matchedReqs || []).forEach(function(rq) {
+          importedByReq[rq.requirementId] = (importedByReq[rq.requirementId] || 0) + (parseFloat(r.hours) || 0);
+        });
+      });
+
+      panel.innerHTML = _renderProgressPanel(reqs, importedByReq, impData.hasSameName);
+    }).catch(function(err) {
+      if (err && err.message !== 'TOKEN_EXPIRED') {
+        panel.innerHTML = '<div class="empty-state"><div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
+      }
+    });
+  }
+
+  function _renderProgressPanel(reqs, importedByReq, hasSameName) {
+    if (!reqs.length) {
+      return '<div class="empty-state"><div class="ei">📋</div><p>目前沒有年度任務。</p></div>';
+    }
+
+    var html = '';
+
+    if (hasSameName) {
+      html += '<div style="background:#FFF3CD;border-left:4px solid #FFC107;border-radius:8px;' +
+        'padding:10px 14px;margin-bottom:14px;font-size:0.82rem;">' +
+        '⚠️ 偵測到同名教師，匯入時數僅供參考，如有疑問請聯絡管理員。</div>';
+    }
+
+    // 統計概覽
+    var totalReqs    = reqs.length;
+    var doneReqs     = 0;
+    reqs.forEach(function(r) {
+      var imported  = importedByReq[r.requirementId] || 0;
+      var effective = Math.max(r.approvedHours || 0, imported);
+      if (r.requiredHours > 0 && effective >= r.requiredHours) doneReqs++;
+      else if (r.requiredHours <= 0 && r.isCompleted) doneReqs++;
+    });
+
+    html += '<div style="background:var(--primary-bg);border-radius:10px;padding:14px 16px;' +
+      'margin-bottom:16px;display:flex;align-items:center;gap:16px;flex-wrap:wrap">' +
+      '<div style="font-size:1.6rem;font-weight:800;color:var(--primary)">' + doneReqs + '/' + totalReqs + '</div>' +
+      '<div style="font-size:0.86rem;color:var(--gray-600)">項年度任務已達成<br>' +
+        '<span style="font-size:0.78rem;color:var(--gray-400)">有效時數 = 核准紀錄 與 匯入時數 取較大值</span></div>' +
+      '</div>';
+
+    // 各任務卡片
+    reqs.forEach(function(r) {
+      var approved  = r.approvedHours  || 0;
+      var pending   = r.pendingHours   || 0;
+      var required  = r.requiredHours  || 0;
+      var imported  = importedByReq[r.requirementId] || 0;
+      var effective = Math.max(approved, imported);
+
+      var isDone    = required > 0 ? effective >= required : r.isCompleted;
+      var pct       = required > 0 ? Math.min(100, Math.round(effective / required * 100)) : (isDone ? 100 : 0);
+      var barColor  = isDone ? 'var(--success)' : (pct >= 50 ? '#f59e0b' : 'var(--danger)');
+
+      // 截止日距今幾天
+      var urgentTag = '';
+      if (!isDone && r.endDate) {
+        var parts = String(r.endDate).replace(/-/g,'/').split('/').map(Number);
+        if (parts.length >= 3 && !isNaN(parts[0])) {
+          var end  = new Date(parts[0], parts[1]-1, parts[2]);
+          var diff = Math.ceil((end - new Date()) / 86400000);
+          if (diff < 0)  urgentTag = '<span style="font-size:0.72rem;background:#fecaca;color:#991b1b;border-radius:999px;padding:2px 8px;margin-left:6px">逾期</span>';
+          else if (diff < 30) urgentTag = '<span style="font-size:0.72rem;background:#fef3c7;color:#92400e;border-radius:999px;padding:2px 8px;margin-left:6px">' + diff + ' 天到期</span>';
+        }
+      }
+
+      html += '<div class="record-card" style="border-left-color:' + barColor + '">' +
+        '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:8px">' +
+          '<div style="font-size:0.92rem;font-weight:700;color:var(--gray-900)">' + _e(r.name) + urgentTag + '</div>' +
+          '<div style="font-size:0.82rem;font-weight:700;color:' + barColor + '">' +
+            (isDone ? '✅ 已達成' : (pct + '%')) +
+          '</div>' +
+        '</div>';
+
+      // 進度條
+      if (required > 0) {
+        html += '<div style="background:var(--gray-200);border-radius:999px;height:8px;margin-bottom:10px;overflow:hidden">' +
+          '<div style="background:' + barColor + ';width:' + pct + '%;height:100%;border-radius:999px;transition:width .4s"></div>' +
+          '</div>';
+      }
+
+      // 時數明細
+      html += '<div style="font-size:0.80rem;color:var(--gray-600);display:flex;gap:16px;flex-wrap:wrap">';
+      if (required > 0) {
+        html += '<span>需達 <strong>' + required + '</strong> 小時</span>';
+      }
+      html += '<span>有效 <strong style="color:var(--primary)">' + effective + '</strong> 小時';
+      if (imported > 0 && approved > 0 && imported !== approved) {
+        html += ' <span style="color:var(--gray-400);font-size:0.75rem">（核准 ' + approved + 'h｜匯入 ' + imported + 'h，取較大值）</span>';
+      } else if (imported > 0 && approved === 0) {
+        html += ' <span style="color:#6366f1;font-size:0.75rem">（來自匯入資料）</span>';
+      }
+      html += '</span>';
+      if (pending > 0) {
+        html += '<span style="color:#f59e0b">待審 ' + pending + ' 小時</span>';
+      }
+      if (r.endDate) {
+        html += '<span style="color:var(--gray-400)">截止 ' + _e(r.endDate) + '</span>';
+      }
+      html += '</div></div>';
+    });
+
+    return html;
   }
 
   /* ── 渲染紀錄列表 ── */
@@ -278,11 +515,14 @@
   });
 
   /* ── GAS Warden 作用域隔離修正 ── */
-  window.onLoginSuccess = onLoginSuccess;
-  window.switchTab      = switchTab;
-  window.goPage         = goPage;
-  window.deleteRecord   = deleteRecord;
-  window.resubmit       = resubmit;
+  window.onLoginSuccess       = onLoginSuccess;
+  window.switchTab            = switchTab;
+  window.goPage               = goPage;
+  window.deleteRecord         = deleteRecord;
+  window.resubmit             = resubmit;
+  window._loadImportedRecords = _loadImportedRecords;
+  window._loadProgress        = _loadProgress;
+  window.onYearChange         = onYearChange;
   </script>
 </body>
 </html>
