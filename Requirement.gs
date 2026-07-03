@@ -99,6 +99,17 @@ function getAllRequirements(body) {
 }
 
 /**
+ * semesterSplit（計算區間）正規化：僅允許 '上學期' / '下學期' / ''（空字串＝整學年）
+ * 達成率的硬性計算區間由此欄推算（見 TrainingReport.gs _requirementWindow_）；
+ * endDate 僅作催辦提醒與畫面顯示，不影響達成率計算。
+ * 舊資料曾被誤存為布林 TRUE/FALSE，一律視為未標記（執行 backfillSemesterSplit 依名稱回填）。
+ */
+function _normalizeSemesterSplit_(v) {
+  const s = String(v || '').trim();
+  return (s === '上學期' || s === '下學期') ? s : '';
+}
+
+/**
  * 新增年度研習任務
  * body 必填：name, endDate
  * body 選填：startDate, requiredHours, hoursNote, deliveryType, semesterSplit,
@@ -133,7 +144,7 @@ function addRequirement(adminId, body) {
       requiredHours: Number(body.requiredHours) || 0,
       hoursNote:     String(body.hoursNote    || ''),
       deliveryType:  String(body.deliveryType || 'ONLINE'),
-      semesterSplit: body.semesterSplit === true || body.semesterSplit === 'TRUE',
+      semesterSplit: _normalizeSemesterSplit_(body.semesterSplit),
       notes:         String(body.notes        || ''),
       links:         String(body.links        || ''),
       isRecurring:   body.isRecurring !== false,  // 預設 true
@@ -182,8 +193,10 @@ function editRequirement(adminId, body) {
       if (colIdx === -1) return;
       if (key === 'requiredHours') {
         data[rowIdx][colIdx] = Number(body[key]) || 0;
-      } else if (key === 'semesterSplit' || key === 'isRecurring') {
+      } else if (key === 'isRecurring') {
         data[rowIdx][colIdx] = body[key] === true || body[key] === 'TRUE';
+      } else if (key === 'semesterSplit') {
+        data[rowIdx][colIdx] = _normalizeSemesterSplit_(body[key]);
       } else {
         data[rowIdx][colIdx] = String(body[key]);
       }
@@ -302,7 +315,7 @@ function renewRequirements(adminId, body) {
         requiredHours: Number(req.requiredHours) || 0,
         hoursNote:     req.hoursNote || '',
         deliveryType:  req.deliveryType || 'ONLINE',
-        semesterSplit: sourceBoolTrue(req.semesterSplit),
+        semesterSplit: _normalizeSemesterSplit_(req.semesterSplit),
         notes:         req.notes  || '',
         links:         req.links  || '',
         isRecurring:   true,
@@ -357,7 +370,7 @@ function seed114Requirements() {
       requiredHours: 3,
       hoursNote: '',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '技服組推薦 e 等公務園學習平臺、教育部磨課師線上課程。完成後上傳研習證明截圖或 PDF，時間需在 2025/8/1 之後。',
       links: 'https://elearn.hrd.gov.tw/',
       isRecurring: true,
@@ -373,7 +386,7 @@ function seed114Requirements() {
       requiredHours: 0,
       hoursNote: '相關行政人員3h｜教保員及助理員3h｜普通班教師6h｜特教教師18h｜相關專業人員6h',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '請依特教組 10/1 電子信件說明確認個人應完成時數。研習平台：臺北市酷課雲-酷課OnO線上教室。',
       links: 'https://ono.tp.edu.tw/course/join/C4Y0FIZAA8W9',
       isRecurring: true,
@@ -389,7 +402,7 @@ function seed114Requirements() {
       requiredHours: 4,
       hoursNote: '',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '依據家庭教育法，每年全校教職員工應有 4 小時家庭教育研習時數。完成後請填寫回覆表單。',
       links: 'https://moocs.moe.edu.tw/moocs/#/course/detail/10002417',
       isRecurring: true,
@@ -405,7 +418,7 @@ function seed114Requirements() {
       requiredHours: 3,
       hoursNote: '可含性騷擾防治 1 小時',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '每年至少須完成性別平等教育研習 4 小時（性別主流化 3h + 多元性別 1h）。完成後請填寫回覆表單。',
       links: 'https://ap2.elearning.taipei/elearn/courseinfo/index.php?courseid=4961',
       isRecurring: true,
@@ -421,7 +434,7 @@ function seed114Requirements() {
       requiredHours: 1,
       hoursNote: '',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '與「性別主流化」合計 4 小時，共同完成性別平等研習義務。',
       links: 'https://ap2.elearning.taipei/elearn/courseinfo/index.php?courseid=3373',
       isRecurring: true,
@@ -437,7 +450,7 @@ function seed114Requirements() {
       requiredHours: 2,
       hoursNote: '',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '114/12/17 有交通評鑑，需本校教職員工 80% 完成率。完成後請填寫回覆表單。',
       links: 'https://ap1.elearning.taipei/elearn/courseinfo/index.php?courseid=2280',
       isRecurring: true,
@@ -453,7 +466,7 @@ function seed114Requirements() {
       requiredHours: 4,
       hoursNote: '',
       deliveryType: 'INPERSON',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '每學年至少辦理一次 4 小時實體課程，於新學年教師共備日執行。',
       links: '',
       isRecurring: true,
@@ -469,7 +482,7 @@ function seed114Requirements() {
       requiredHours: 2,
       hoursNote: '上學期 8–11 月完成',
       deliveryType: 'ONLINE',
-      semesterSplit: true,
+      semesterSplit: '上學期',
       notes: '每學期需上 2 小時愛滋相關研習，全年合計 4 小時。臺北e大搜尋「愛滋」。',
       links: 'https://elearning.taipei/mpage/',
       isRecurring: true,
@@ -485,7 +498,7 @@ function seed114Requirements() {
       requiredHours: 2,
       hoursNote: '下學期 2–5 月完成',
       deliveryType: 'ONLINE',
-      semesterSplit: true,
+      semesterSplit: '下學期',
       notes: '每學期需上 2 小時愛滋相關研習，全年合計 4 小時。臺北e大搜尋「愛滋」。',
       links: 'https://elearning.taipei/mpage/',
       isRecurring: true,
@@ -501,7 +514,7 @@ function seed114Requirements() {
       requiredHours: 1,
       hoursNote: '',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '每年度至少 1 小時失智相關議題研習。臺北e大搜尋「失智」。',
       links: 'https://elearning.taipei/mpage/',
       isRecurring: true,
@@ -517,7 +530,7 @@ function seed114Requirements() {
       requiredHours: 4,
       hoursNote: '4 小時中必須包含 2 小時「氣候變遷調適及溫室氣體減量」課程',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '完成 2 小時後請填報表單。推薦課程：臺北市淨零課程_淨零綠生活。',
       links: 'https://ap1.elearning.taipei/elearn/course/view.php?id=5038',
       isRecurring: true,
@@ -533,7 +546,7 @@ function seed114Requirements() {
       requiredHours: 1,
       hoursNote: '',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '依據「臺北市推動兒童權利公約認知提升與教育訓練實施計畫」。臺北e大搜尋「兒童權利公約」。',
       links: 'https://ap2.elearning.taipei/elearn/courseinfo/index.php?courseid=2795',
       isRecurring: true,
@@ -549,7 +562,7 @@ function seed114Requirements() {
       requiredHours: 2,
       hoursNote: '',
       deliveryType: 'ONLINE',
-      semesterSplit: false,
+      semesterSplit: '',
       notes: '115/5/21 有交通評鑑，需本校教職員工 80% 完成率。完成後請填寫回覆表單。',
       links: 'https://moocs.moe.edu.tw/moocs/#/course/detail/10002662',
       isRecurring: true,
@@ -795,4 +808,36 @@ function seedMatchKeywords114() {
     }
   }
   Logger.log('✅ seedMatchKeywords114 完成，已更新 ' + updated + ' 筆任務關鍵字。');
+}
+
+/**
+ * 一次性維運函式：回填全部年度任務的 semesterSplit（於 GAS 編輯器手動執行，可重複執行）
+ * 背景：舊版 add/editRequirement 誤將此欄布林化，前端選的「上學期/下學期」被存成 FALSE。
+ * 規則：已是 '上學期'/'下學期' 者不動；否則名稱含「上學期」→ '上學期'、含「下學期」→ '下學期'、其餘 → ''（整學年）
+ * 僅整欄覆寫 semesterSplit 一欄，不碰其他資料
+ */
+function backfillSemesterSplit() {
+  const sheet    = _getRequirementSheet();
+  const data     = sheet.getDataRange().getValues();
+  const keys     = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
+  const nameCol  = keys.indexOf('name');
+  const splitCol = keys.indexOf('semesterSplit');
+  if (splitCol === -1) throw new Error('找不到 semesterSplit 欄。');
+  if (data.length <= 1) throw new Error('TRAINING_REQUIREMENT 工作表無資料列。');
+
+  let changed = 0;
+  const colValues = [];
+  for (let i = 1; i < data.length; i++) {
+    const name = String(data[i][nameCol] || '');
+    const cur  = String(data[i][splitCol] || '');
+    let next;
+    if (cur === '上學期' || cur === '下學期')  next = cur;
+    else if (name.indexOf('上學期') >= 0)      next = '上學期';
+    else if (name.indexOf('下學期') >= 0)      next = '下學期';
+    else                                        next = '';
+    if (next !== cur) changed++;
+    colValues.push([next]);
+  }
+  sheet.getRange(2, splitCol + 1, colValues.length, 1).setValues(colValues);
+  Logger.log('✅ backfillSemesterSplit 完成：共 ' + colValues.length + ' 筆，更新 ' + changed + ' 筆。');
 }

@@ -1030,7 +1030,8 @@ function exportDoubleColumnCSV(academicYear) {
 function generateGoogleDoc(academicYear) {
   try {
     academicYear = Number(academicYear || _currentAcademicYear());
-    if (!REPORT_DOC_TEMPLATE_ID) return _err('REPORT_DOC_TEMPLATE_ID 尚未設定，請先建立 Google 文件範本並填入 Schema.gs');
+    var templateId = _getReportTemplateId_();
+    if (!templateId) return _err('公文範本尚未建立，請於 GAS 編輯器執行 createReportDocTemplate()');
 
     var statsRes = calcStats(academicYear);
     if (!statsRes.success) return statsRes;
@@ -1038,7 +1039,7 @@ function generateGoogleDoc(academicYear) {
     var totals   = statsRes.data.totals;
 
     // 複製範本
-    var templateFile = DriveApp.getFileById(REPORT_DOC_TEMPLATE_ID);
+    var templateFile = DriveApp.getFileById(templateId);
     var today        = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd');
     var docName      = academicYear + '學年度_研習達成率審查簽呈_' + today;
     var newFile      = templateFile.makeCopy(docName, DriveApp.getFolderById(TRAINING_DRIVE_ROOT_FOLDER_ID));
@@ -1055,7 +1056,7 @@ function generateGoogleDoc(academicYear) {
                       (new Date().getMonth() + 1) + '月' + new Date().getDate() + '日',
       '{{學年度}}':   rocYear + '學年度',
       '{{總人數}}':   String(totals.school),
-      '{{校長姓名}}': PRINCIPAL_NAME || '○○○',
+      '{{校長姓名}}': _getPrincipalName_() || '○○○',
       '{{字號}}':     ''
     };
     Object.keys(replacements).forEach(function(key) {
@@ -1090,6 +1091,9 @@ function generateGoogleDoc(academicYear) {
       });
 
       // 建立教師通過指標 Map（重用 passMap 邏輯）
+      // 迴圈前先載入指標規則一次，避免 parseIndicators_ 重複讀 PropertiesService
+      var rulesRaw = PropertiesService.getScriptProperties().getProperty(INDICATOR_RULES_KEY);
+      var rules    = rulesRaw ? JSON.parse(rulesRaw) : DEFAULT_INDICATORS_;
       var passMap10 = {};
       teachers10.forEach(function(t) { passMap10[t.name] = []; });
       var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
@@ -1132,6 +1136,99 @@ function generateGoogleDoc(academicYear) {
   } catch (e) {
     return _err('generateGoogleDoc 失敗：' + e.message);
   }
+}
+
+// ==================== F4-c：報告設定（PropertiesService 優先，Schema.gs 常數為 fallback） ====================
+
+function _getReportTemplateId_() {
+  var v = PropertiesService.getScriptProperties().getProperty(REPORT_TEMPLATE_ID_KEY);
+  return String(v || REPORT_DOC_TEMPLATE_ID || '').trim();
+}
+
+function _getPrincipalName_() {
+  var v = PropertiesService.getScriptProperties().getProperty(PRINCIPAL_NAME_KEY);
+  return String(v || PRINCIPAL_NAME || '').trim();
+}
+
+/** 管理後台：讀取報告設定（校長姓名 + 範本文件連結） */
+function getReportSettings() {
+  try {
+    var templateId = _getReportTemplateId_();
+    return _ok({
+      principalName: _getPrincipalName_(),
+      templateId:    templateId,
+      templateUrl:   templateId ? 'https://docs.google.com/document/d/' + templateId + '/edit' : ''
+    });
+  } catch (e) {
+    return _err('getReportSettings 失敗：' + e.message);
+  }
+}
+
+/** 管理後台：儲存報告設定（目前僅校長姓名） */
+function saveReportSettings(body) {
+  try {
+    var name = String((body || {}).principalName || '').trim();
+    if (!name) return _err('校長姓名為必填');
+    if (name.length > 20) return _err('校長姓名長度不可超過 20 字');
+    PropertiesService.getScriptProperties().setProperty(PRINCIPAL_NAME_KEY, name);
+    return _ok({ principalName: name });
+  } catch (e) {
+    return _err('saveReportSettings 失敗：' + e.message);
+  }
+}
+
+/**
+ * 一次性維運函式：建立簽呈公文 Google 文件範本（於 GAS 編輯器手動執行）
+ * - 命名不帶結尾底線，否則 GAS 編輯器函式下拉選單會隱藏（底線結尾＝私有函式）
+ * - 公文格式參照 TTVS export_official_word_report()（yamcom/Teacher_Training_Verification）
+ * - 產出存入系統 Drive 根資料夾，ID 自動寫入 PropertiesService（REPORT_TEMPLATE_ID_KEY）
+ * - 範本內文（主旨、說明、格式）可直接在 Google 文件中編輯維護，佔位符 {{...}} 必須保留
+ * - 重複執行會建立新範本並改指向新檔；舊範本不會刪除，可自行至 Drive 清理
+ */
+function createReportDocTemplate() {
+  var doc  = DocumentApp.create('研習達成率審查簽呈_範本');
+  var body = doc.getBody();
+
+  // 大標題（置中、粗體、24pt）
+  var title = body.getParagraphs()[0];
+  title.setText('{{學校全名}}　函（稿）');
+  title.setAlignment(DocumentApp.HorizontalAlignment.CENTER);
+  title.editAsText().setBold(true).setFontSize(24);
+
+  // 發文資訊
+  body.appendParagraph('');
+  body.appendParagraph('受文者：臺北市政府教育局');
+  body.appendParagraph('發文日期：{{發文日期}}');
+  body.appendParagraph('發文字號：{{字號}}');
+  body.appendParagraph('密等及解密條件或保密期限：普通');
+  body.appendParagraph('附件：全校教師研習統計表 CSV 檔');
+  body.appendParagraph('');
+
+  // 主旨
+  body.appendParagraph('主旨：').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph('謹檢送本校「{{學年度}}推動數位學習精進方案」全校教師研習檢核統計結果與審查報表（全校教職員共 {{總人數}} 人），請鑒核。');
+
+  // 說明
+  body.appendParagraph('說明：').setHeading(DocumentApp.ParagraphHeading.HEADING2);
+  body.appendParagraph('一、依據臺北市政府教育局推動教師數位學習工作坊認證增能計畫辦理。');
+  body.appendParagraph('二、本校已透過「研習登錄與審核系統」完成全校教師研習紀錄逐筆檢核，剔除時數未達標準者。');
+  body.appendParagraph('三、本次檢核重點包含「精進數位」與「數位學習工作坊」系列之完成情形，統計摘要如下表（前 10 筆，完整名單詳如附件）：');
+  body.appendParagraph('{{統計表格}}');
+
+  // 簽核欄（右對齊）
+  body.appendParagraph('');
+  body.appendParagraph('校長　{{校長姓名}}　（簽章）')
+      .setAlignment(DocumentApp.HorizontalAlignment.RIGHT);
+
+  doc.saveAndClose();
+
+  // 移入系統 Drive 根資料夾（DocumentApp.create 預設落在「我的雲端硬碟」根目錄）
+  var file = DriveApp.getFileById(doc.getId());
+  file.moveTo(DriveApp.getFolderById(TRAINING_DRIVE_ROOT_FOLDER_ID));
+
+  PropertiesService.getScriptProperties().setProperty(REPORT_TEMPLATE_ID_KEY, doc.getId());
+  Logger.log('範本已建立並登記完成：' + doc.getUrl());
+  return doc.getUrl();
 }
 
 // ==================== 身分分類規則管理 ====================
@@ -1315,6 +1412,28 @@ function getIdentityRules() {
  *   }]
  * }
  */
+/**
+ * 依學年度＋semesterSplit 推算達成率的硬性計算區間（與截止日期 endDate 完全脫鉤）
+ * 整學年：8/1–翌年 7/31；上學期：8/1–翌年 1/31；下學期：翌年 2/1–7/31
+ * endDate 僅供催辦提醒與畫面顯示（軟性目標）
+ */
+function _requirementWindow_(academicYear, semesterSplit) {
+  var y = Number(academicYear) + 1911;  // 民國學年 → 西元起始年
+  var s = String(semesterSplit || '').trim();
+  if (s === '上學期') return { startTs: new Date(y, 7, 1).getTime(), endTs: new Date(y + 1, 0, 31, 23, 59, 59).getTime() };
+  if (s === '下學期') return { startTs: new Date(y + 1, 1, 1).getTime(), endTs: new Date(y + 1, 6, 31, 23, 59, 59).getTime() };
+  return { startTs: new Date(y, 7, 1).getTime(), endTs: new Date(y + 1, 6, 31, 23, 59, 59).getTime() };
+}
+
+/** ImportedData 日期欄轉 timestamp：regex 擷取年月日再以數字參數建構，避免 new Date(字串) 地雷 */
+function _importDateTs_(rawDate) {
+  if (!rawDate) return null;
+  if (rawDate instanceof Date) return rawDate.getTime();
+  var m = String(rawDate).match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
+}
+
 function calcRequirementStats(body) {
   try {
     var academicYear = Number((body || {}).academicYear || _currentAcademicYear());
@@ -1388,21 +1507,28 @@ function calcRequirementStats(body) {
       var iTtCol   = iHdr.indexOf('title');
       var iHrCol   = iHdr.indexOf('hours');
       var iYrCol   = iHdr.indexOf('academicYear');
+      var iDtCol   = iHdr.indexOf('date');
       iData.slice(1).forEach(function(r) {
         if (Number(r[iYrCol]) !== academicYear) return;
         var nm  = String(r[iNmCol] || '').trim();
         var hrs = parseFloat(r[iHrCol]) || 0;
         if (!nm || hrs <= 0) return;
         if (!importedByName[nm]) importedByName[nm] = [];
-        importedByName[nm].push({ title: String(r[iTtCol] || '').trim(), hours: hrs });
+        importedByName[nm].push({
+          title: String(r[iTtCol] || '').trim(),
+          hours: hrs,
+          ts:    iDtCol >= 0 ? _importDateTs_(r[iDtCol]) : null
+        });
       });
     }
 
     // ── 內部：關鍵字比對，回傳 ImportedData 中符合任務的累積時數 ──
-    function _importedHoursFor_(userName, keywords) {
+    // win：任務硬性計算區間；日期已知且落在區間外者不計入（分學期任務防重複計入），日期未知者保守計入
+    function _importedHoursFor_(userName, keywords, win) {
       var rows = importedByName[userName] || [];
       var total = 0;
       rows.forEach(function(rec) {
+        if (rec.ts !== null && win && (rec.ts < win.startTs || rec.ts > win.endTs)) return;
         var t = rec.title;
         for (var k = 0; k < keywords.length; k++) {
           if (t.indexOf(keywords[k]) >= 0) { total += rec.hours; break; }
@@ -1418,6 +1544,9 @@ function calcRequirementStats(body) {
 
       var keywords = [];
       try { keywords = req.matchKeywords ? JSON.parse(req.matchKeywords) : []; } catch (e) {}
+
+      // 硬性計算區間：整學年或上下學期，與 endDate（軟性催辦目標）無關
+      var win = _requirementWindow_(academicYear, req.semesterSplit);
 
       var groups;
       if (audienceRules.length > 0) {
@@ -1436,7 +1565,7 @@ function calcRequirementStats(body) {
         var pending = [];
         members.forEach(function(u) {
           var recordHours   = approvedMap[u.userId + '_' + req.requirementId] || 0;
-          var importedHours = keywords.length > 0 ? _importedHoursFor_(u.name, keywords) : 0;
+          var importedHours = keywords.length > 0 ? _importedHoursFor_(u.name, keywords, win) : 0;
           // 同名衝突：若該姓名有多個 userId，匯入時數不確定歸屬，標記但仍計入（保守計算）
           var hasSameName   = (nameMap[u.name] || []).length > 1;
           var effectiveHours = Math.max(recordHours, importedHours);
@@ -1460,7 +1589,7 @@ function calcRequirementStats(body) {
           requiredHours: g.requiredHours,
           total:         members.length,
           passed:        passed,
-          rate:          members.length ? Math.round(passed / members.length * 100) : 0,
+          rate:          members.length ? Math.round(passed / members.length * 100) : null,  // null = 無此類人員
           pendingList:   pending
         };
       });
@@ -1543,17 +1672,10 @@ function getMyImportedRecords(userId, body) {
     var reqKeywords = requirements.map(function(r) {
       var kws = [];
       try { kws = r.matchKeywords ? JSON.parse(r.matchKeywords) : []; } catch (e) {}
-      // 解析日期範圍，供分學期任務過濾（避免同關鍵字的上下學期重複計入）
-      var startTs = null, endTs = null;
-      if (r.startDate) {
-        var sp = String(r.startDate).replace(/-/g, '/').split('/').map(Number);
-        if (sp.length >= 3 && !isNaN(sp[0])) startTs = new Date(sp[0], sp[1]-1, sp[2]).getTime();
-      }
-      if (r.endDate) {
-        var ep = String(r.endDate).replace(/-/g, '/').split('/').map(Number);
-        if (ep.length >= 3 && !isNaN(ep[0])) endTs = new Date(ep[0], ep[1]-1, ep[2], 23, 59, 59).getTime();
-      }
-      return { requirementId: r.requirementId, name: r.name, keywords: kws, startTs: startTs, endTs: endTs };
+      // 硬性計算區間依學年度＋semesterSplit 推算（與管理端 calcRequirementStats 一致）；
+      // endDate 僅作催辦顯示，不參與比對，避免軟性截止日誤砍達成紀錄
+      var win = _requirementWindow_(r.academicYear, r.semesterSplit);
+      return { requirementId: r.requirementId, name: r.name, keywords: kws, startTs: win.startTs, endTs: win.endTs };
     });
 
     var myRecords = [];
@@ -1566,22 +1688,13 @@ function getMyImportedRecords(userId, body) {
       var hours = parseFloat(r[iHrCol]) || 0;
 
       // 取得記錄日期的 timestamp（ImportedData 的 date 欄讀回可能是 Date 物件）
-      var rawDate = iDtCol >= 0 ? r[iDtCol] : null;
-      var recTs   = null;
-      if (rawDate) {
-        recTs = rawDate instanceof Date ? rawDate.getTime() : new Date(String(rawDate)).getTime();
-        if (isNaN(recTs)) recTs = null;
-      }
+      var recTs = iDtCol >= 0 ? _importDateTs_(r[iDtCol]) : null;
 
-      // 比對符合哪些任務（關鍵字 + 若有日期範圍則同時驗證）
+      // 比對符合哪些任務（關鍵字 + 硬性計算區間；日期未知者保守計入）
       var matchedReqs = reqKeywords
         .filter(function(rk) {
           if (!rk.keywords.some(function(kw) { return title.indexOf(kw) >= 0; })) return false;
-          // 若任務有設定 startDate/endDate，則記錄日期必須在區間內
-          if (recTs !== null) {
-            if (rk.startTs !== null && recTs < rk.startTs) return false;
-            if (rk.endTs   !== null && recTs > rk.endTs)   return false;
-          }
+          if (recTs !== null && (recTs < rk.startTs || recTs > rk.endTs)) return false;
           return true;
         })
         .map(function(rk) { return { requirementId: rk.requirementId, name: rk.name }; });
@@ -1643,6 +1756,9 @@ function checkImportedBeforeSubmit(userId, body) {
     try { keywords = reqData.matchKeywords ? JSON.parse(reqData.matchKeywords) : []; } catch (e) {}
     if (keywords.length === 0) return _ok({ matched: false, records: [], totalHours: 0 });
 
+    // 硬性計算區間：以任務所屬學年度＋semesterSplit 推算（與達成率計算一致）
+    var win = _requirementWindow_(reqData.academicYear, reqData.semesterSplit);
+
     // 查 ImportedData
     var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
     var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
@@ -1664,6 +1780,9 @@ function checkImportedBeforeSubmit(userId, body) {
       var title = String(r[iTtCol] || '').trim();
       var hrs   = parseFloat(r[iHrCol]) || 0;
       if (hrs <= 0) return;
+      // 日期已知且落在計算區間外者不計入（日期未知者保守計入）
+      var recTs = iDtCol >= 0 ? _importDateTs_(r[iDtCol]) : null;
+      if (recTs !== null && (recTs < win.startTs || recTs > win.endTs)) return;
       for (var k = 0; k < keywords.length; k++) {
         if (title.indexOf(keywords[k]) >= 0) {
           matched.push({

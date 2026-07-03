@@ -131,11 +131,11 @@
           </select>
         </div>
         <div class="form-group" style="flex:1">
-          <label class="form-label">分學期</label>
+          <label class="form-label">計算區間</label>
           <select id="rqm-fsemester" class="form-control">
-            <option value="">否</option>
-            <option value="上學期">上學期</option>
-            <option value="下學期">下學期</option>
+            <option value="">整學年（8/1–7/31）</option>
+            <option value="上學期">上學期（8/1–1/31）</option>
+            <option value="下學期">下學期（2/1–7/31）</option>
           </select>
         </div>
       </div>
@@ -699,6 +699,20 @@
           </button>
         </div>
         <div id="rpt-export-result" style="font-size:0.84rem;margin-top:10px"></div>
+      </div>
+
+      <!-- S5：報告設定 -->
+      <div class="card">
+        <div style="font-size:0.95rem;font-weight:700;color:var(--primary);margin-bottom:14px">
+          ⚙️ 報告設定
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+          <label for="rpt-principal-name" style="font-size:0.9rem;font-weight:600">校長姓名</label>
+          <input id="rpt-principal-name" type="text" class="form-control" maxlength="20"
+                 placeholder="簽呈簽核欄顯示" style="max-width:220px">
+          <button class="btn btn-sm btn-primary" onclick="rptSaveSettings()">儲存</button>
+        </div>
+        <div id="rpt-template-info" style="font-size:0.84rem;margin-top:10px"></div>
       </div>
 
     </div><!-- /panel-report -->
@@ -1731,6 +1745,7 @@
     }
     _rptLoadIndicators();
     rptLoadStats();
+    _rptLoadSettings();
     // 載入名冊來源摘要
     api('report_get_roster_sources', {}).then(function(res) {
       if (res.success) _rptRenderRosterSources(res.data);
@@ -2869,6 +2884,33 @@
     });
   }
 
+  /* ── S5：報告設定 ── */
+  function _rptLoadSettings() {
+    api('report_get_settings', {}).then(function(res) {
+      if (!res.success) return;
+      document.getElementById('rpt-principal-name').value = res.data.principalName || '';
+      var info = document.getElementById('rpt-template-info');
+      if (res.data.templateUrl) {
+        info.innerHTML = '📄 公文範本：<a href="' + res.data.templateUrl +
+                         '" target="_blank">開啟範本編輯內容</a>' +
+                         '（主旨、說明等文字可直接修改，佔位符 {{...}} 請保留）';
+      } else {
+        info.innerHTML = '⚠️ 公文範本尚未建立，請於 GAS 編輯器執行 createReportDocTemplate()';
+      }
+    }).catch(function(){});
+  }
+
+  function rptSaveSettings() {
+    var name = document.getElementById('rpt-principal-name').value.trim();
+    if (!name) { showToast('請輸入校長姓名', 'error'); return; }
+    showSpinner();
+    api('report_save_settings', { principalName: name }).then(function(res) {
+      hideSpinner();
+      if (res.success) showToast('✅ 校長姓名已儲存', 'success');
+      else showToast(res.error || '儲存失敗', 'error');
+    });
+  }
+
   /* ── 初始化（管理者限定）── */
   document.addEventListener('DOMContentLoaded', function() {
     var ok = initPage({ adminOnly: true });
@@ -2963,6 +3005,7 @@
   window.rptDeleteIndicator     = rptDeleteIndicator;
   window.rptExportCSV           = rptExportCSV;
   window.rptExportDoc           = rptExportDoc;
+  window.rptSaveSettings        = rptSaveSettings;
   window.rptShowIdentityRules   = rptShowIdentityRules;
   window.closeIdentityModal     = closeIdentityModal;
   window.rptCalcReqStats        = rptCalcReqStats;
@@ -3058,16 +3101,22 @@
               + '</tr></thead><tbody>';
 
         req.groups.forEach(function(g) {
-          var rateColor = g.rate >= 80 ? '#16a34a' : g.rate >= 50 ? '#d97706' : '#dc2626';
+          // 總人數 0（rate = null）代表校內無此身分人員，達成率與未達標都顯示中性狀態
+          var noMembers = !g.total;
+          var rateColor = noMembers ? '#9ca3af'
+                        : g.rate >= 80 ? '#16a34a' : g.rate >= 50 ? '#d97706' : '#dc2626';
+          var rateText  = noMembers ? '—' : g.rate + '%';
           html += '<tr style="border-bottom:1px solid #f0f0f0">'
                 + '<td style="padding:6px 12px;font-weight:600">' + g.group + '</td>'
                 + '<td style="padding:6px 8px;text-align:center">' + g.requiredHours + 'h</td>'
                 + '<td style="padding:6px 8px;text-align:center">' + g.passed + '</td>'
                 + '<td style="padding:6px 8px;text-align:center">' + g.total + '</td>'
-                + '<td style="padding:6px 8px;text-align:center;font-weight:700;color:' + rateColor + '">' + g.rate + '%</td>'
+                + '<td style="padding:6px 8px;text-align:center;font-weight:700;color:' + rateColor + '">' + rateText + '</td>'
                 + '<td style="padding:6px 8px;text-align:center">';
 
-          if (g.pendingList && g.pendingList.length > 0) {
+          if (noMembers) {
+            html += '<span style="color:#9ca3af">無此類人員</span>';
+          } else if (g.pendingList && g.pendingList.length > 0) {
             var btnData = encodeURIComponent(JSON.stringify(g.pendingList));
             html += '<button class="btn btn-sm btn-ghost" style="font-size:0.75rem;padding:2px 8px"'
                   + ' onclick=\'rptShowReqPending(this)\' data-pending=\'' + btnData + '\'>'

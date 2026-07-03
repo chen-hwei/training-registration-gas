@@ -143,9 +143,11 @@ const TEACHER_SNAPSHOT_SHEET = 'TeacherSnapshot';
 const INDICATOR_RULES_KEY    = 'indicatorRules';
 const ROSTER_SOURCES_KEY     = 'rosterSources';   // 各學年度名冊來源記錄（PropertiesService）
 const STATS_CACHE_SHEET      = 'StatsCache';       // 伺服器端統計快取工作表
-const REPORT_DOC_TEMPLATE_ID = '';        // 建立 Google 文件範本後填入
+const REPORT_DOC_TEMPLATE_ID = '';        // fallback；正式值優先讀 PropertiesService（REPORT_TEMPLATE_ID_KEY）
 const SCHOOL_NAME            = '臺北市立中崙高級中學';
-const PRINCIPAL_NAME         = '';        // 校長姓名
+const PRINCIPAL_NAME         = '';        // fallback；正式值優先讀 PropertiesService（PRINCIPAL_NAME_KEY）
+const REPORT_TEMPLATE_ID_KEY = 'reportDocTemplateId';  // 簽呈範本文件 ID（createReportDocTemplate_ 自動寫入）
+const PRINCIPAL_NAME_KEY     = 'principalName';        // 校長姓名（管理後台「報告設定」可修改）
 
 // ==================== ID 產生器（需在 LockService 內呼叫） ====================
 

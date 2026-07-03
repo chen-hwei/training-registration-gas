@@ -118,6 +118,8 @@ function handleRequest(payload) {
     case 'report_calc':                return calcStats((body || {}).academicYear, (body || {}).mode);
     case 'report_export_csv':          return exportDoubleColumnCSV((body || {}).academicYear);
     case 'report_export_doc':          return generateGoogleDoc((body || {}).academicYear);
+    case 'report_get_settings':        return getReportSettings();
+    case 'report_save_settings':       return saveReportSettings(body || {});
     case 'get_indicators':             return getIndicators();
     case 'save_indicator':             return saveIndicator(body || {});
     case 'delete_indicator':           return deleteIndicator((body || {}).id);
