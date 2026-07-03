@@ -133,13 +133,12 @@ function normalizeRow_(row, headers) {
   return obj;
 }
 
-// ── 內部：學年度計算（月份 >= 8 為新學年）──
+// ── 內部：學年度計算（月份 >= 8 為新學年；regex 取年月，不經 new Date 避免字串解析與時區地雷）──
 function toAcademicYear_(dateStr) {
-  if (!dateStr) return _currentAcademicYear();
-  var d = new Date(dateStr.replace(/\//g, '-'));
-  if (isNaN(d)) return _currentAcademicYear();
-  var y = d.getFullYear() - 1911;
-  return (d.getMonth() + 1) >= 8 ? y : y - 1;
+  var m = String(dateStr || '').match(/(\d{4})[\/\-](\d{1,2})/);
+  if (!m) return _currentAcademicYear();
+  var y = parseInt(m[1], 10) - 1911;
+  return parseInt(m[2], 10) >= 8 ? y : y - 1;
 }
 
 // ── 內部：判斷來源（有 courseCode → national；有核准文號格式 → taipei）──

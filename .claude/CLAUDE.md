@@ -7,7 +7,7 @@
 ## 本專案特別注意
 - Auth 統一使用 SchoolPortalLib（Token TTL 6 小時）
 - 管理者識別：`systemAccess.training_admin = true`
-- Hub.TrainingStats 只計入 `approvalStatus = 'APPROVED'`
+- Hub.TrainingStats 只計入 `status = 'APPROVED'`
 - 視覺主色：`--color-primary: #3730A3`（藍靛）
 - 共用 CSS 從 `SchoolPortalLib.getSharedCSS()` 取得
 
