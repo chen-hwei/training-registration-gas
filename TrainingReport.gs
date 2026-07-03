@@ -114,6 +114,13 @@ function findColIdx_(headers, aliases) {
   return -1;
 }
 
+// ── 內部：日期正規化，輸出 YYYY/M/D（去掉時間部分與補零，避免全國/臺北不同格式導致去重失敗）──
+function _normalizeDate_(dateStr) {
+  var m = String(dateStr || '').match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (!m) return String(dateStr || '').trim();
+  return m[1] + '/' + parseInt(m[2], 10) + '/' + parseInt(m[3], 10);
+}
+
 // ── 內部：將一列原始資料依欄位別名對映為標準物件 ──
 function normalizeRow_(row, headers) {
   var obj = {};
@@ -122,6 +129,7 @@ function normalizeRow_(row, headers) {
     var val = idx >= 0 ? String(row[idx] || '').trim() : '';
     obj[key] = val;
   });
+  if (obj.date) obj.date = _normalizeDate_(obj.date);
   return obj;
 }
 
