@@ -77,7 +77,7 @@ function handleRequest(payload) {
     case 'v1/getMyRecords':                  return { success: true, data: getMyRecords(userId) };
     case 'v1/submitRecord':                  return submitRecord(userId, body || {});
     case 'v1/deleteRecord':                  return deleteRecord(userId, body || {});
-    case 'v1/getRequirements':               return { success: true, data: getRequirements(userId) };
+    case 'v1/getRequirements':               return { success: true, data: getRequirements(userId, body || {}) };
     case 'v1/getMyImportedRecords':          return getMyImportedRecords(userId, body || {});
     case 'v1/checkImportedBeforeSubmit':     return checkImportedBeforeSubmit(userId, body || {});
   }

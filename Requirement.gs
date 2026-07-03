@@ -3,11 +3,12 @@
 // ── Level 1：教師端 ──
 
 /**
- * 取得當前學年度所有 ACTIVE 任務，並附帶登入教師的完成進度
+ * 取得指定學年度所有 ACTIVE 任務，並附帶登入教師的完成進度
+ * body.academicYear 選填；未傳時預設當前學年度（Index.html 沿用此預設）
  * 回傳格式：[{ ...requirement, requiredHours, approvedHours, pendingHours, isCompleted }, ...]
  */
-function getRequirements(userId) {
-  const academicYear = _currentAcademicYear();
+function getRequirements(userId, body) {
+  const academicYear = (body && body.academicYear) ? Number(body.academicYear) : _currentAcademicYear();
   const requirements = parseSheetData(_getRequirementSheet())
     .filter(r => r.status === 'ACTIVE' && Number(r.academicYear) === academicYear);
 
@@ -306,7 +307,10 @@ function renewRequirements(adminId, body) {
         links:         req.links  || '',
         isRecurring:   true,
         status:        'ACTIVE',
-        createdAt:     _now()
+        createdAt:     _now(),
+        // 統計模組欄位必須一併複製，否則新學年匯入紀錄比對不到任務（靜默失效）
+        audienceRules: req.audienceRules || '',
+        matchKeywords: req.matchKeywords || ''
       };
 
       allRows.push(schema.keys.map(k => newReq[k] !== undefined ? newReq[k] : ''));
@@ -621,6 +625,98 @@ function updateAudienceRules114() {
     }
   }
   Logger.log('✅ updateAudienceRules114 完成，已更新 ' + updated + ' 筆任務。');
+}
+
+// ==================== 歷史學年度任務回溯（一次性 Seed，執行後可刪除） ====================
+
+/**
+ * 一次性回溯建立 110–113 學年度任務：以試算表中「現有的 114 學年度 ACTIVE 任務列」為範本複製，
+ * 完整帶入 matchKeywords / audienceRules / hoursNote 等後續維運補上的欄位。
+ * 在 GAS 編輯器直接執行此函式即可；已有資料的學年度自動跳過，可安全重複執行。
+ *
+ * 日期規則（民國學年 N = 西元 N+1911 年 8/1 起，截止日統一 7/31）：
+ *   一般任務：       {N+1911}/8/1 ～ {N+1912}/7/31
+ *   上學期分學期任務：{N+1911}/8/1 ～ {N+1912}/1/31
+ *   下學期分學期任務：{N+1912}/2/1 ～ {N+1912}/7/31
+ *   （上下學期切半，避免同一筆匯入紀錄同時命中兩個任務而重複計入）
+ */
+function seedHistoricalRequirements() {
+  const TARGET_YEARS = [110, 111, 112, 113];
+  const SOURCE_YEAR  = 114;
+
+  const sheet   = _getRequirementSheet();
+  const schema  = SHEET_SCHEMA.TRAINING_REQUIREMENT;
+  const allRows = sheet.getDataRange().getValues();
+
+  const boolTrue = v => v === true || String(v).toUpperCase() === 'TRUE';
+  const sourceReqs = parseSheetData(sheet).filter(
+    r => Number(r.academicYear) === SOURCE_YEAR && r.status === 'ACTIVE'
+  );
+  if (sourceReqs.length === 0) {
+    Logger.log('❌ 找不到 ' + SOURCE_YEAR + ' 學年度 ACTIVE 任務，無法複製，已中止。');
+    return;
+  }
+
+  // 已有資料的學年度整年跳過（防重複執行）
+  const yearColIdx = schema.keys.indexOf('academicYear');
+  const existingYears = {};
+  allRows.slice(1).forEach(row => { existingYears[Number(row[yearColIdx])] = true; });
+
+  let totalCreated = 0;
+  TARGET_YEARS.forEach(year => {
+    if (existingYears[year]) {
+      Logger.log('⚠️ ' + year + ' 學年度已有任務資料，跳過。');
+      return;
+    }
+    const startCE = year + 1911; // 學年起始西元年（8月起）
+    const endCE   = year + 1912; // 學年結束西元年（隔年7月止）
+
+    sourceReqs.forEach((req, idx) => {
+      const requirementId = 'RQ' + year + String(idx + 1).padStart(3, '0');
+
+      // 依任務名稱或 semesterSplit 欄判定學期歸屬，決定日期區間
+      const marker = String(req.name || '') + String(req.semesterSplit || '');
+      let startDate, endDate;
+      if (marker.indexOf('下學期') >= 0) {
+        startDate = endCE   + '/2/1'; endDate = endCE + '/7/31';
+      } else if (marker.indexOf('上學期') >= 0) {
+        startDate = startCE + '/8/1'; endDate = endCE + '/1/31';
+      } else {
+        startDate = startCE + '/8/1'; endDate = endCE + '/7/31';
+      }
+
+      const newReq = {
+        requirementId,
+        name:          req.name,
+        owner:         req.owner,
+        academicYear:  year,
+        startDate,
+        endDate,
+        requiredHours: Number(req.requiredHours) || 0,
+        hoursNote:     req.hoursNote || '',
+        deliveryType:  req.deliveryType || 'ONLINE',
+        semesterSplit: req.semesterSplit || '',
+        notes:         req.notes || '',
+        links:         req.links || '',
+        isRecurring:   boolTrue(req.isRecurring),
+        status:        'ACTIVE',
+        createdAt:     _now(),
+        audienceRules: req.audienceRules || '',
+        matchKeywords: req.matchKeywords || ''
+      };
+      allRows.push(schema.keys.map(k => newReq[k] !== undefined ? newReq[k] : ''));
+      totalCreated++;
+    });
+    Logger.log('✅ ' + year + ' 學年度已建立 ' + sourceReqs.length + ' 筆任務。');
+  });
+
+  if (totalCreated === 0) {
+    Logger.log('ℹ️ 沒有需要建立的資料（各學年度均已存在）。');
+    return;
+  }
+  sheet.clearContents();
+  sheet.getRange(1, 1, allRows.length, allRows[0].length).setValues(allRows);
+  Logger.log('✅ seedHistoricalRequirements 完成，共寫入 ' + totalCreated + ' 筆歷史學年度任務。');
 }
 
 /**

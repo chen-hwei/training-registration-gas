@@ -62,11 +62,7 @@
               style="width:auto;padding:6px 12px;font-size:0.84rem"
               onchange="onYearChange()">
         <option value="">全部年度</option>
-        <option value="114" selected>114 學年度</option>
-        <option value="113">113 學年度</option>
-        <option value="112">112 學年度</option>
-        <option value="111">111 學年度</option>
-        <option value="110">110 學年度</option>
+        <!-- 學年度選項由 _initYearSelector() 動態產生：當前學年 ～ 110，預設當前學年 -->
       </select>
     </div>
 
@@ -167,6 +163,26 @@
     else                 { _renderTab(); }
   }
 
+  /* ── 當前學年度（民國年，8月起換新學年；與後端 _currentAcademicYear() 同邏輯）── */
+  function _currentAY() {
+    var d = new Date();
+    return (d.getMonth() + 1) >= 8 ? d.getFullYear() - 1911 : d.getFullYear() - 1912;
+  }
+
+  /* ── 動態產生學年度選項：當前學年 ～ 110，預設當前學年 ── */
+  function _initYearSelector() {
+    var sel = document.getElementById('year-selector');
+    if (!sel) return;
+    var curAY = _currentAY();
+    for (var y = curAY; y >= 110; y--) {
+      var opt = document.createElement('option');
+      opt.value = String(y);
+      opt.textContent = y + ' 學年度';
+      if (y === curAY) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+
   /* ── 年度選擇器變更 ── */
   var _importedLoaded = false;
   var _progressLoaded = false;   // 宣告移至此處，與 imported 並列管理
@@ -180,7 +196,7 @@
 
   function _selectedYear() {
     var sel = document.getElementById('year-selector');
-    return sel ? sel.value : '114';
+    return sel ? sel.value : String(_currentAY());
   }
 
   /* ── 載入已匯入紀錄 ── */
@@ -249,7 +265,7 @@
     var year = _selectedYear();
     panel.innerHTML = '<div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>';
     Promise.all([
-      api('v1/getRequirements', {}),
+      api('v1/getRequirements', year ? { academicYear: year } : {}),
       api('v1/getMyImportedRecords', { academicYear: year })
     ]).then(function(results) {
       _progressLoaded = true;
@@ -265,7 +281,9 @@
         });
       });
 
-      panel.innerHTML = _renderProgressPanel(reqs, importedByReq, impData.hasSameName);
+      // 選「全部年度」時任務進度仍以當前學年為準，標示實際顯示的學年度
+      var dispYear = year || (reqs.length ? reqs[0].academicYear : '');
+      panel.innerHTML = _renderProgressPanel(reqs, importedByReq, impData.hasSameName, dispYear);
     }).catch(function(err) {
       if (err && err.message !== 'TOKEN_EXPIRED') {
         panel.innerHTML = '<div class="empty-state"><div class="ei">❌</div><p>載入失敗，請重新整理頁面。</p></div>';
@@ -273,12 +291,21 @@
     });
   }
 
-  function _renderProgressPanel(reqs, importedByReq, hasSameName) {
+  function _renderProgressPanel(reqs, importedByReq, hasSameName, dispYear) {
     if (!reqs.length) {
-      return '<div class="empty-state"><div class="ei">📋</div><p>目前沒有年度任務。</p></div>';
+      return '<div class="empty-state"><div class="ei">📋</div>' +
+        '<p>' + (dispYear ? _e(dispYear) + ' 學年度' : '目前') + '沒有年度任務。</p></div>';
     }
 
     var html = '';
+
+    // 判斷顯示中的學年度是否為當前學年；歷史學年不顯示逾期/到期標籤
+    var isCurrentYear = Number(dispYear) === _currentAY();
+
+    if (dispYear) {
+      html += '<div style="font-size:0.84rem;font-weight:700;color:var(--gray-600);margin-bottom:10px">' +
+        '📅 目前顯示：' + _e(dispYear) + ' 學年度任務進度</div>';
+    }
 
     if (hasSameName) {
       html += '<div style="background:#FFF3CD;border-left:4px solid #FFC107;border-radius:8px;' +
@@ -315,9 +342,9 @@
       var pct       = required > 0 ? Math.min(100, Math.round(effective / required * 100)) : (isDone ? 100 : 0);
       var barColor  = isDone ? 'var(--success)' : (pct >= 50 ? '#f59e0b' : 'var(--danger)');
 
-      // 截止日距今幾天
+      // 截止日距今幾天（僅當前學年顯示逾期/到期標籤，歷史學年不顯示）
       var urgentTag = '';
-      if (!isDone && r.endDate) {
+      if (!isDone && r.endDate && isCurrentYear) {
         var parts = String(r.endDate).replace(/-/g,'/').split('/').map(Number);
         if (parts.length >= 3 && !isNaN(parts[0])) {
           var end  = new Date(parts[0], parts[1]-1, parts[2]);
@@ -510,6 +537,7 @@
 
   /* ── 初始化 ── */
   document.addEventListener('DOMContentLoaded', function() {
+    _initYearSelector();
     var ok = initPage();
     if (ok) _loadRecords();
   });
