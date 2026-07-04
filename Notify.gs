@@ -131,6 +131,8 @@ function checkAndNotifyOverdue() {
       }
     } catch (e) {
       console.error('通知發送失敗 type=' + item.type + ' userId=' + item.teacher.userId + ' 原因：' + e.message);
+      const catalogId = (item.course && item.course.catalogId) || (item.record && item.record.recordId) || '';
+      _logOp_(item.teacher ? item.teacher.userId : '', 'ERROR_NOTIFY_' + item.type, 'catalogId=' + catalogId + '：' + e.message);
     }
   });
 
