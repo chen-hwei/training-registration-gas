@@ -11,7 +11,7 @@ function doGet(e) {
   template.initResubmitId   = (e.parameter && e.parameter.resubmit || '').replace(/[^A-Za-z0-9]/g, '');
   template.initRequirementId = (e.parameter && e.parameter.req      || '').replace(/[^A-Za-z0-9]/g, '');
   // 注入絕對 URL 至前端，供 _navigate() 使用（防止 googleusercontent.com 相對路徑導覽問題）
-  template.appBaseUrl     = WEB_APP_BASE_URL;
+  template.appBaseUrl     = getWebAppBaseUrl_();
 
   return template.evaluate()
     .setTitle('研習登錄系統 — 中崙高中')

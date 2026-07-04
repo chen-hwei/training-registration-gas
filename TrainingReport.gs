@@ -1614,6 +1614,124 @@ function calcRequirementStats(body) {
 // ==================== 教師端：查看已匯入紀錄 ====================
 
 /**
+ * 讀一次 Hub.UserStatusCache，取得姓名／同名判斷／身分分類欄位
+ * 供 getRequirements（audienceRules 分眾）與匯入比對共用，避免重複開 Hub 試算表
+ * 回傳 null 表示找不到此帳號
+ */
+function _getHubUserInfo_(userId) {
+  var hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+  var uscSheet = hub.getSheetByName('UserStatusCache');
+  if (!uscSheet) return null;
+  var uscData  = uscSheet.getDataRange().getValues();
+  var uHdr     = uscData[0];
+  var uIdCol   = uHdr.indexOf('userId');
+  var uNmCol   = uHdr.indexOf('name');
+  var jpCol    = uHdr.indexOf('jobPrimary');
+  var ttCol    = uHdr.indexOf('title');
+  var jtCol    = uHdr.indexOf('jobTask');
+
+  var myName = '';
+  var userRow = null;
+  for (var i = 1; i < uscData.length; i++) {
+    if (String(uscData[i][uIdCol] || '') === userId) {
+      userRow = uscData[i];
+      myName  = String(userRow[uNmCol] || '').trim();
+      break;
+    }
+  }
+  if (!myName) return null;
+
+  var sameNameCount = uscData.slice(1).filter(function(r) {
+    return String(r[uNmCol] || '').trim() === myName;
+  }).length;
+
+  return {
+    myName:      myName,
+    hasSameName: sameNameCount > 1,
+    jobPrimary:  jpCol >= 0 ? String(userRow[jpCol] || '').trim() : '',
+    title:       ttCol >= 0 ? String(userRow[ttCol] || '').trim() : '',
+    jobTask:     jtCol >= 0 ? String(userRow[jtCol] || '').trim() : ''
+  };
+}
+
+/**
+ * 依姓名比對 ImportedData 與年度任務關鍵字＋硬性計算區間
+ * academicYear 傳 null 代表全部年度（不篩選）
+ * 回傳 { records: [...], importedByReq: {requirementId: 匯入時數加總} }
+ */
+function _matchImportedToRequirements_(myName, academicYear) {
+  var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
+  var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
+  if (!importSheet) return { records: [], importedByReq: {} };
+
+  var iData   = importSheet.getDataRange().getValues();
+  var iHdr    = iData[0];
+  var iNmCol  = iHdr.indexOf('teacherName');
+  var iTtCol  = iHdr.indexOf('title');
+  var iHrCol  = iHdr.indexOf('hours');
+  var iYrCol  = iHdr.indexOf('academicYear');
+  var iOgCol  = iHdr.indexOf('organizer');
+  var iDtCol  = iHdr.indexOf('date');
+  var iSrCol  = iHdr.indexOf('source');    // 來源（全國/臺北市）
+
+  // 讀取年度任務關鍵字（全部年度模式下不篩年度，讓跨年資料也能對應任務）
+  var requirements = parseSheetData(_getRequirementSheet())
+    .filter(function(r) {
+      if (r.status !== 'ACTIVE') return false;
+      return academicYear === null || Number(r.academicYear) === academicYear;
+    });
+  var reqKeywords = requirements.map(function(r) {
+    var kws = [];
+    try { kws = r.matchKeywords ? JSON.parse(r.matchKeywords) : []; } catch (e) {}
+    // 硬性計算區間依學年度＋semesterSplit 推算（與管理端 calcRequirementStats 一致）；
+    // endDate 僅作催辦顯示，不參與比對，避免軟性截止日誤砍達成紀錄
+    var win = _requirementWindow_(r.academicYear, r.semesterSplit);
+    return { requirementId: r.requirementId, name: r.name, keywords: kws, startTs: win.startTs, endTs: win.endTs };
+  });
+
+  var myRecords     = [];
+  var importedByReq = {};
+  iData.slice(1).forEach(function(r) {
+    if (String(r[iNmCol] || '').trim() !== myName) return;
+    var recYear = Number(r[iYrCol]);
+    if (academicYear !== null && recYear !== academicYear) return;
+
+    var title = String(r[iTtCol] || '').trim();
+    var hours = parseFloat(r[iHrCol]) || 0;
+
+    // 取得記錄日期的 timestamp（ImportedData 的 date 欄讀回可能是 Date 物件）
+    var recTs = iDtCol >= 0 ? _importDateTs_(r[iDtCol]) : null;
+
+    // 比對符合哪些任務（關鍵字 + 硬性計算區間；日期未知者保守計入）
+    var matchedReqs = reqKeywords
+      .filter(function(rk) {
+        if (!rk.keywords.some(function(kw) { return title.indexOf(kw) >= 0; })) return false;
+        if (recTs !== null && (recTs < rk.startTs || recTs > rk.endTs)) return false;
+        return true;
+      })
+      .map(function(rk) { return { requirementId: rk.requirementId, name: rk.name }; });
+
+    matchedReqs.forEach(function(rq) {
+      importedByReq[rq.requirementId] = (importedByReq[rq.requirementId] || 0) + hours;
+    });
+
+    myRecords.push({
+      title:       title,
+      hours:       hours,
+      date:        iDtCol >= 0 ? String(r[iDtCol] || '') : '',
+      organizer:   iOgCol >= 0 ? String(r[iOgCol] || '') : '',
+      source:      iSrCol >= 0 ? String(r[iSrCol] || '') : '',
+      matchedReqs: matchedReqs
+    });
+  });
+
+  // 依日期降冪排序
+  myRecords.sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
+
+  return { records: myRecords, importedByReq: importedByReq };
+}
+
+/**
  * 取得登入教師的已匯入研習紀錄（從 ImportedData，依姓名比對）
  * 同時標示每筆是否符合任一年度任務關鍵字
  * 回傳 { records: [...], hasSameName: bool, academicYear }
@@ -1624,95 +1742,17 @@ function getMyImportedRecords(userId, body) {
     var rawYear      = (body || {}).academicYear;
     var academicYear = (rawYear === '' || rawYear === 0 || rawYear === '0') ? null : Number(rawYear || _currentAcademicYear());
 
-    // 取得教師姓名
-    var hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
-    var uscSheet = hub.getSheetByName('UserStatusCache');
-    if (!uscSheet) return _err('Hub.UserStatusCache 不存在');
-    var uscData  = uscSheet.getDataRange().getValues();
-    var uHdr     = uscData[0];
-    var uIdCol   = uHdr.indexOf('userId');
-    var uNmCol   = uHdr.indexOf('name');
+    var userInfo = _getHubUserInfo_(userId);
+    if (!userInfo) return _err('找不到此帳號對應的姓名');
 
-    var myName = '';
-    for (var i = 1; i < uscData.length; i++) {
-      if (String(uscData[i][uIdCol] || '') === userId) {
-        myName = String(uscData[i][uNmCol] || '').trim();
-        break;
-      }
-    }
-    if (!myName) return _err('找不到此帳號對應的姓名');
+    var matched = _matchImportedToRequirements_(userInfo.myName, academicYear);
 
-    // 偵測同名：計算相同姓名的 userId 數量
-    var sameNameCount = uscData.slice(1).filter(function(r) {
-      return String(r[uNmCol] || '').trim() === myName;
-    }).length;
-    var hasSameName = sameNameCount > 1;
-
-    // 讀取 ImportedData
-    var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
-    var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
-    if (!importSheet) return _ok({ records: [], hasSameName: hasSameName, academicYear: academicYear });
-
-    var iData   = importSheet.getDataRange().getValues();
-    var iHdr    = iData[0];
-    var iNmCol  = iHdr.indexOf('teacherName');
-    var iTtCol  = iHdr.indexOf('title');
-    var iHrCol  = iHdr.indexOf('hours');
-    var iYrCol  = iHdr.indexOf('academicYear');
-    var iOgCol  = iHdr.indexOf('organizer');
-    var iDtCol  = iHdr.indexOf('date');
-    var iSrCol  = iHdr.indexOf('source');    // 來源（全國/臺北市）
-
-    // 讀取年度任務關鍵字（全部年度模式下不篩年度，讓跨年資料也能對應任務）
-    var requirements = parseSheetData(_getRequirementSheet())
-      .filter(function(r) {
-        if (r.status !== 'ACTIVE') return false;
-        return academicYear === null || Number(r.academicYear) === academicYear;
-      });
-    var reqKeywords = requirements.map(function(r) {
-      var kws = [];
-      try { kws = r.matchKeywords ? JSON.parse(r.matchKeywords) : []; } catch (e) {}
-      // 硬性計算區間依學年度＋semesterSplit 推算（與管理端 calcRequirementStats 一致）；
-      // endDate 僅作催辦顯示，不參與比對，避免軟性截止日誤砍達成紀錄
-      var win = _requirementWindow_(r.academicYear, r.semesterSplit);
-      return { requirementId: r.requirementId, name: r.name, keywords: kws, startTs: win.startTs, endTs: win.endTs };
+    return _ok({
+      records:     matched.records,
+      hasSameName: userInfo.hasSameName,
+      myName:      userInfo.myName,
+      academicYear: academicYear
     });
-
-    var myRecords = [];
-    iData.slice(1).forEach(function(r) {
-      if (String(r[iNmCol] || '').trim() !== myName) return;
-      var recYear = Number(r[iYrCol]);
-      if (academicYear !== null && recYear !== academicYear) return;
-
-      var title = String(r[iTtCol] || '').trim();
-      var hours = parseFloat(r[iHrCol]) || 0;
-
-      // 取得記錄日期的 timestamp（ImportedData 的 date 欄讀回可能是 Date 物件）
-      var recTs = iDtCol >= 0 ? _importDateTs_(r[iDtCol]) : null;
-
-      // 比對符合哪些任務（關鍵字 + 硬性計算區間；日期未知者保守計入）
-      var matchedReqs = reqKeywords
-        .filter(function(rk) {
-          if (!rk.keywords.some(function(kw) { return title.indexOf(kw) >= 0; })) return false;
-          if (recTs !== null && (recTs < rk.startTs || recTs > rk.endTs)) return false;
-          return true;
-        })
-        .map(function(rk) { return { requirementId: rk.requirementId, name: rk.name }; });
-
-      myRecords.push({
-        title:       title,
-        hours:       hours,
-        date:        iDtCol >= 0 ? String(r[iDtCol] || '') : '',
-        organizer:   iOgCol >= 0 ? String(r[iOgCol] || '') : '',
-        source:      iSrCol >= 0 ? String(r[iSrCol] || '') : '',
-        matchedReqs: matchedReqs
-      });
-    });
-
-    // 依日期降冪排序
-    myRecords.sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
-
-    return _ok({ records: myRecords, hasSameName: hasSameName, myName: myName, academicYear: academicYear });
   } catch (e) {
     return _err('getMyImportedRecords 失敗：' + e.message);
   }

@@ -55,8 +55,11 @@ function syncTrainingStats() {
   console.log('syncTrainingStats 完成，共同步 ' + dataRows.length + ' 筆教師統計。');
 }
 
-/** 建立每晚 23:30 的定時觸發器（一次性執行，部署時呼叫） */
+/** 建立每晚 23:30 的定時觸發器（可重複執行：會先刪除同名舊觸發器再重建，不疊加） */
 function setupSyncTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'syncTrainingStats') ScriptApp.deleteTrigger(t);
+  });
   ScriptApp.newTrigger('syncTrainingStats')
     .timeBased()
     .atHour(23)

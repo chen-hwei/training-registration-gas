@@ -238,7 +238,7 @@
         done.push(r);
       } else if (r._status === 'urgent' || r._status === 'overdue') {
         urgent.push(r);
-      } else if (r.approvedHours > 0 || r.pendingHours > 0) {
+      } else if (r.effectiveHours > 0 || r.pendingHours > 0) {
         inProgress.push(r);
       } else {
         notStarted.push(r);
@@ -246,6 +246,12 @@
     });
 
     var html = '';
+
+    if (_allRequirements.some(function(r){ return r.hasSameName; })) {
+      html += '<div style="background:#FFF3CD;border-left:4px solid #FFC107;border-radius:8px;' +
+        'padding:10px 14px;margin-bottom:14px;font-size:0.82rem;">' +
+        '⚠️ 偵測到同名教師，匯入時數僅供參考，如有疑問請聯絡管理員。</div>';
+    }
 
     /* 統計摘要 */
     var total     = _allRequirements.filter(function(r){ return r.requiredHours > 0; }).length;
@@ -348,17 +354,22 @@
         (r.hoursNote ? '<br><span style="color:#92400E">' + _e(r.hoursNote) + '</span>' : '') +
         '</div>';
     } else {
-      var pct = Math.min(100, Math.round(r.approvedHours / r.requiredHours * 100));
+      var effective = r.effectiveHours != null ? r.effectiveHours : r.approvedHours;
+      var pct = Math.min(100, Math.round(effective / r.requiredHours * 100));
       var barClass = r.isCompleted ? 'done' : (status === 'urgent' || status === 'overdue' ? 'urgent' : '');
       progressHtml =
         '<div class="progress-wrap">' +
           '<div class="progress-bar ' + barClass + '" style="width:' + pct + '%"></div>' +
         '</div>' +
         '<div class="progress-label">' +
-          '<span><span class="hrs-done">' + r.approvedHours + '</span> / ' +
-          r.requiredHours + ' 小時已通過審核</span>' +
+          '<span><span class="hrs-done">' + effective + '</span> / ' +
+          r.requiredHours + ' 小時</span>' +
           '<span>' + pct + '%</span>' +
-        '</div>';
+        '</div>' +
+        (r.importedHours > 0
+          ? '<div style="font-size:0.72rem;color:var(--gray-400);margin-top:2px">' +
+            '有效時數 = 核准 ' + r.approvedHours + ' 與匯入 ' + r.importedHours + ' 取較大值</div>'
+          : '');
     }
 
     /* 備註（推薦連結）*/

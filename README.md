@@ -212,6 +212,9 @@
 | **v3.2 修正** | 匯入去重日期正規化：修正全國/臺北來源日期格式不一致導致同筆研習重複匯入 | ✅ 完成（2026-07-03） |
 | **v3.3** | 歷史學年度任務回溯（110–113 seed，共 52 筆）＋ 115 學年整備（getRequirements 年度參數 / 動態年度選擇器 / renewRequirements 補關鍵字與分眾欄位 / 歷史學年不顯逾期） | ✅ 完成（2026-07-03） |
 | **v3.3.1** | 技術債清理：toAcademicYear_ 改 regex 解析（消除 GAS 日期字串解析與時區地雷）；.claude/CLAUDE.md 欄名 approvalStatus→status 修正 | ✅ 完成（2026-07-03） |
+| **v3.4** | 報告匯出功能完成（簽呈公文 Google 文件範本＋校長姓名後台設定）；年度任務達成率改依硬性學年/學期區間計算，與截止日期脫鉤 | ✅ 完成（2026-07-04） |
+| **v3.5** | 觸發器安裝防重複（setupSyncTrigger/setupNotifyTriggers）；WEB_APP_BASE_URL 改讀 Script Properties，重新部署免改碼 | ✅ 完成（2026-07-04） |
+| **v3.6** | 年度任務進度口徑統一：公告課程 Tab 改計入匯入時數（effectiveHours = max(核准, 匯入)），修正純匯入型教師被誤標未開始/逾期 | ✅ 完成（2026-07-04） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
@@ -220,7 +223,7 @@
 | `HUB_SPREADSHEET_ID` | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ` |
 | `LOG_SPREADSHEET_ID` | `1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM` |
 | `SchoolPortalLib ID` | `1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` |
-| `WEB_APP_BASE_URL` | `https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec` |
+| `WEB_APP_BASE_URL` | `https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec`（v3.5 起優先讀 GAS 指令碼屬性，此值僅作 fallback 保底） |
 
 ### ⚠️ 正確的系統網址（Google Workspace 域專用）
 

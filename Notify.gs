@@ -293,8 +293,11 @@ function debugNotify() {
   console.log('=== debugNotify 結束 ===');
 }
 
-/** 建立定時觸發器（一次性執行，部署時呼叫） */
+/** 建立定時觸發器（可重複執行：會先刪除同名舊觸發器再重建，不疊加） */
 function setupNotifyTriggers() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'checkAndNotifyOverdue') ScriptApp.deleteTrigger(t);
+  });
   // N2 + N3：每日 07:00
   ScriptApp.newTrigger('checkAndNotifyOverdue')
     .timeBased().atHour(7).everyDays(1).create();
