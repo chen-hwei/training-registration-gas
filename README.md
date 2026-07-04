@@ -220,7 +220,7 @@
 | `HUB_SPREADSHEET_ID` | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ` |
 | `LOG_SPREADSHEET_ID` | `1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM` |
 | `SchoolPortalLib ID` | `1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` |
-| `WEB_APP_BASE_URL` | `https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec` |
+| `WEB_APP_BASE_URL` | `https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec`（v3.5 起優先讀 GAS 指令碼屬性，此值僅作 fallback 保底） |
 
 ### ⚠️ 正確的系統網址（Google Workspace 域專用）
 

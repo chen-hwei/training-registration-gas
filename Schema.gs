@@ -7,8 +7,17 @@ const LOG_SPREADSHEET_ID            = '1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcS
 // ==================== Web App 絕對 URL（前端導覽用）====================
 // 必須使用含 /a/macros/zlsh.tp.edu.tw/ 的 Workspace 域 URL
 // 此值會透過 doGet() template.appBaseUrl 注入前端，供 _navigate() 使用
-// 若日後重新部署（新 Deployment ID），需一併更新此常數
-const WEB_APP_BASE_URL = 'https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec';
+// 優先讀取 Script Properties（重新部署後到 GAS 編輯器「專案設定 → 指令碼屬性」改值即可，程式碼零異動）
+// 讀不到 Script Properties 時 fallback 回下方常數
+const WEB_APP_BASE_URL_FALLBACK = 'https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec';
+
+let _webAppBaseUrlCache = null;
+function getWebAppBaseUrl_() {
+  if (_webAppBaseUrlCache) return _webAppBaseUrlCache;
+  const fromProps = PropertiesService.getScriptProperties().getProperty('WEB_APP_BASE_URL');
+  _webAppBaseUrlCache = fromProps || WEB_APP_BASE_URL_FALLBACK;
+  return _webAppBaseUrlCache;
+}
 
 // ==================== SHEET_SCHEMA ====================
 // headers：試算表第一列的中文標題（唯一來源）
