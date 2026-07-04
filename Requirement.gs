@@ -5,7 +5,8 @@
 /**
  * 取得指定學年度所有 ACTIVE 任務，並附帶登入教師的完成進度
  * body.academicYear 選填；未傳時預設當前學年度（Index.html 沿用此預設）
- * 回傳格式：[{ ...requirement, requiredHours, approvedHours, pendingHours, isCompleted }, ...]
+ * 有效時數 = 核准紀錄與匯入時數取較大值（口徑與 Records.html 一致，見 v3.6 修正）
+ * 回傳格式：[{ ...requirement, requiredHours, approvedHours, pendingHours, importedHours, effectiveHours, hasSameName, isCompleted }, ...]
  */
 function getRequirements(userId, body) {
   const academicYear = (body && body.academicYear) ? Number(body.academicYear) : _currentAcademicYear();
@@ -27,33 +28,29 @@ function getRequirements(userId, body) {
     if (r.status === 'PENDING')  pendingMap[rid]  = (pendingMap[rid]  || 0) + h;
   });
 
-  // 若有分眾任務（audienceRules），從 Hub.UserStatusCache 取得使用者身分
+  // Hub.UserStatusCache 只開一次：供 audienceRules 分眾身分判斷 + 匯入時數姓名比對共用
   let userIdentityGroup = null;
-  const hasAudienceRules = requirements.some(r => r.audienceRules && String(r.audienceRules).trim() !== '');
-  if (hasAudienceRules) {
-    try {
-      const hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
-      const uscSheet = hub.getSheetByName('UserStatusCache');
-      if (uscSheet) {
-        const uscData = uscSheet.getDataRange().getValues();
-        const hdr     = uscData[0];
-        const idCol   = hdr.indexOf('userId');
-        const jpCol   = hdr.indexOf('jobPrimary');
-        const ttCol   = hdr.indexOf('title');
-        const jtCol   = hdr.indexOf('jobTask');
-        const userRow = uscData.slice(1).find(r => String(r[idCol] || '').trim() === userId);
-        if (userRow) {
-          const identityRules = _loadIdentityRules_();
-          userIdentityGroup   = _classifyIdentity_({
-            jobPrimary: jpCol >= 0 ? String(userRow[jpCol] || '').trim() : '',
-            title:      ttCol >= 0 ? String(userRow[ttCol] || '').trim() : '',
-            jobTask:    jtCol >= 0 ? String(userRow[jtCol] || '').trim() : ''
-          }, identityRules);
-        }
+  let importedByReq     = {};
+  let hasSameName        = false;
+  try {
+    const userInfo = _getHubUserInfo_(userId);
+    if (userInfo) {
+      hasSameName = userInfo.hasSameName;
+
+      const hasAudienceRules = requirements.some(r => r.audienceRules && String(r.audienceRules).trim() !== '');
+      if (hasAudienceRules) {
+        const identityRules = _loadIdentityRules_();
+        userIdentityGroup   = _classifyIdentity_({
+          jobPrimary: userInfo.jobPrimary,
+          title:      userInfo.title,
+          jobTask:    userInfo.jobTask
+        }, identityRules);
       }
-    } catch (e) {
-      Logger.log('getRequirements: identity lookup failed: ' + e.message);
+
+      importedByReq = _matchImportedToRequirements_(userInfo.myName, academicYear).importedByReq;
     }
+  } catch (e) {
+    Logger.log('getRequirements: identity/imported lookup failed: ' + e.message);
   }
 
   return requirements.map(req => {
@@ -70,13 +67,18 @@ function getRequirements(userId, body) {
       } catch (e) {}
     }
 
-    const approved = approvedMap[req.requirementId] || 0;
+    const approved  = approvedMap[req.requirementId] || 0;
+    const imported  = importedByReq[req.requirementId] || 0;
+    const effective = Math.max(approved, imported);
     return {
       ...req,
-      requiredHours: required,
-      approvedHours: approved,
-      pendingHours:  pendingMap[req.requirementId] || 0,
-      isCompleted:   required > 0 && approved >= required
+      requiredHours:  required,
+      approvedHours:  approved,
+      pendingHours:   pendingMap[req.requirementId] || 0,
+      importedHours:  imported,
+      effectiveHours: effective,
+      hasSameName:    hasSameName,
+      isCompleted:    required > 0 && effective >= required
     };
   });
 }
