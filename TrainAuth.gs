@@ -162,14 +162,12 @@ function trainLoginWithIdSuffix_(params) {
     return { success: false, message: '此帳號已停用，請聯繫資訊組' };
   }
 
-  const storedHash = String(user.idHash || '').trim();
-  if (!storedHash) {
+  // ── 密碼驗證（pinHash 優先、fallback idHash，任務單任務10：五系統密碼機制統一）──
+  const check = SchoolPortalLib.verifyUserPassword(userId, suffix);
+  if (check.reason === 'NO_CREDENTIAL') {
     return { success: false, message: '尚未設定個人驗證碼，請聯繫資訊組' };
   }
-
-  // ── 比對雜湊 ──────────────────────────────────────────────
-  const inputHash = _hashIdSuffixTrain_(suffix);
-  if (inputHash !== storedHash) {
+  if (!check.valid) {
     props.setProperty(lockKey, String(lockVal + 1));
     const remain = 4 - lockVal;
     return { success: false, message: '驗證碼錯誤（還有 ' + remain + ' 次機會）' };
