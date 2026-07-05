@@ -216,6 +216,7 @@
 | **v3.5** | 觸發器安裝防重複（setupSyncTrigger/setupNotifyTriggers）；WEB_APP_BASE_URL 改讀 Script Properties，重新部署免改碼 | ✅ 完成（2026-07-04） |
 | **v3.6** | 年度任務進度口徑統一：公告課程 Tab 改計入匯入時數（effectiveHours = max(核准, 匯入)），修正純匯入型教師被誤標未開始/逾期 | ✅ 完成（2026-07-04） |
 | **v3.7** | GAS 優化任務單第 3 批：handleRequest 錯誤留痕 + 通知失敗留痕，接入中央 AuditLog（`SchoolPortalLib.logAction`） | ✅ 完成（2026-07-05） |
+| **v3.8** | GAS 優化任務單第 10 批：五系統密碼機制統一，登入改呼叫 `SchoolPortalLib.verifyUserPassword`，修改密碼後全系統即時生效 | ✅ 完成（2026-07-05） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
