@@ -143,8 +143,8 @@ function trainLoginWithIdSuffix_(params) {
   const suffix = String((params && params.idSuffix) || '').trim();
 
   if (!userId || !suffix) return { success: false, message: '資料不完整' };
-  if (!/^[A-Za-z0-9]{6}$/.test(suffix)) {
-    return { success: false, message: '請輸入身分證後六碼（共 6 碼英數字）' };
+  if (!/^[A-Za-z0-9]{4,8}$/.test(suffix)) {
+    return { success: false, message: '密碼格式錯誤（身分證後六碼或已設定的自訂密碼，4-8 碼英數）' };
   }
 
   // ── 暴力破解保護 ──────────────────────────────────────────
@@ -170,7 +170,10 @@ function trainLoginWithIdSuffix_(params) {
   if (!check.valid) {
     props.setProperty(lockKey, String(lockVal + 1));
     const remain = 4 - lockVal;
-    return { success: false, message: '驗證碼錯誤（還有 ' + remain + ' 次機會）' };
+    const message = check.hasCustomPin
+      ? '密碼錯誤：您已設定自訂密碼，請輸入自訂密碼（勿使用身分證後六碼）；忘記密碼請洽資訊組（還有 ' + remain + ' 次機會）'
+      : '驗證碼錯誤（還有 ' + remain + ' 次機會）';
+    return { success: false, message };
   }
 
   // ── 驗證成功 ──────────────────────────────────────────────
