@@ -125,7 +125,7 @@ function syncTrainingStats() {
     }, identityRules);
 
     let approvedTotal   = 0;   // 本學年核准時數（限當學年任務）
-    let effectiveTotal   = 0;  // Σ 各任務 effectiveHours
+    let effectiveTotal   = 0;  // Σ 各任務 min(effectiveHours, 該任務規定時數)，單項不超額灌水
     let requirementsDone = 0;  // 依 effectiveHours >= 應達時數判定的任務達成數
 
     reqDefs.forEach(rd => {
@@ -140,7 +140,8 @@ function syncTrainingStats() {
       const imported   = importedHoursFor_(importedByName[name], rd.keywords, rd.win);
       const effective  = Math.max(approved, imported);
       approvedTotal   += approved;
-      effectiveTotal  += effective;
+      // 單項任務超額完成時，累加進總數的部分 cap 在該任務規定時數，避免超額時數灌水總和
+      effectiveTotal  += required > 0 ? Math.min(effective, required) : 0;
       if (required > 0 && effective >= required) requirementsDone++;
     });
 
