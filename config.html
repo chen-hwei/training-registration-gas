@@ -31,9 +31,9 @@
       <div id="login-step2-name"
            style="padding:8px 12px;margin-bottom:14px;background:#EBF5FB;border-radius:6px;border-left:3px solid #2E86C1;font-size:0.88rem;"></div>
       <div class="form-group">
-        <label class="form-label">身分證後六碼<span class="req">*</span></label>
+        <label class="form-label">密碼<span class="req">*</span></label>
         <input type="password" id="login-idSuffix" class="form-control"
-               placeholder="請輸入身分證後六碼" maxlength="6"
+               placeholder="密碼（未自訂者輸入身分證後六碼）" maxlength="8"
                autocomplete="current-password">
       </div>
       <div id="login-error2"
@@ -175,7 +175,7 @@ function doCheckUserId() {
       // 短暫停頓後切換至步驟 2
       setTimeout(function() {
         document.getElementById('login-step2-name').textContent =
-          '👤 ' + _pendingUserName + ' 老師，請輸入身分證後六碼';
+          '👤 ' + _pendingUserName + ' 老師，請輸入密碼';
         document.getElementById('login-idSuffix').value = '';
         _showStep(2);
         document.getElementById('login-idSuffix').focus();
@@ -195,8 +195,8 @@ function doLoginWithIdSuffix() {
   var btn    = document.getElementById('login-step2-btn');
   errEl.style.display = 'none';
 
-  if (!suffix || suffix.length !== 6) {
-    errEl.textContent = '請輸入身分證後六碼（共 6 碼）。'; errEl.style.display = 'block'; return;
+  if (!suffix || suffix.length < 4 || suffix.length > 8) {
+    errEl.textContent = '密碼格式錯誤（身分證後六碼或已設定的自訂密碼，4-8 碼）。'; errEl.style.display = 'block'; return;
   }
 
   btn.disabled = true; btn.textContent = '驗證中…';
