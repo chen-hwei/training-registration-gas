@@ -151,13 +151,14 @@ function syncTrainingStats() {
       requiredDoneMap[uid] || 0,   // 必修達成數：原邏輯，課程 isRequired 計數，維持不變
       effectiveTotal,
       requirementsDone,            // 年度任務達成數：新欄，依 effectiveHours >= 應達時數（含分眾覆寫）判定
+      reqDefs.length,              // 年度任務總數：分母，全體教師同一學年度皆相同
       now
     ]);
   });
 
   // 組裝並一次寫入 Hub.TrainingStats（向下相容加欄，順序需與門戶 Schema.gs 的
   // TRAINING_STATS_HEADERS/TRAINING_STATS_KEYS 一致）
-  const headers = ['教師ID', '部別', '本學年核准時數', '必修達成數', '本學年有效時數', '年度任務達成數', '最後同步時間'];
+  const headers = ['教師ID', '部別', '本學年核准時數', '必修達成數', '本學年有效時數', '年度任務達成數', '年度任務總數', '最後同步時間'];
   const allData = [headers, ...dataRows];
 
   // 若 Hub 試算表尚未建立 TrainingStats 工作表，自動建立
