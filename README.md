@@ -30,11 +30,13 @@
 ### 自動通知（學校 Gmail）
 系統透過 GAS `MailApp` 使用管理者的學校 Gmail 自動寄送三種通知信：
 
-| 情境 | 觸發條件 | 收件者 |
-|---|---|---|
-| **到期前提醒**（N1） | 必修課程距截止日 ≤ 7 天，教師無登錄紀錄 | 教師本人 |
-| **逾期未完成**（N2） | 必修課程已過截止日，無通過審核的紀錄 | 教師本人 ＋ 所屬處室管理者 |
-| **待審逾時**（N3） | PENDING 紀錄超過 3 天未被審核 | 所屬處室管理者 |
+| 情境 | 觸發條件 | 收件者 | 寄送方式 |
+|---|---|---|---|
+| **到期前提醒**（N1） | 必修課程距截止日 ≤ 7 天，教師無登錄紀錄 | 教師本人 | 分組 BCC（同課程同天數合併一封） |
+| **逾期未完成**（N2） | 必修課程已過截止日，無通過審核的紀錄 | 教師本人 ＋ 所屬處室管理者 | 教師分組 BCC；管理者每日彙整一封 |
+| **待審逾時**（N3） | PENDING 紀錄超過 3 天未被審核 | 所屬處室管理者 | 管理者每日彙整一封 |
+
+> v3.10 起改為分組 BCC + 管理者每日彙整，避免逐人逐課寄信塞爆寄件備份；寄件顯示名稱與回信地址統一（`SYSTEM_MAIL_NAME` / `MAIL_REPLY_TO`）。
 
 ---
 
@@ -50,7 +52,7 @@
 | 檔案上傳 | FileReader → Base64 → `google.script.run`（單次上傳，上限 8MB） |
 | 圖片壓縮 | Canvas API 前端壓縮（JPG/PNG 自動壓縮至 2MB 以下再上傳，防手機大圖逾時） |
 | 併發保護 | `LockService.getScriptLock()` 保護所有試算表寫入（submitRecord / reviewRecord） |
-| 通知寄送 | GAS `MailApp`，使用腳本擁有者的學校 Gmail，1,500 封/日配額 |
+| 通知寄送 | GAS `MailApp`，分組 BCC + 管理者每日彙整（v3.10），統一寄件識別（`name`/`replyTo` 讀 Script Properties `MAIL_REPLY_TO`），1,500 人次/日配額 |
 | Email 來源 | `SchoolPortalLib.getUser(txxxx).email`，不重複儲存（教職員名冊為唯一來源） |
 
 ---
@@ -218,6 +220,7 @@
 | **v3.7** | GAS 優化任務單第 3 批：handleRequest 錯誤留痕 + 通知失敗留痕，接入中央 AuditLog（`SchoolPortalLib.logAction`） | ✅ 完成（2026-07-05） |
 | **v3.8** | GAS 優化任務單第 10 批：五系統密碼機制統一，登入改呼叫 `SchoolPortalLib.verifyUserPassword`，修改密碼後全系統即時生效 | ✅ 完成（2026-07-05） |
 | **v3.9** | GAS 優化任務單第 6 批：Hub.TrainingStats 口徑升級（含匯入時數/學年篩選/分眾覆寫/部別欄），登入密碼格式放寬為 4-8 碼英數 | ✅ 完成（2026-07-06） |
+| **v3.10** | GAS 優化任務單第 8 批：通知信改分組 BCC 群發 + 管理者每日彙整 + 統一寄件識別（`SYSTEM_MAIL_NAME`/`MAIL_REPLY_TO`） | ✅ 完成（2026-07-07） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
@@ -284,7 +287,7 @@ clasp push
 - Token 使用 `CacheService`（非 `PropertiesService`），TTL 6 小時，自動回收
 - 所有試算表寫入操作（`submitRecord`、`reviewRecord`）均以 `LockService` 保護，防止多人同時送出時資料錯位
 - 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
-- 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 封；以 `CacheService` 防止同一教師同一天重複收到相同通知
+- 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 人次；教師信改分組 BCC 群發，`to` 固定為系統回信地址、教師名單一律走 `bcc`，嚴禁互見；以 `CacheService` 防止同一教師/同一管理者同一天重複收到相同通知
 - 管理者收件對象依**教師所屬處室**對應，不會跨處室通知
 
 ## 系統設計哲學
