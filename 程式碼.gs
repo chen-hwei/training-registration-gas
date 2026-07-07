@@ -113,7 +113,7 @@ function handleRequest(payload) {
       case 'v1/admin/getFileUrl':           return getFileUrl(body || {});
       case 'v1/admin/exportRecords':        return exportRecords(body || {});
       case 'v1/admin/previewNotification':  return previewNotification();
-      case 'v1/admin/triggerNotification':  return { success: true, sent: checkAndNotifyOverdue() };
+      case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, checkAndNotifyOverdue());
       case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements(body || {}) };
       case 'v1/admin/addRequirement':       return addRequirement(userId, body || {});
       case 'v1/admin/editRequirement':      return editRequirement(userId, body || {});
