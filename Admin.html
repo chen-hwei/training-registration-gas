@@ -1296,32 +1296,44 @@
       .then(function(res) {
         hideSpinner();
         var result = document.getElementById('notify-preview-result');
-        if (!res || !res.data) {
+        if (!res || !res.groups || !res.count) {
           result.innerHTML =
             '<div class="empty-state"><div class="ei">📭</div><p>目前無需發送通知。</p></div>';
           return;
         }
-        var data = res.data;
+        var groups = res.groups;
         var html = '';
-        var sections = [
-          { key: 'n1', label: '🔔 N1 到期前 7 天提醒', color: 'var(--warning)' },
-          { key: 'n2', label: '⚠️ N2 逾期未完成',       color: 'var(--danger)' },
-          { key: 'n3', label: '📋 N3 待審逾時提醒',     color: 'var(--primary)' }
-        ];
-        sections.forEach(function(s) {
-          var items = data[s.key] || [];
-          if (!items.length) return;
-          html += '<div class="notif-preview-card" style="border-color:' + s.color + ';background:#fafafa">' +
-            '<div style="font-weight:700;color:' + s.color + ';margin-bottom:8px">' +
-            s.label + '（共 ' + items.length + ' 筆）</div>';
-          items.forEach(function(item) {
-            html += '<div style="font-size:0.82rem;padding:4px 0;border-top:1px solid var(--gray-200)">' +
-              '👤 ' + _e(item.userId || '') + '（' + _e(item.department || '') + '）' +
-              ' — ' + _e(item.title || '') +
-              '</div>';
-          });
-          html += '</div>';
-        });
+
+        function renderCard(title, color, items, renderRow) {
+          if (!items.length) return '';
+          var card = '<div class="notif-preview-card" style="border-color:' + color + ';background:#fafafa">' +
+            '<div style="font-weight:700;color:' + color + ';margin-bottom:8px">' + title + '</div>';
+          items.forEach(function(g) { card += renderRow(g); });
+          card += '</div>';
+          return card;
+        }
+
+        function renderTeacherGroup(g) {
+          return '<div style="font-size:0.82rem;padding:6px 0;border-top:1px solid var(--gray-200)">' +
+            '📦 ' + _e(g.label) + '（' + g.count + ' 人，1 封 BCC）' +
+            '<div style="color:var(--gray-600);padding-left:12px">' +
+            g.teachers.map(function(t) { return _e(t.teacherName) + '（' + _e(t.department) + '）'; }).join('、') +
+            '</div></div>';
+        }
+
+        function renderAdminDigest(g) {
+          return '<div style="font-size:0.82rem;padding:6px 0;border-top:1px solid var(--gray-200)">' +
+            '📧 ' + _e(g.adminEmail) + '（' + g.count + ' 筆，1 封彙整信）' +
+            '<div style="color:var(--gray-600);padding-left:12px">' +
+            g.items.map(function(it) { return _e(it.teacherName) + '（' + _e(it.department) + '）— ' + _e(it.title); }).join('；') +
+            '</div></div>';
+        }
+
+        html += renderCard('🔔 N1 到期前 7 天提醒（教師分組 BCC）', 'var(--warning)', groups.n1, renderTeacherGroup);
+        html += renderCard('⚠️ N2 逾期未完成（教師分組 BCC）',       'var(--danger)',  groups.n2, renderTeacherGroup);
+        html += renderCard('⚠️ N2 管理者每日彙整',                  'var(--danger)',  groups.n2Admin, renderAdminDigest);
+        html += renderCard('📋 N3 待審逾時管理者每日彙整',           'var(--primary)', groups.n3Admin, renderAdminDigest);
+
         result.innerHTML = html ||
           '<div class="empty-state"><div class="ei">✅</div><p>目前無需發送任何通知。</p></div>';
       })
@@ -1347,8 +1359,9 @@
           .then(function(res) {
             hideSpinner();
             if (res && res.success) {
-              var sentCount = res.sent != null ? res.sent : '─';
-              showToast('✅ 已發送通知（共 ' + sentCount + ' 封）', 'success');
+              var mailCount      = res.mails != null ? res.mails : '─';
+              var recipientCount = res.recipients != null ? res.recipients : '─';
+              showToast('✅ 已發送通知（共 ' + mailCount + ' 封，' + recipientCount + ' 人次）', 'success');
             } else {
               showToast((res && res.error) || '發送失敗', 'error');
             }

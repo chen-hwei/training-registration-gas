@@ -19,6 +19,20 @@ function getWebAppBaseUrl_() {
   return _webAppBaseUrlCache;
 }
 
+// ==================== 通知信寄件識別（任務 13-A）====================
+// 系統顯示名稱（MailApp sendEmail 的 name 欄）
+const SYSTEM_MAIL_NAME = '研習登錄系統';
+
+// 回信地址：優先讀 Script Properties「MAIL_REPLY_TO」（GAS 編輯器 → 專案設定 → 指令碼屬性）
+// 讀不到時 fallback 回目前執行帳號的信箱，避免因忘記設定屬性而寄信失敗
+let _mailReplyToCache = null;
+function getMailReplyTo_() {
+  if (_mailReplyToCache) return _mailReplyToCache;
+  const fromProps = PropertiesService.getScriptProperties().getProperty('MAIL_REPLY_TO');
+  _mailReplyToCache = fromProps || Session.getEffectiveUser().getEmail();
+  return _mailReplyToCache;
+}
+
 // ==================== SHEET_SCHEMA ====================
 // headers：試算表第一列的中文標題（唯一來源）
 // keys   ：前後端程式碼使用的英文 Key（與 headers 一一對應）
