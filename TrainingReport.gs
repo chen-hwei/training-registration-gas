@@ -1231,6 +1231,21 @@ function createReportDocTemplate() {
   return doc.getUrl();
 }
 
+/**
+ * 維運函式：用 Hub.UserStatusCache 目前在職名單完全覆蓋（非合併）指定學年度 TeacherSnapshot
+ * - 命名不帶結尾底線，於 GAS 編輯器手動執行（下拉選單可見）
+ * - 與現有 rptDoImport 的 appendMode 合併語意不同：合併只會新增/更新，不會移除已從 Hub 下架的舊名單；
+ *   本函式改用 snapshotTeacherRoster(overwrite:true) 的取代模式，才能真正清掉已離職／測試帳號
+ * - 執行前務必先確認 Hub.UserStatusCache 本身已無測試帳號（本函式只如實反映 Hub 現況，不做額外過濾）
+ * - 不帶參數時預設覆蓋當前學年度；如需指定學年度，直接在編輯器改傳入值後執行
+ */
+function overwriteSnapshotFromHub(academicYear) {
+  var year = Number(academicYear || _currentAcademicYear());
+  var res  = snapshotTeacherRoster({ academicYear: year, rosterRows: [], overwrite: true });
+  Logger.log(JSON.stringify(res));
+  return res;
+}
+
 // ==================== 身分分類規則管理 ====================
 
 var IDENTITY_RULES_KEY_ = 'identityClassificationRules';
