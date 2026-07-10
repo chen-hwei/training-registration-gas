@@ -387,6 +387,7 @@
         </div>
         <div style="display:flex;gap:8px">
           <button class="btn btn-sm btn-outline" onclick="renewRequirements()">📋 複製到下學年</button>
+          <button class="btn btn-sm btn-outline" onclick="runYearSwitchHealthCheck()">🩺 學年切換健檢</button>
           <button class="btn btn-sm btn-primary" onclick="openReqModal(null)">＋ 新增任務</button>
         </div>
       </div>
@@ -1661,6 +1662,56 @@
     );
   }
 
+  /* ── 資料健檢（任務3）：學年切換檢查 ── */
+  function runYearSwitchHealthCheck() {
+    var curYear = parseInt(document.getElementById('req-year-filter').value) || null;
+    if (!curYear) { showToast('請先選擇學年度', 'error'); return; }
+    var targetYear = curYear + 1;
+    showSpinner();
+    api('v1/admin/runHealthCheck', { scope: 'yearSwitch', academicYear: targetYear })
+      .then(function(res) {
+        hideSpinner();
+        if (!res.success) { showToast(res.error || '健檢失敗', 'error'); return; }
+        showConfirmModal(
+          '🩺 學年切換健檢（' + targetYear + ' 學年度）',
+          _renderHealthCheckHtml(res.data.groups),
+          '關閉',
+          function() {},
+          'btn-primary'
+        );
+      })
+      .catch(function(err) {
+        hideSpinner();
+        if (err && err.message !== 'TOKEN_EXPIRED') showToast(err.message || '系統錯誤', 'error');
+      });
+  }
+
+  /* ── 資料健檢（任務3）：共用結果渲染（yearSwitch / preExport 共用）── */
+  function _renderHealthCheckHtml(groups) {
+    var problemGroups = (groups || []).filter(function(g) { return g.level === 'warning'; });
+    if (problemGroups.length === 0) {
+      return '<div style="border-left:4px solid #28A745;background:#D4EDDA;border-radius:6px;padding:14px;font-weight:600">✅ 未發現資料問題</div>';
+    }
+    return problemGroups.map(function(g) {
+      var shown = g.samples.slice(0, HEALTHCHECK_SAMPLE_LIMIT_);
+      var rest  = g.count - shown.length;
+      var listHtml = shown.map(function(s) {
+        return '<div style="padding:6px 2px;border-bottom:1px solid #eee;font-size:0.85rem">' + _e(s) + '</div>';
+      }).join('');
+      return (
+        '<details open style="border-left:4px solid #FFC107;background:#FFF3CD;border-radius:6px;padding:12px 14px;margin-bottom:12px">' +
+          '<summary style="cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
+            '<span>⚠️ ' + _e(g.title) + '</span><span style="color:#DC3545;white-space:nowrap">' + g.count + ' 筆</span>' +
+          '</summary>' +
+          '<div style="margin-top:8px">' + listHtml +
+            (rest > 0 ? '<div style="padding:6px 2px;color:#888;font-size:0.85rem">其餘 ' + rest + ' 筆未列出</div>' : '') +
+          '</div>' +
+        '</details>'
+      );
+    }).join('');
+  }
+  var HEALTHCHECK_SAMPLE_LIMIT_ = 30;
+
   /* ════════════════════════════════════════
      研習統計分析模組（TRAIN-REPORT）JS
   ════════════════════════════════════════ */
@@ -2884,9 +2935,24 @@
     });
   }
 
-  /* ── S4：產生 Google 文件 ── */
+  /* ── S4：產生 Google 文件（先跑簽呈匯出前健檢，警示式不阻擋）── */
   function rptExportDoc() {
     var yr = Number(document.getElementById('rpt-dash-year').value);
+    showSpinner();
+    api('v1/admin/runHealthCheck', { scope: 'preExport', academicYear: yr }).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '健檢失敗', 'error'); return; }
+      showConfirmModal(
+        '📋 簽呈匯出前健檢（' + yr + ' 學年度）',
+        _renderHealthCheckHtml(res.data.groups),
+        '繼續匯出',
+        function() { _doExportDoc(yr); },
+        'btn-warning'
+      );
+    });
+  }
+
+  function _doExportDoc(yr) {
     showSpinner();
     api('report_export_doc', { academicYear: yr }).then(function(res) {
       hideSpinner();
@@ -2992,6 +3058,7 @@
   window.saveReq             = saveReq;
   window.archiveReq          = archiveReq;
   window.renewRequirements   = renewRequirements;
+  window.runYearSwitchHealthCheck = runYearSwitchHealthCheck;
   // 研習統計模組
   window.rptParseFile           = rptParseFile;
   window.rptDoImport            = rptDoImport;

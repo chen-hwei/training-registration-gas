@@ -119,6 +119,7 @@ function handleRequest(payload) {
       case 'v1/admin/editRequirement':      return editRequirement(userId, body || {});
       case 'v1/admin/archiveRequirement':   return archiveRequirement(userId, body || {});
       case 'v1/admin/renewRequirements':    return renewRequirements(userId, body || {});
+      case 'v1/admin/runHealthCheck':       return runDataHealthCheck(userId, (body || {}).scope, (body || {}).academicYear);
 
       // ── 研習統計分析模組（TRAIN-REPORT）──
       case 'report_import':              return importTrainingData(body || {});
