@@ -35,9 +35,16 @@ function _hcGroup_(id, title, problemSamples) {
   };
 }
 
-// ── 共用：ISO 時間字串轉 Date，一律用數字參數建構，禁止 new Date(字串) ──
+// ── 共用：Hub 儲存格時間值轉 Date，一律用數字參數建構，禁止 new Date(字串) ──
+// 實測發現 Hub.TrainingStats「最後同步時間」欄因 Sync.gs 寫入後強制 setNumberFormat('General')，
+// 讀出來是試算表日期序號（Number），並非 Date 物件也不是 ISO 字串，須額外處理此情況。
 function _hcParseTimestamp_(raw) {
   if (raw instanceof Date) return raw;
+  if (typeof raw === 'number' && !isNaN(raw)) {
+    // 試算表日期序號 epoch 為 1899-12-30；Asia/Taipei 固定 UTC+8、無夏令時，直接反推絕對時間
+    var utcMillis = Math.round((raw - 25569) * 86400000);
+    return new Date(utcMillis - 8 * 3600 * 1000);
+  }
   var m = String(raw || '').match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})/);
   if (!m) return null;
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6]));
