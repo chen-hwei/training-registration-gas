@@ -1686,20 +1686,22 @@
       });
   }
 
-  /* ── 資料健檢（任務3）：共用結果渲染（yearSwitch / preExport 共用）── */
+  /* ── 資料健檢（任務3）：共用結果渲染（yearSwitch / preExport 共用）──
+     內容包一層 max-height + overflow-y:auto，避免問題清單過長把 Modal 底部的
+     取消／確認按鈕擠出可視範圍（generic-modal-box 本身無高度限制，須在內容層自行處理）── */
   function _renderHealthCheckHtml(groups) {
     var problemGroups = (groups || []).filter(function(g) { return g.level === 'warning'; });
     if (problemGroups.length === 0) {
       return '<div style="border-left:4px solid #28A745;background:#D4EDDA;border-radius:6px;padding:14px;font-weight:600">✅ 未發現資料問題</div>';
     }
-    return problemGroups.map(function(g) {
+    var html = problemGroups.map(function(g) {
       var shown = g.samples.slice(0, HEALTHCHECK_SAMPLE_LIMIT_);
       var rest  = g.count - shown.length;
       var listHtml = shown.map(function(s) {
         return '<div style="padding:6px 2px;border-bottom:1px solid #eee;font-size:0.85rem">' + _e(s) + '</div>';
       }).join('');
       return (
-        '<details open style="border-left:4px solid #FFC107;background:#FFF3CD;border-radius:6px;padding:12px 14px;margin-bottom:12px">' +
+        '<details style="border-left:4px solid #FFC107;background:#FFF3CD;border-radius:6px;padding:12px 14px;margin-bottom:12px">' +
           '<summary style="cursor:pointer;font-weight:700;min-height:44px;display:flex;align-items:center;justify-content:space-between;gap:10px">' +
             '<span>⚠️ ' + _e(g.title) + '</span><span style="color:#DC3545;white-space:nowrap">' + g.count + ' 筆</span>' +
           '</summary>' +
@@ -1709,6 +1711,7 @@
         '</details>'
       );
     }).join('');
+    return '<div style="max-height:50vh;overflow-y:auto;padding-right:4px">' + html + '</div>';
   }
   var HEALTHCHECK_SAMPLE_LIMIT_ = 30;
 
