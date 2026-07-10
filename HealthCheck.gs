@@ -186,12 +186,23 @@ function _healthCheckPreExport_(year) {
       var name = String(r[nCol] || '').trim();
       var title = String(r[tCol] || '').trim();
       if (!name || !title) missingField.push(rowLabel + '：教師姓名或研習名稱缺漏');
+
+      // 日期欄可能因 Sheets 自動判讀而讀出 Date 物件，須先轉字串再驗證（比照 parseSheetData 的處理方式）
+      var dateRaw = r[dCol];
+      var dateStr = dateRaw instanceof Date
+        ? Utilities.formatDate(dateRaw, 'Asia/Taipei', 'yyyy/M/d')
+        : String(dateRaw || '').trim();
+      // 空白日期是系統既有容許的正常狀態（calcStats／syncTrainingStats 皆不因此出錯），只標記「有值但解析失敗」
       // 沿用既有 _detectAcademicYearFromDate_（會回傳 null），不重寫日期解析邏輯
-      if (_detectAcademicYearFromDate_(r[dCol]) === null) {
-        dateBad.push(rowLabel + '（' + name + '）：日期「' + r[dCol] + '」無法解析');
+      if (dateStr && _detectAcademicYearFromDate_(dateStr) === null) {
+        dateBad.push(rowLabel + '（' + name + '）：日期「' + dateStr + '」無法解析');
       }
-      var hrs = parseFloat(r[hCol]);
-      if (isNaN(hrs) || hrs <= 0) hoursBad.push(rowLabel + '（' + name + '）：時數「' + r[hCol] + '」非合法數值');
+
+      // 時數同理：空白/0 是既有業務規則容許的「未計入時數」，只標記「有值但非數字」的真正壞資料
+      var hoursStr = String(r[hCol] || '').trim();
+      if (hoursStr && isNaN(parseFloat(hoursStr))) {
+        hoursBad.push(rowLabel + '（' + name + '）：時數「' + hoursStr + '」非合法數值');
+      }
     });
   }
   groups.push(_hcGroup_('preExport_importedMissingField', 'ImportedData 必要欄位缺漏', missingField));
