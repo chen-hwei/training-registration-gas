@@ -448,9 +448,13 @@
 
         <!-- 各年度名冊來源摘要 -->
         <div id="rpt-roster-sources" style="margin-top:16px;display:none">
-          <div style="font-size:0.84rem;font-weight:600;margin-bottom:8px;
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+                      font-size:0.84rem;font-weight:600;margin-bottom:8px;
                       border-top:1px solid var(--gray-200);padding-top:12px">
-            📋 各學年度名冊來源
+            <span>📋 各學年度名冊來源</span>
+            <button class="btn btn-sm btn-outline" style="font-weight:400"
+                    onclick="rptOverwriteRosterFromHub()"
+                    title="以 Hub 目前在職名單重建目前學年度名冊快照">🔄 從 Hub 全量覆蓋目前學年度</button>
           </div>
           <div id="rpt-roster-sources-list"></div>
         </div>
@@ -2290,6 +2294,24 @@
     inp.click();
   }
 
+  /* ── S1a：從 Hub 全量覆蓋目前學年度名冊（不經 CSV，直接以 Hub 在職名單重建）── */
+  function rptOverwriteRosterFromHub() {
+    var yr = Number(document.getElementById('rpt-dash-year').value);
+    if (!yr) { showToast('請先於下方達成率儀表板選擇學年度', 'error'); return; }
+    if (!confirm(yr + ' 學年度名冊將被 Hub 目前在職名單完全覆蓋，既有 CSV 補錄資料將遺失，確定執行？')) return;
+
+    showSpinner();
+    api('report_snapshot', { academicYear: yr, rosterRows: [], overwrite: true }).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '覆蓋失敗', 'error'); return; }
+      _rptClearCache_(yr);
+      showToast(yr + ' 學年度名冊已從 Hub 覆蓋：' + res.data.snapshotCount + ' 人', 'success');
+      api('report_get_roster_sources', {}).then(function(r2) {
+        if (r2.success) _rptRenderRosterSources(r2.data);
+      });
+    });
+  }
+
   /* ── S2：載入達成率統計（三層快取：localStorage → 伺服器 → 重算）── */
   function rptLoadStats(forceRefresh) {
     var yr          = Number(document.getElementById('rpt-dash-year').value);
@@ -3070,6 +3092,7 @@
   window.rptParseRoster         = rptParseRoster;
   window.rptBatchImportRoster   = rptBatchImportRoster;
   window.rptSupplementRoster    = rptSupplementRoster;
+  window.rptOverwriteRosterFromHub = rptOverwriteRosterFromHub;
   window.rptLoadStats           = rptLoadStats;
   window.rptToggleBatchPanel    = rptToggleBatchPanel;
   window.rptBatchCalc           = rptBatchCalc;

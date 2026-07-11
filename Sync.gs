@@ -107,7 +107,7 @@ function syncTrainingStats() {
   // 部別：僅保留「高中部／國中部」，其餘（行政人員等）一律顯示空白
   function toDivision_(dept) {
     const d = String(dept || '').trim();
-    return (d === '高中部' || d === '國中部') ? d : '';
+    return VALID_DEPT.includes(d) ? d : '';
   }
 
   const now      = _now();

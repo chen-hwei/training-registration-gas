@@ -212,7 +212,7 @@ function snapshotTeacherRoster(body) {
         cd2.slice(1).forEach(function(row) {
           if (!ACTIVE2.includes(String(row[stC2] || ''))) return;
           var dept = String(row[dC2] || '').trim();
-          if (dept !== '高中部' && dept !== '國中部') return;
+          if (!VALID_DEPT.includes(dept)) return;
           var name = String(row[nC2] || '').trim();
           existMap[name] = [academicYear, name, dept, jC2 >= 0 ? String(row[jC2] || '').trim() : ''];
         });
@@ -257,7 +257,7 @@ function snapshotTeacherRoster(body) {
       cacheData.slice(1).forEach(function(row) {
         if (!ACTIVE.includes(String(row[statusCol] || ''))) return;
         var dept = String(row[deptCol] || '').trim();
-        if (dept !== '高中部' && dept !== '國中部') return;
+        if (!VALID_DEPT.includes(dept)) return;
         newRows.push([
           academicYear,
           String(row[nameCol]  || '').trim(),
@@ -834,7 +834,6 @@ function calcStats(academicYear, mode) {
     var sJobCol   = sHdr.indexOf('jobPrimary');
 
     var teacherMap = {};   // { name → { department, jobPrimary } }
-    var VALID_DEPT = ['高中部', '國中部'];
     // jobPrimary 過濾：使用 _isTeacherJob_() 關鍵字比對，相容完整職稱格式
 
     snapData.slice(1).forEach(function(r) {
@@ -939,7 +938,6 @@ function exportDoubleColumnCSV(academicYear) {
     var sDeptCol  = sHdr.indexOf('department');
     var sJobCol   = sHdr.indexOf('jobPrimary');
 
-    var VALID_DEPT = ['高中部', '國中部'];
     // jobPrimary 過濾：使用 _isTeacherJob_() 關鍵字比對
     var teachers   = [];
     snapData.slice(1).forEach(function(r) {

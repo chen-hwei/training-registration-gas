@@ -143,7 +143,6 @@ function _hcCheckHubSyncFreshness_() {
 function _healthCheckPreExport_(year) {
   var groups = [];
   var ss = SpreadsheetApp.openById(TRAINING_SS_ID);
-  var VALID_DEPT = ['高中部', '國中部'];
 
   // ⑤ 教師名單一致性：TeacherSnapshot 該學年度全部姓名 vs calcStats 實際納入統計的篩選條件
   // （不呼叫 calcStats() 本體，因其內含 saveStatsCache_ 寫入快取，健檢須維持零寫入）
