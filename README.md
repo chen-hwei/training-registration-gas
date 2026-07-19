@@ -224,13 +224,14 @@
 | **v3.9** | GAS 優化任務單第 6 批：Hub.TrainingStats 口徑升級（含匯入時數/學年篩選/分眾覆寫/部別欄），登入密碼格式放寬為 4-8 碼英數 | ✅ 完成（2026-07-06） |
 | **v3.10** | GAS 優化任務單第 8 批：通知信改分組 BCC 群發 + 管理者每日彙整 + 統一寄件識別（`SYSTEM_MAIL_NAME`/`MAIL_REPLY_TO`） | ✅ 完成（2026-07-07） |
 | **v3.11** | GAS 優化任務單第 4 批：資料健檢模組（學年切換檢查＋簽呈匯出前檢查，警示式，`HealthCheck.gs` 新檔） | ✅ 完成（2026-07-10） |
+| **v3.13** | 可移植性 P1-a：組態集中，`TRAINING_SS_ID`/`TRAINING_DRIVE_ROOT_FOLDER_ID`/`HUB_SPREADSHEET_ID` 改讀 Script Properties（fallback 兜底），移除零引用死碼 `LOG_SPREADSHEET_ID` | ✅ 完成（2026-07-19） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
 |---|---|
-| `TRAINING_SS_ID` | `1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y` |
-| `HUB_SPREADSHEET_ID` | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ` |
-| `LOG_SPREADSHEET_ID` | `1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM` |
+| `TRAINING_SS_ID` | `1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y`（v3.13 起優先讀 GAS 指令碼屬性，此值為 fallback 保底） |
+| `TRAINING_DRIVE_ROOT_FOLDER_ID` | `1YoGvcZqlHFZdqyZdNlIuoo3a0wQ_Z1um`（同上） |
+| `HUB_SPREADSHEET_ID` | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ`（同上） |
 | `SchoolPortalLib ID` | `1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` |
 | `WEB_APP_BASE_URL` | `https://script.google.com/a/macros/zlsh.tp.edu.tw/s/AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g/exec`（v3.5 起優先讀 GAS 指令碼屬性，此值僅作 fallback 保底） |
 
