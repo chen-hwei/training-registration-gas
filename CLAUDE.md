@@ -40,12 +40,13 @@ Google Workspace 學校帳號的 GAS Web App 有兩種 URL，**只有第一種�
 | 常數 | 值 |
 |---|---|
 | `scriptId` (.clasp.json) | `1adeMuteQ3rkICnHD7W1bZpRhAdc_WaeN27zBpAmCqOVoEhL6hOCi43lB` |
-| `TRAINING_SS_ID` | `1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y` |
-| `TRAINING_DRIVE_ROOT_FOLDER_ID` | `1YoGvcZqlHFZdqyZdNlIuoo3a0wQ_Z1um` |
-| `HUB_SPREADSHEET_ID` | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ` |
-| `LOG_SPREADSHEET_ID` | `1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM` |
+| `TRAINING_SS_ID`（v3.13 起 `*_FALLBACK`，優先讀 Script Properties） | `1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y` |
+| `TRAINING_DRIVE_ROOT_FOLDER_ID`（同上） | `1YoGvcZqlHFZdqyZdNlIuoo3a0wQ_Z1um` |
+| `HUB_SPREADSHEET_ID`（同上） | `10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ` |
 | `SchoolPortalLib` Library ID | `1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` |
 | Deployment ID | `AKfycbx9kbkwBcxy8XnoqIBuiUF36UGUKjaTWOA87BoKK72JO_hvE4kqxfotLmEHadWkOXAu6g` |
+
+> **v3.13 起（Q18 P1-a）**：上表 3 個 ID 改為 Script Properties 優先讀取，`Schema.gs` 內僅存 `*_FALLBACK` 常數兜底。**換學校部署時改「GAS 編輯器 → 專案設定 → 指令碼屬性」填入新值即可，不需改 `Schema.gs` 重新 push**。`LOG_SPREADSHEET_ID`（全 repo 零引用死碼）已移除。
 
 ---
 
