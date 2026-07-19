@@ -94,7 +94,7 @@ function _healthCheckYearSwitch_(year) {
   groups.push(_hcCheckHubSyncFreshness_());
 
   // ④ 目標學年名冊快照（TeacherSnapshot）是否存在
-  var snapSheet = SpreadsheetApp.openById(TRAINING_SS_ID).getSheetByName(TEACHER_SNAPSHOT_SHEET);
+  var snapSheet = SpreadsheetApp.openById(getTrainingSsId_()).getSheetByName(TEACHER_SNAPSHOT_SHEET);
   var hasSnapshot = false;
   if (snapSheet) {
     var snapData = snapSheet.getDataRange().getValues();
@@ -115,7 +115,7 @@ function _hcCheckHubSyncFreshness_() {
   var id = 'yearSwitch_hubSyncFreshness';
   var title = 'Hub.TrainingStats 同步時效';
   try {
-    var hub = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+    var hub = SpreadsheetApp.openById(getHubSpreadsheetId_());
     var sheet = hub.getSheetByName('TrainingStats');
     if (!sheet) return _hcGroup_(id, title, ['Hub.TrainingStats 工作表不存在，尚未執行過同步']);
 
@@ -142,7 +142,7 @@ function _hcCheckHubSyncFreshness_() {
 
 function _healthCheckPreExport_(year) {
   var groups = [];
-  var ss = SpreadsheetApp.openById(TRAINING_SS_ID);
+  var ss = SpreadsheetApp.openById(getTrainingSsId_());
 
   // ⑤ 教師名單一致性：TeacherSnapshot 該學年度全部姓名 vs calcStats 實際納入統計的篩選條件
   // （不呼叫 calcStats() 本體，因其內含 saveStatsCache_ 寫入快取，健檢須維持零寫入）

@@ -36,7 +36,7 @@ function _saveFileToDrive(userId, base64, mimeType, originalName, trainingDate, 
  */
 function _getOrCreateUserFolder(userId, trainingDate) {
   const year       = String(trainingDate).split('/')[0] || String(new Date().getFullYear());
-  const root       = DriveApp.getFolderById(TRAINING_DRIVE_ROOT_FOLDER_ID);
+  const root       = DriveApp.getFolderById(getTrainingDriveRootFolderId_());
   const yearFolder = _getOrCreateSubFolder(root, year);
   return _getOrCreateSubFolder(yearFolder, userId);
 }

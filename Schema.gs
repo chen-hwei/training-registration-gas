@@ -1,8 +1,38 @@
 // ==================== 系統常數（部署後填入實際 ID） ====================
-const TRAINING_SS_ID                = '1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y';
-const TRAINING_DRIVE_ROOT_FOLDER_ID = '1YoGvcZqlHFZdqyZdNlIuoo3a0wQ_Z1um';
-const HUB_SPREADSHEET_ID            = '10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ';
-const LOG_SPREADSHEET_ID            = '1dSOsV-y_9O0Hj1pKkOFf_NKBlGSbTzClC_OcTBcSFuM';
+// 優先讀取 Script Properties（GAS 編輯器 → 專案設定 → 指令碼屬性），讀不到時 fallback 回下方常數（P1-a 新增，2026-07-19）
+const TRAINING_SS_ID_FALLBACK                = '1Wx9ccA2rfH5HB1kVB4QlUIvTS7zVmbcklHFOJI6Xj6Y';
+const TRAINING_DRIVE_ROOT_FOLDER_ID_FALLBACK = '1YoGvcZqlHFZdqyZdNlIuoo3a0wQ_Z1um';
+const HUB_SPREADSHEET_ID_FALLBACK            = '10CkSP4jGDh6Tfitljl69AJ256gV46TdGnaN170gE6BQ';
+
+// ==================== Script Properties 共用讀取層（P1-a 新增，2026-07-19）====================
+// 單次執行內最多 1 次 getProperties() 整包讀取＋memoize，供下方各 getter 共用
+let _configPropsCache_ = null;
+function _configProps_() {
+  if (_configPropsCache_) return _configPropsCache_;
+  _configPropsCache_ = PropertiesService.getScriptProperties().getProperties();
+  return _configPropsCache_;
+}
+
+let _trainingSsIdCache_ = null;
+function getTrainingSsId_() {
+  if (_trainingSsIdCache_) return _trainingSsIdCache_;
+  _trainingSsIdCache_ = _configProps_()['TRAINING_SS_ID'] || TRAINING_SS_ID_FALLBACK;
+  return _trainingSsIdCache_;
+}
+
+let _trainingDriveRootFolderIdCache_ = null;
+function getTrainingDriveRootFolderId_() {
+  if (_trainingDriveRootFolderIdCache_) return _trainingDriveRootFolderIdCache_;
+  _trainingDriveRootFolderIdCache_ = _configProps_()['TRAINING_DRIVE_ROOT_FOLDER_ID'] || TRAINING_DRIVE_ROOT_FOLDER_ID_FALLBACK;
+  return _trainingDriveRootFolderIdCache_;
+}
+
+let _hubSpreadsheetIdCache_ = null;
+function getHubSpreadsheetId_() {
+  if (_hubSpreadsheetIdCache_) return _hubSpreadsheetIdCache_;
+  _hubSpreadsheetIdCache_ = _configProps_()['HUB_SPREADSHEET_ID'] || HUB_SPREADSHEET_ID_FALLBACK;
+  return _hubSpreadsheetIdCache_;
+}
 
 // ==================== Web App 絕對 URL（前端導覽用）====================
 // 必須使用含 /a/macros/zlsh.tp.edu.tw/ 的 Workspace 域 URL
@@ -14,8 +44,7 @@ const WEB_APP_BASE_URL_FALLBACK = 'https://script.google.com/a/macros/zlsh.tp.ed
 let _webAppBaseUrlCache = null;
 function getWebAppBaseUrl_() {
   if (_webAppBaseUrlCache) return _webAppBaseUrlCache;
-  const fromProps = PropertiesService.getScriptProperties().getProperty('WEB_APP_BASE_URL');
-  _webAppBaseUrlCache = fromProps || WEB_APP_BASE_URL_FALLBACK;
+  _webAppBaseUrlCache = _configProps_()['WEB_APP_BASE_URL'] || WEB_APP_BASE_URL_FALLBACK;
   return _webAppBaseUrlCache;
 }
 
@@ -28,8 +57,7 @@ const SYSTEM_MAIL_NAME = '研習登錄系統';
 let _mailReplyToCache = null;
 function getMailReplyTo_() {
   if (_mailReplyToCache) return _mailReplyToCache;
-  const fromProps = PropertiesService.getScriptProperties().getProperty('MAIL_REPLY_TO');
-  _mailReplyToCache = fromProps || Session.getEffectiveUser().getEmail();
+  _mailReplyToCache = _configProps_()['MAIL_REPLY_TO'] || Session.getEffectiveUser().getEmail();
   return _mailReplyToCache;
 }
 
@@ -83,7 +111,7 @@ const SHEET_SCHEMA = {
 // ==================== 工作表存取輔助 ====================
 
 function _getTrainingSheet(sheetName) {
-  const ss = SpreadsheetApp.openById(TRAINING_SS_ID);
+  const ss = SpreadsheetApp.openById(getTrainingSsId_());
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) throw new Error('工作表不存在：' + sheetName);
   return sheet;
@@ -137,7 +165,7 @@ function ensureSheetHeaders(sheetName) {
   const schema = SHEET_SCHEMA[sheetName];
   if (!schema) throw new Error('SHEET_SCHEMA 找不到：' + sheetName);
 
-  const ss = SpreadsheetApp.openById(TRAINING_SS_ID);
+  const ss = SpreadsheetApp.openById(getTrainingSsId_());
   let sheet = ss.getSheetByName(sheetName);
 
   // 工作表不存在時自動建立
