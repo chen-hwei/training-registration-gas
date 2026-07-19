@@ -58,7 +58,7 @@ function syncTrainingStats() {
     });
 
   // ── Step 4：ImportedData 只讀一次，建立 { 教師姓名 → 紀錄陣列 }（當學年篩選）──
-  const importSheet = SpreadsheetApp.openById(TRAINING_SS_ID).getSheetByName(IMPORTED_DATA_SHEET);
+  const importSheet = SpreadsheetApp.openById(getTrainingSsId_()).getSheetByName(IMPORTED_DATA_SHEET);
   const importedByName = {};
   if (importSheet) {
     const iData  = importSheet.getDataRange().getValues();
@@ -94,7 +94,7 @@ function syncTrainingStats() {
   }
 
   // ── Step 5：在職教師名單（userId／姓名／部別／身分分類），迴圈只做記憶體運算 ──
-  const hub       = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+  const hub       = SpreadsheetApp.openById(getHubSpreadsheetId_());
   const cacheData = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
   const ch        = cacheData[0];
   const uidCol    = ch.indexOf('userId');

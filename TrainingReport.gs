@@ -164,7 +164,7 @@ function snapshotTeacherRoster(body) {
     var appendMode   = body.appendMode || false;
     var fileName     = body.fileName   || '';
 
-    var ss    = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss    = SpreadsheetApp.openById(getTrainingSsId_());
     var sheet = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
 
     // 初始化工作表
@@ -201,7 +201,7 @@ function snapshotTeacherRoster(body) {
         });
       } else {
         sourceTag = 'hub';
-        var hub2  = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+        var hub2  = SpreadsheetApp.openById(getHubSpreadsheetId_());
         var cs2   = hub2.getSheetByName('UserStatusCache');
         if (!cs2) return _err('Hub UserStatusCache 工作表不存在');
         var cd2   = cs2.getDataRange().getValues();
@@ -244,7 +244,7 @@ function snapshotTeacherRoster(body) {
       });
     } else {
       sourceTag = 'hub';
-      var hub       = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+      var hub       = SpreadsheetApp.openById(getHubSpreadsheetId_());
       var cacheSheet = hub.getSheetByName('UserStatusCache');
       if (!cacheSheet) return _err('Hub UserStatusCache 工作表不存在');
       var cacheData = cacheSheet.getDataRange().getValues();
@@ -377,7 +377,7 @@ function importTrainingData(body) {
     if (rows.length === 0) return _err('無匯入資料');
 
     // 讀取 TeacherSnapshot 建立姓名集合（用於 unmatchedNames 偵測）
-    var ss            = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss            = SpreadsheetApp.openById(getTrainingSsId_());
     var snapSheet     = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
     var knownNames    = {};
     if (snapSheet) {
@@ -510,7 +510,7 @@ function debugFindCRPDRecord() {
   var TEACHER_NAME = '陳宏煒';  // ← 若要查別人，改這裡
   var KEYWORDS     = ['CRPD', '身心障礙者權利公約', '兒童權利公約', 'CRC'];
 
-  var ss    = SpreadsheetApp.openById(TRAINING_SS_ID);
+  var ss    = SpreadsheetApp.openById(getTrainingSsId_());
   var sheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
   if (!sheet) { Logger.log('❌ ImportedData 工作表不存在'); return; }
 
@@ -575,7 +575,7 @@ function manualAddImportedRecord() {
   };
   // ────────────────────────────────
 
-  var ss    = SpreadsheetApp.openById(TRAINING_SS_ID);
+  var ss    = SpreadsheetApp.openById(getTrainingSsId_());
   var sheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
   if (!sheet) { Logger.log('❌ ImportedData 工作表不存在'); return; }
 
@@ -618,7 +618,7 @@ function debugRequirementsAndDateFilter() {
 
   Logger.log('\n=== Step 2：確認身分分類 ===');
   try {
-    var hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+    var hub      = SpreadsheetApp.openById(getHubSpreadsheetId_());
     var uscSheet = hub.getSheetByName('UserStatusCache');
     if (!uscSheet) { Logger.log('❌ UserStatusCache 不存在'); return; }
     var uscData = uscSheet.getDataRange().getValues();
@@ -644,7 +644,7 @@ function debugRequirementsAndDateFilter() {
 
   Logger.log('\n=== Step 3：確認交通安全記錄的日期過濾 ===');
   try {
-    var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss          = SpreadsheetApp.openById(getTrainingSsId_());
     var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
     var iData       = importSheet.getDataRange().getValues();
     var iHdr        = iData[0];
@@ -654,7 +654,7 @@ function debugRequirementsAndDateFilter() {
 
     // 找測試使用者的交通安全紀錄
     var testName = null;
-    var hub2 = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+    var hub2 = SpreadsheetApp.openById(getHubSpreadsheetId_());
     var usc2 = hub2.getSheetByName('UserStatusCache');
     if (usc2) {
       var ud = usc2.getDataRange().getValues();
@@ -721,7 +721,7 @@ function debugRequirementsAndDateFilter() {
 function getStatsCache(academicYear, mode) {
   try {
     var key   = _statsCacheKey_(academicYear, mode);
-    var ss    = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss    = SpreadsheetApp.openById(getTrainingSsId_());
     var sheet = ss.getSheetByName(STATS_CACHE_SHEET);
     if (!sheet) return _ok(null);
     var rows = sheet.getDataRange().getValues();
@@ -744,7 +744,7 @@ function saveStatsCache_(academicYear, mode, statsData) {
     var key  = _statsCacheKey_(academicYear, mode);
     var ts   = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
     var json = JSON.stringify(statsData);
-    var ss   = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss   = SpreadsheetApp.openById(getTrainingSsId_());
     var sheet = ss.getSheetByName(STATS_CACHE_SHEET);
     if (!sheet) {
       sheet = ss.insertSheet(STATS_CACHE_SHEET);
@@ -769,7 +769,7 @@ function saveStatsCache_(academicYear, mode, statsData) {
 function clearStatsCache_(academicYear) {
   try {
     var prefix = String(academicYear) + '_';
-    var ss     = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss     = SpreadsheetApp.openById(getTrainingSsId_());
     var sheet  = ss.getSheetByName(STATS_CACHE_SHEET);
     if (!sheet) return;
     var rows = sheet.getDataRange().getValues();
@@ -821,7 +821,7 @@ function calcStats(academicYear, mode) {
   try {
     academicYear = Number(academicYear || _currentAcademicYear());
     mode = (mode === 'year') ? 'year' : 'cumulative';  // 預設 cumulative
-    var ss = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss = SpreadsheetApp.openById(getTrainingSsId_());
 
     // Step 1：讀取 TeacherSnapshot，建立教師 Map
     var snapSheet = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
@@ -926,7 +926,7 @@ function exportDoubleColumnCSV(academicYear) {
     var statsRes = calcStats(academicYear);
     if (!statsRes.success) return statsRes;
 
-    var ss        = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss        = SpreadsheetApp.openById(getTrainingSsId_());
     var snapSheet = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
     if (!snapSheet) return _err('TeacherSnapshot 不存在');
 
@@ -1013,7 +1013,7 @@ function exportDoubleColumnCSV(academicYear) {
     var fileName   = academicYear + '學年度_全校研習達成率審查.csv';
 
     // 儲存至 Drive 並回傳下載連結
-    var folder = DriveApp.getFolderById(TRAINING_DRIVE_ROOT_FOLDER_ID);
+    var folder = DriveApp.getFolderById(getTrainingDriveRootFolderId_());
     var file   = folder.createFile(fileName, csvContent, MimeType.PLAIN_TEXT);
     file.setName(fileName);
 
@@ -1040,7 +1040,7 @@ function generateGoogleDoc(academicYear) {
     var templateFile = DriveApp.getFileById(templateId);
     var today        = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd');
     var docName      = academicYear + '學年度_研習達成率審查簽呈_' + today;
-    var newFile      = templateFile.makeCopy(docName, DriveApp.getFolderById(TRAINING_DRIVE_ROOT_FOLDER_ID));
+    var newFile      = templateFile.makeCopy(docName, DriveApp.getFolderById(getTrainingDriveRootFolderId_()));
     var doc          = DocumentApp.openById(newFile.getId());
     var body         = doc.getBody();
 
@@ -1073,7 +1073,7 @@ function generateGoogleDoc(academicYear) {
 
     if (insertIdx >= 0) {
       // 取前 10 筆教師達成資料（從 ImportedData 重建）
-      var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
+      var ss          = SpreadsheetApp.openById(getTrainingSsId_());
       var snapSheet   = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
       var snapData    = snapSheet ? snapSheet.getDataRange().getValues() : [[]];
       var sHdr        = snapData[0] || [];
@@ -1222,7 +1222,7 @@ function createReportDocTemplate() {
 
   // 移入系統 Drive 根資料夾（DocumentApp.create 預設落在「我的雲端硬碟」根目錄）
   var file = DriveApp.getFileById(doc.getId());
-  file.moveTo(DriveApp.getFolderById(TRAINING_DRIVE_ROOT_FOLDER_ID));
+  file.moveTo(DriveApp.getFolderById(getTrainingDriveRootFolderId_()));
 
   PropertiesService.getScriptProperties().setProperty(REPORT_TEMPLATE_ID_KEY, doc.getId());
   Logger.log('範本已建立並登記完成：' + doc.getUrl());
@@ -1452,7 +1452,7 @@ function calcRequirementStats(body) {
     var academicYear = Number((body || {}).academicYear || _currentAcademicYear());
 
     // ── Step 1：從 Hub.UserStatusCache 讀取在職人員 ──
-    var hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+    var hub      = SpreadsheetApp.openById(getHubSpreadsheetId_());
     var uscSheet = hub.getSheetByName('UserStatusCache');
     if (!uscSheet) return _err('Hub.UserStatusCache 工作表不存在');
 
@@ -1510,7 +1510,7 @@ function calcRequirementStats(body) {
       });
 
     // ── Step 4：讀取 ImportedData，建立 { name → [{ title, hours, date, source }] } ──
-    var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss          = SpreadsheetApp.openById(getTrainingSsId_());
     var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
     var importedByName = {};  // { teacherName → [{ title, hours, academicYear }] }
     if (importSheet) {
@@ -1632,7 +1632,7 @@ function calcRequirementStats(body) {
  * 回傳 null 表示找不到此帳號
  */
 function _getHubUserInfo_(userId) {
-  var hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+  var hub      = SpreadsheetApp.openById(getHubSpreadsheetId_());
   var uscSheet = hub.getSheetByName('UserStatusCache');
   if (!uscSheet) return null;
   var uscData  = uscSheet.getDataRange().getValues();
@@ -1673,7 +1673,7 @@ function _getHubUserInfo_(userId) {
  * 回傳 { records: [...], importedByReq: {requirementId: 匯入時數加總} }
  */
 function _matchImportedToRequirements_(myName, academicYear) {
-  var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
+  var ss          = SpreadsheetApp.openById(getTrainingSsId_());
   var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
   if (!importSheet) return { records: [], importedByReq: {} };
 
@@ -1785,7 +1785,7 @@ function checkImportedBeforeSubmit(userId, body) {
     var academicYear = Number((body || {}).academicYear || _currentAcademicYear());
 
     // 取得教師姓名
-    var hub      = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+    var hub      = SpreadsheetApp.openById(getHubSpreadsheetId_());
     var uscSheet = hub.getSheetByName('UserStatusCache');
     var uscData  = uscSheet.getDataRange().getValues();
     var uHdr     = uscData[0];
@@ -1813,7 +1813,7 @@ function checkImportedBeforeSubmit(userId, body) {
     var win = _requirementWindow_(reqData.academicYear, reqData.semesterSplit);
 
     // 查 ImportedData
-    var ss          = SpreadsheetApp.openById(TRAINING_SS_ID);
+    var ss          = SpreadsheetApp.openById(getTrainingSsId_());
     var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
     if (!importSheet) return _ok({ matched: false, records: [], totalHours: 0 });
 

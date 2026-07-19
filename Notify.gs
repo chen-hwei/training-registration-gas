@@ -330,7 +330,7 @@ function _escapeHtml_(s) {
 
 /** 取得所有在職教師清單（從 Hub.UserStatusCache） */
 function _getActiveTeachers() {
-  const hub   = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+  const hub   = SpreadsheetApp.openById(getHubSpreadsheetId_());
   const data  = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
   const hdr   = data[0];
   const uidCol    = hdr.indexOf('userId');
@@ -351,7 +351,7 @@ function _getActiveTeachers() {
 
 /** 取得指定處室的 training_admin 管理者 email 清單 */
 function _getAdminEmailsByDept(department) {
-  const hub   = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+  const hub   = SpreadsheetApp.openById(getHubSpreadsheetId_());
   const data  = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
   const hdr   = data[0];
   const deptCol   = hdr.indexOf('department');

@@ -76,7 +76,7 @@ function _hashIdSuffixTrain_(suffix) {
 // 不依賴固定欄序，欄位新增或搬移不影響程式邏輯。
 function _getHubUser_(userId) {
   try {
-    const hub   = SpreadsheetApp.openById(HUB_SPREADSHEET_ID);
+    const hub   = SpreadsheetApp.openById(getHubSpreadsheetId_());
     const sheet = hub.getSheetByName('UserStatusCache');
     if (!sheet) { Logger.log('[_getHubUser_] 找不到 UserStatusCache 工作表'); return null; }
 
