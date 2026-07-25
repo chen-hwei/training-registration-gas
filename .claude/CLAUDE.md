@@ -40,11 +40,6 @@
 若理解有誤，請直接指正，我重新確認。
 
 ## 收工補充（專案專屬）
-> 收工流程主體見全域 `~/.claude/CLAUDE.md` 第 5 節。
-
-| 步驟 | 路徑 |
-|---|---|
-| 步驟 2 latest_status | `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\latest_status\training_latest.md` |
-| 步驟 2.5 知識卡片 | `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\training.md` |
-
-**步驟 3 接口通知信觸發前提**：Hub.TrainingStats 的欄位結構或寫入邏輯有異動才需通知（影響主門戶儀表板）。
+> 本專案的收工路徑、`git add` 清單、接口通知觸發前提、專屬檢查條目與專案鐵律，
+> 統一定義於 `.claude/wrap-up.md`，由全域 `/wrap-up` skill 讀取。本節不再重複記載，
+> 避免兩套收工規格並存。
