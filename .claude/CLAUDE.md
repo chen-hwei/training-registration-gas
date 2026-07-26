@@ -1,8 +1,9 @@
 ﻿# 本專案：研習登錄與審核系統（TRAIN）
 
 ## 開工必讀（依序）
-1. `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\training.md` — 架構與待辦
-2. `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\latest_status\training_latest.md` — 接關點
+1. `.claude/CONTEXT.md` — 本專案術語表（審核狀態、每晚同步、消費者 URL 白屏⋯）
+2. `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\training.md` — 架構與待辦
+3. `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\latest_status\training_latest.md` — 接關點
 
 ## 本專案特別注意
 - Auth 統一使用 SchoolPortalLib（Token TTL 6 小時）
