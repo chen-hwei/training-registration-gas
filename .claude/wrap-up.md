@@ -4,11 +4,14 @@
 |---|---|
 | 專案代號 | TRAINING |
 | 專案全名 | 研習登錄與審核系統 |
-| 專案目錄 | `C:\Users\User\Documents\Claude Desktop\研習登錄系統\` |
-| 開發進度說明.md | `C:\Users\User\Documents\Claude Desktop\研習登錄系統\開發進度說明.md` |
-| README.md | `C:\Users\User\Documents\Claude Desktop\研習登錄系統\README.md` |
-| 知識卡片 | `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\training.md` |
-| latest_status | `G:\我的雲端硬碟\Obsidian\Claude專案\_projects\latest_status\training_latest.md` |
+| 資料夾名 | 研習登錄系統 |
+| slug | training |
+
+> **路徑一律由 `/wrap-up` 步驟 0 推導**：讀 `~/.claude/env.md` 取得 `PROJECTS_ROOT`
+> 與 `OBSIDIAN_ROOT`，再依該檔所載公式，以上表的 `資料夾名` 與 `slug` 代入，得出
+> 專案目錄、開發進度說明、README、知識卡片、latest_status 等路徑。
+> `資料夾名` 與 `slug` **為本專案的明文值，嚴禁由專案代號或專案全名推導**
+> —— 本專案的 `資料夾名` 與 `專案全名` 不同。
 
 ## git add 預設清單
 
