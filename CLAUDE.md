@@ -54,7 +54,8 @@ Google Workspace 學校帳號的 GAS Web App 有兩種 URL，**只有第一種�
 
 ```bash
 # 步驟 1：推送程式碼
-cd "C:\Users\User\Documents\Claude Desktop\研習登錄系統"
+cd "{{PROJECTS_ROOT}}\研習登錄系統"
+# {{PROJECTS_ROOT}} 的值定義於 ~/.claude/env.md（機器層設定，不進版控）
 clasp push
 # 出現 "Manifest file has been updated. Do you want to push and overwrite?" 要回答 y
 ```
