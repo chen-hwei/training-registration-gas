@@ -155,8 +155,8 @@
 ```
 研習登錄系統
   │
-  ├─ 身分驗證 ──────→ SchoolPortalLib.verifyToken()
-  │                    （共用 CacheService Token，txxxx + PIN）
+  ├─ 身分驗證 ──────→ TRAIN 原生 Token（train/getUserName + train/loginWithIdSuffix）
+  │                    （txxxx + 身分證後六碼／自訂密碼；向後相容 SchoolPortalLib.verifyToken()）
   │
   ├─ 使用者資訊 ────→ Hub.UserStatusCache（唯讀，取得部門資料）
   │
@@ -225,6 +225,7 @@
 | **v3.10** | GAS 優化任務單第 8 批：通知信改分組 BCC 群發 + 管理者每日彙整 + 統一寄件識別（`SYSTEM_MAIL_NAME`/`MAIL_REPLY_TO`） | ✅ 完成（2026-07-07） |
 | **v3.11** | GAS 優化任務單第 4 批：資料健檢模組（學年切換檢查＋簽呈匯出前檢查，警示式，`HealthCheck.gs` 新檔） | ✅ 完成（2026-07-10） |
 | **v3.13** | 可移植性 P1-a：組態集中，`TRAINING_SS_ID`/`TRAINING_DRIVE_ROOT_FOLDER_ID`/`HUB_SPREADSHEET_ID` 改讀 Script Properties（fallback 兜底），移除零引用死碼 `LOG_SPREADSHEET_ID` | ✅ 完成（2026-07-19） |
+| **v3.14** | SSO 階段0/R5③：移除公開路由 `action:login`／`getTeachers`（全 repo 零呼叫的公開曝露入口，殘餘風險：門戶 `v1/login` 共用 PIN 通道仍在線，待 R5④ 完成才真正關閉） | ✅ 完成（2026-08-06） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
