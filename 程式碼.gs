@@ -56,10 +56,6 @@ function handleRequest(payload) {
     if (!action) return _err('MISSING_ACTION');
 
     // ── 公開路由（無需 Token）──
-    if (action === 'login') {
-      // 保留舊版共用 PIN 登入（向後相容，未來可移除）
-      return SchoolPortalLib.login((body || {}).userId, (body || {}).pin);
-    }
     if (action === 'train/getUserName') {
       // 新版登入步驟 1：查工號對應姓名
       return trainGetUserName_(body || {});
@@ -67,9 +63,6 @@ function handleRequest(payload) {
     if (action === 'train/loginWithIdSuffix') {
       // 新版登入步驟 2：身分證後六碼驗證
       return trainLoginWithIdSuffix_(body || {});
-    }
-    if (action === 'getTeachers') {
-      return { success: true, data: SchoolPortalLib.getTeachers() };
     }
     if (action === 'logout') {
       // train_ token 靠 CacheService TTL 自然過期，SPL token 呼叫 revokeToken
