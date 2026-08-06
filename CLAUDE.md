@@ -71,7 +71,7 @@ GAS 編輯器 → 右上「部署」→「管理部署」→ ✎ 編輯 → 版�
 
 ## 👤 管理者權限設定
 
-`isAdmin()` 讀取 `localStorage.spl_access`，此值來自 `SchoolPortalLib.login()` 回傳的 `systemAccess`，最終來源是 **Hub 試算表的 `UserStatusCache` 工作表**。
+`isAdmin()` 讀取 `localStorage.spl_access`，此值由 `config.html` 的 `saveSession()`（:78-83）寫入，來自 `trainLoginWithIdSuffix_()`（`TrainAuth.gs:185-187`）回傳的 `systemAccess`，最終來源是 **Hub 試算表的 `UserStatusCache` 工作表**。
 
 若管理者帳號看不到管理後台（跳回首頁）：
 1. 開啟 Hub 試算表 → `UserStatusCache` 工作表
@@ -86,7 +86,7 @@ GAS 編輯器 → 右上「部署」→「管理部署」→ ✎ 編輯 → 版�
 - Library ID：`1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` · [GitHub](https://github.com/chen-hwei/school-portal-lib)
 - **已嵌入 `appsscript.json`**，`clasp push` 後不需要在 GAS 編輯器手動重新加入
 - 使用 `developmentMode: true`（HEAD 版本），修改 Library 後立即生效
-- 主要呼叫方式：`SchoolPortalLib.login()`, `SchoolPortalLib.verifyToken()`, `SchoolPortalLib.getUser()`, `SchoolPortalLib.getTeachers()`
+- 主要呼叫方式：`SchoolPortalLib.verifyToken()`, `SchoolPortalLib.getUser()`, `SchoolPortalLib.verifyUserPassword()`, `SchoolPortalLib.revokeToken()`, `SchoolPortalLib.logAction()`（`login()`／`getTeachers()` 已於 2026-08-06 SSO 階段0/R5③ 移除公開路由後，TRAIN 端零呼叫）
 
 ---
 
