@@ -86,7 +86,7 @@ GAS 編輯器 → 右上「部署」→「管理部署」→ ✎ 編輯 → 版�
 - Library ID：`1nAG4tkI8tlHbmrMpdvmIHdA47SFkPwO8zMujGH11rOhjteYieMxzpVFS` · [GitHub](https://github.com/chen-hwei/school-portal-lib)
 - **已嵌入 `appsscript.json`**，`clasp push` 後不需要在 GAS 編輯器手動重新加入
 - 使用 `developmentMode: true`（HEAD 版本），修改 Library 後立即生效
-- 主要呼叫方式：`SchoolPortalLib.verifyToken()`, `SchoolPortalLib.getUser()`, `SchoolPortalLib.verifyUserPassword()`, `SchoolPortalLib.revokeToken()`, `SchoolPortalLib.logAction()`（`login()`／`getTeachers()` 已於 2026-08-06 SSO 階段0/R5③ 移除公開路由後，TRAIN 端零呼叫）
+- 主要呼叫方式：`SchoolPortalLib.verifyToken()`, `SchoolPortalLib.getUser()`, `SchoolPortalLib.verifyUserPassword()`, `SchoolPortalLib.revokeToken()`, `SchoolPortalLib.logAction()`, `SchoolPortalLib.redeemHandoffCode()`（v3.15 SSO 方案 B 交換碼兌換，`TrainAuth.gs:trainRedeemHandoff_()` 呼叫）（`login()`／`getTeachers()` 已於 2026-08-06 SSO 階段0/R5③ 移除公開路由後，TRAIN 端零呼叫）
 
 ---
 
@@ -95,6 +95,7 @@ GAS 編輯器 → 右上「部署」→「管理部署」→ ✎ 編輯 → 版�
 ### 前端共用元件（config.html）
 - `api(action, body)` → 所有後端呼叫唯一入口（透過 `google.script.run`，**禁止 fetch**）
 - `initPage({ adminOnly: true })` → 頁面初始化 + Token 檢查 + 管理者檢查
+- `_bootPage(opts, cb)` → SSO 交換碼兌換入口（v3.15），包裝 `initPage()`：頁面帶交換碼即嘗試兌換（不看本地舊 token），7 秒逾時保底，失敗靜默退回登入畫面；四頁 `DOMContentLoaded` 皆呼叫它取代直接呼叫 `initPage()`
 - `saveSession(res)` → 登入後儲存 Token 到 localStorage
 - `isAdmin()` → 讀取 `localStorage.spl_access.training_admin`
 
@@ -108,8 +109,7 @@ window.functionName   = functionName;
 ### 頁面 DOMContentLoaded 初始化模式
 ```javascript
 document.addEventListener('DOMContentLoaded', function() {
-  var ok = initPage({ adminOnly: true }); // 一般頁面不傳 adminOnly
-  if (ok) _loadData();
+  _bootPage({ adminOnly: true }, function(ok) { if (ok) _loadData(); }); // 一般頁面不傳 adminOnly
 });
 ```
 
