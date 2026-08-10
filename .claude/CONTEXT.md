@@ -38,3 +38,12 @@ localStorage 的 Token 隨之消失而白屏。**正確入口只有 `/a/macros/z
 
 **通知（N1／N2／N3）** —— `Notify.gs` 的三類定時通知。改動通知條件前，
 必須確認 `setupNotifyTriggers()` 的觸發器仍存在。
+
+## SSO 接手（v3.15）
+
+**`_bootPage()`** —— `config.html` 包裝既有 `initPage()` 的 SSO 交換碼兌換入口，四頁
+`DOMContentLoaded` 皆改呼叫它取代直接呼叫 `initPage()`。跨專案共用術語「一次性交換碼」
+定義見 `~/.claude/CONTEXT.md`。
+
+**`train/redeemHandoff`** —— PUBLIC 路由，兌換門戶交換碼換發 `train_` token，見 `TrainAuth.gs`
+的 `trainRedeemHandoff_()`。失敗路徑零 AuditLog 寫入。

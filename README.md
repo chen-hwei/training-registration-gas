@@ -157,6 +157,7 @@
   │
   ├─ 身分驗證 ──────→ TRAIN 原生 Token（train/getUserName + train/loginWithIdSuffix）
   │                    （txxxx + 身分證後六碼／自訂密碼；向後相容 SchoolPortalLib.verifyToken()）
+  │                    SSO 交換碼兌換（train/redeemHandoff，v3.15）：門戶已登入教師點卡片免重複登入
   │
   ├─ 使用者資訊 ────→ Hub.UserStatusCache（唯讀，取得部門資料）
   │
@@ -226,6 +227,7 @@
 | **v3.11** | GAS 優化任務單第 4 批：資料健檢模組（學年切換檢查＋簽呈匯出前檢查，警示式，`HealthCheck.gs` 新檔） | ✅ 完成（2026-07-10） |
 | **v3.13** | 可移植性 P1-a：組態集中，`TRAINING_SS_ID`/`TRAINING_DRIVE_ROOT_FOLDER_ID`/`HUB_SPREADSHEET_ID` 改讀 Script Properties（fallback 兜底），移除零引用死碼 `LOG_SPREADSHEET_ID` | ✅ 完成（2026-07-19） |
 | **v3.14** | SSO 階段0/R5③：移除公開路由 `action:login`／`getTeachers`（全 repo 零呼叫的公開曝露入口，殘餘風險：門戶 `v1/login` 共用 PIN 通道仍在線，待 R5④ 完成才真正關閉） | ✅ 完成（2026-08-06） |
+| **v3.15** | SSO 方案 B Stage 2：新增 `train/redeemHandoff` 公開路由與前端 `_bootPage()`，接收門戶交換碼免重複登入（[PR #20](https://github.com/chen-hwei/training-registration-gas/pull/20)／[PR #21](https://github.com/chen-hwei/training-registration-gas/pull/21)） | ✅ 完成（2026-08-10） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
