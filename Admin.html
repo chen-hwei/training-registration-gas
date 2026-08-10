@@ -43,6 +43,7 @@
 <body>
   <?!= include('config') ?>
   <script>var APP_BASE_URL = '<?!= appBaseUrl ?>';</script>
+  <script>var INIT_HANDOFF_CODE = '<?!= handoffCode ?>';</script>
 
   <!-- ── 退件原因 Modal（含預設選項 + 其他自訂）── -->
   <div id="reject-modal"
@@ -3017,8 +3018,7 @@
 
   /* ── 初始化（管理者限定）── */
   document.addEventListener('DOMContentLoaded', function() {
-    var ok = initPage({ adminOnly: true });
-    if (ok) _loadReviews();
+    _bootPage({ adminOnly: true }, function(ok) { if (ok) _loadReviews(); });
   });
 
   /* ── GAS Warden 作用域隔離修正 ── */

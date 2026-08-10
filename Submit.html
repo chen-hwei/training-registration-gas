@@ -37,6 +37,7 @@
 <body>
   <?!= include('config') ?>
   <script>var APP_BASE_URL = '<?!= appBaseUrl ?>';</script>
+  <script>var INIT_HANDOFF_CODE = '<?!= handoffCode ?>';</script>
 
   <!-- ── 頁首 ── -->
   <div class="app-header">
@@ -709,8 +710,7 @@
 
   /* ── 初始化 ── */
   document.addEventListener('DOMContentLoaded', function() {
-    var ok = initPage();
-    if (ok) _init();
+    _bootPage({}, function(ok) { if (ok) _init(); });
   });
 
   /* ── GAS Warden 作用域隔離修正 ── */

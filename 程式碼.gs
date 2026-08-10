@@ -12,6 +12,9 @@ function doGet(e) {
   template.initRequirementId = (e.parameter && e.parameter.req      || '').replace(/[^A-Za-z0-9]/g, '');
   // 注入絕對 URL 至前端，供 _navigate() 使用（防止 googleusercontent.com 相對路徑導覽問題）
   template.appBaseUrl     = getWebAppBaseUrl_();
+  // SSO 方案 B 交換碼（task_5e719428 Stage 2）：門戶帶來的 ?hx=<code>，白名單比照既有參數處理
+  // 無條件注入所有頁面模板（比照 appBaseUrl），避免其餘頁面 evaluate() 因未定義變數噴錯
+  template.handoffCode    = (e.parameter && e.parameter.hx || '').replace(/[^A-Za-z0-9_]/g, '');
 
   return template.evaluate()
     .setTitle('研習登錄系統 — 中崙高中')
@@ -63,6 +66,11 @@ function handleRequest(payload) {
     if (action === 'train/loginWithIdSuffix') {
       // 新版登入步驟 2：身分證後六碼驗證
       return trainLoginWithIdSuffix_(body || {});
+    }
+    if (action === 'train/redeemHandoff') {
+      // SSO 方案 B（task_5e719428 Stage 2）：兌換門戶核發的一次性交換碼，換發原生 train_ token
+      // PUBLIC：兌換發生在使用者尚未認證之前
+      return trainRedeemHandoff_(body || {});
     }
     if (action === 'logout') {
       // train_ token 靠 CacheService TTL 自然過期，SPL token 呼叫 revokeToken

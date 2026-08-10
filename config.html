@@ -259,6 +259,36 @@ function initPage(opts) {
   return true;
 }
 
+// ── SSO 方案 B：頁面啟動時嘗試兌換門戶帶來的交換碼（task_5e719428 Stage 2）──
+// 觸發條件是「帶碼就兌換」，不看本地是否已有 token——train_ token 在後端只活 6 小時，
+// 但 localStorage 裡的舊 token 永不過期，若以「本地無 token」為條件，隔天從門戶回訪
+// 這個最主要的情境反而會被舊 token 擋下，SSO 等於沒做。
+// google.script.run 沒有 timeout，故加 7 秒逾時保底，用 _booted 旗標防止逾時與成功回呼雙重執行。
+var HANDOFF_REDEEM_TIMEOUT_MS = 7000;
+
+function _bootPage(opts, cb) {
+  var code = (typeof INIT_HANDOFF_CODE !== 'undefined') ? INIT_HANDOFF_CODE : '';
+  if (!code) { cb(initPage(opts)); return; }
+
+  var booted = false;
+  var finish = function() {
+    if (booted) return;
+    booted = true;
+    hideSpinner();
+    cb(initPage(opts));
+  };
+
+  showSpinner();
+  setTimeout(finish, HANDOFF_REDEEM_TIMEOUT_MS);
+
+  apiPublic('train/redeemHandoff', { code: code })
+    .then(function(res) {
+      if (res && res.success) saveSession(res);
+      finish();
+    })
+    .catch(function() { finish(); }); // 靜默失敗，落回 initPage() 原有的登入畫面邏輯
+}
+
 function _renderAdminNav() {
   if (!isAdmin()) return;
   var nav = document.querySelector('.app-nav');
@@ -395,6 +425,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // ── 掛載至 window（GAS Warden 作用域隔離必要措施）──
 window.api               = api;
 window.apiPublic         = apiPublic;
+window._bootPage         = _bootPage;
 window.doLogin           = doLogin;           // 舊版入口（指向 doCheckUserId）
 window.doCheckUserId     = doCheckUserId;     // 步驟 1
 window.doLoginWithIdSuffix = doLoginWithIdSuffix; // 步驟 2

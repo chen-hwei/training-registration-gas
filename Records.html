@@ -9,6 +9,7 @@
 <body>
   <?!= include('config') ?>
   <script>var APP_BASE_URL = '<?!= appBaseUrl ?>';</script>
+  <script>var INIT_HANDOFF_CODE = '<?!= handoffCode ?>';</script>
 
   <!-- ── 頁首 ── -->
   <div class="app-header">
@@ -538,8 +539,7 @@
   /* ── 初始化 ── */
   document.addEventListener('DOMContentLoaded', function() {
     _initYearSelector();
-    var ok = initPage();
-    if (ok) _loadRecords();
+    _bootPage({}, function(ok) { if (ok) _loadRecords(); });
   });
 
   /* ── GAS Warden 作用域隔離修正 ── */

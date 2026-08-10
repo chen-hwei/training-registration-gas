@@ -187,6 +187,41 @@ function trainLoginWithIdSuffix_(params) {
   return { success: true, token, expireAt, name, userId, systemAccess };
 }
 
+// ── SSO 方案 B：兌換門戶核發的一次性交換碼（task_5e719428 Stage 2）───
+// 設計權威：_hub/sso-cross-system.md §4 方案 B、§5.1
+// action: 'train/redeemHandoff'（PUBLIC，兌換發生在使用者尚未認證之前）
+// body: { code }
+//
+// ⚠️ 匿名可任意觸發，失敗路徑一律不得寫 AuditLog（比照 SchoolPortalLib
+// redeemHandoffCode 對 invalid_code／expired_or_used 改走 console.warn 的理由：
+// 兩者都可被任何人反覆呼叫，寫 logAction 會灌爆五系統共用的稽核表）。
+// 函式內自行 try/catch，不讓例外冒到 handleRequest 的 catch-all（那裡會呼叫 _logOp_）。
+function trainRedeemHandoff_(params) {
+  try {
+    const code = String((params && params.code) || '').trim();
+    if (!code) return { success: false };
+
+    const result = SchoolPortalLib.redeemHandoffCode(code, 'training');
+    if (!result || !result.success) return { success: false };
+
+    const userId = result.userId;
+    const user = _getHubUser_(userId);
+    if (!user) return { success: false };
+    if (!TRAIN_ACTIVE_STATUSES.includes(String(user.status || '').trim())) {
+      return { success: false };
+    }
+
+    const { token, expireAt } = _issueTrainToken_(userId);
+    let systemAccess = {};
+    try { systemAccess = JSON.parse(String(user.systemAccess || '{}')); } catch (_) {}
+
+    return { success: true, token, expireAt, name: String(user.name || ''), userId, systemAccess };
+  } catch (e) {
+    Logger.log('[trainRedeemHandoff_] err=' + e.message);
+    return { success: false };
+  }
+}
+
 // ── 管理工具：解鎖被鎖定帳號 ─────────────────────────────────
 function trainUnlockUser_(params) {
   const target = params && params.targetUserId;
