@@ -283,7 +283,12 @@ function _bootPage(opts, cb) {
 
   apiPublic('train/redeemHandoff', { code: code })
     .then(function(res) {
-      if (res && res.success) saveSession(res);
+      if (res && res.success) {
+        saveSession(res);
+        // 逾時已先跳出登入 Modal、稍後兌換才姍姍來遲成功：手動收斂一次，
+        // 避免 Modal 卡住無法自動關閉（此時 cb 尚未以 true 呼叫過，不會重複載入）
+        if (booted) { _hideLoginOverlay(); cb(initPage(opts)); return; }
+      }
       finish();
     })
     .catch(function() { finish(); }); // 靜默失敗，落回 initPage() 原有的登入畫面邏輯
