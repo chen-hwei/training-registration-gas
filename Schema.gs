@@ -97,13 +97,15 @@ const SHEET_SCHEMA = {
       '任務編號', '任務名稱', '主責單位', '學年度',
       '開始日期', '截止日期', '所需時數', '時數說明',
       '研習形式', '分學期計算', '備註說明', '推薦連結',
-      '是否循環', '狀態', '建立時間', '分眾時數規則', '比對關鍵字'
+      '是否循環', '狀態', '建立時間', '分眾時數規則', '比對關鍵字',
+      '教師公告', '適用對象'
     ],
     keys: [
       'requirementId', 'name', 'owner', 'academicYear',
       'startDate', 'endDate', 'requiredHours', 'hoursNote',
       'deliveryType', 'semesterSplit', 'notes', 'links',
-      'isRecurring', 'status', 'createdAt', 'audienceRules', 'matchKeywords'
+      'isRecurring', 'status', 'createdAt', 'audienceRules', 'matchKeywords',
+      'teacherNote', 'targetAudience'
     ]
   }
 };

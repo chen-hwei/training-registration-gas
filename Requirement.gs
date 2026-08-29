@@ -115,16 +115,17 @@ function _normalizeSemesterSplit_(v) {
  * 新增年度研習任務
  * body 必填：name, endDate
  * body 選填：startDate, requiredHours, hoursNote, deliveryType, semesterSplit,
- *            notes, links, isRecurring, academicYear
- * owner 自動從管理者的 department 取得，不信任前端傳入
+ *            notes, links, isRecurring, academicYear, owner, targetAudience,
+ *            matchKeywords, audienceRules, teacherNote
+ * owner：body.owner 有填即採用，留空才 fallback 帶入管理者所屬處室
  */
 function addRequirement(adminId, body) {
   if (!body.name)    return _err('MISSING_NAME');
   if (!body.endDate) return _err('MISSING_END_DATE');
 
-  // 主責單位自動帶入管理者所屬處室
+  // 主責單位：前端有填優先採用，留空才自動帶入管理者所屬處室
   const adminUser = SchoolPortalLib.getUser(adminId);
-  const owner = (adminUser && adminUser.department) ? adminUser.department : String(body.owner || '');
+  const owner = String(body.owner || '').trim() || ((adminUser && adminUser.department) ? adminUser.department : '');
 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
@@ -151,12 +152,20 @@ function addRequirement(adminId, body) {
       links:         String(body.links        || ''),
       isRecurring:   body.isRecurring !== false,  // 預設 true
       status:        'ACTIVE',
-      createdAt:     _now()
+      createdAt:     _now(),
+      audienceRules: String(body.audienceRules || ''),
+      matchKeywords: String(body.matchKeywords || ''),
+      teacherNote:   String(body.teacherNote   || ''),
+      targetAudience: String(body.targetAudience || '')
     };
 
     allRows.push(schema.keys.map(k => newReq[k] !== undefined ? newReq[k] : ''));
+    // 補齊寬度：schema 若已加欄但試算表尚未跑過 initSheetHeaders()，避免 ragged array 導致
+    // setValues 拋錯（此時 clearContents 已執行，拋錯會清空整張工作表）
+    const W = Math.max(schema.keys.length, allRows[0].length);
+    const rows = allRows.map(r => { const a = r.slice(); while (a.length < W) a.push(''); return a; });
     sheet.clearContents();
-    sheet.getRange(1, 1, allRows.length, allRows[0].length).setValues(allRows);
+    sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
     SchoolPortalLib.logAction(adminId, 'ADD_REQUIREMENT', requirementId);
     return { success: true, requirementId };
@@ -166,10 +175,11 @@ function addRequirement(adminId, body) {
 }
 
 /**
- * 編輯年度研習任務（owner 不可透過前端修改）
+ * 編輯年度研習任務
  * body 必填：requirementId
  * body 選填：name, startDate, endDate, requiredHours, hoursNote, deliveryType,
- *            semesterSplit, notes, links, isRecurring
+ *            semesterSplit, notes, links, isRecurring, owner, targetAudience,
+ *            teacherNote, audienceRules, matchKeywords
  */
 function editRequirement(adminId, body) {
   if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');
@@ -188,7 +198,7 @@ function editRequirement(adminId, body) {
 
     const EDITABLE = ['name', 'startDate', 'endDate', 'requiredHours', 'hoursNote',
                       'deliveryType', 'semesterSplit', 'notes', 'links', 'isRecurring',
-                      'audienceRules', 'matchKeywords'];
+                      'audienceRules', 'matchKeywords', 'owner', 'teacherNote', 'targetAudience'];
     EDITABLE.forEach(key => {
       if (body[key] === undefined) return;
       const colIdx = schema.keys.indexOf(key);
@@ -204,8 +214,11 @@ function editRequirement(adminId, body) {
       }
     });
 
+    // 補齊寬度：理由同 addRequirement()（R-2）
+    const W = Math.max(schema.keys.length, data[0].length);
+    const rows = data.map(r => { const a = r.slice(); while (a.length < W) a.push(''); return a; });
     sheet.clearContents();
-    sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
+    sheet.getRange(1, 1, rows.length, W).setValues(rows);
     SpreadsheetApp.flush();
 
     SchoolPortalLib.logAction(adminId, 'EDIT_REQUIREMENT', body.requirementId);
@@ -325,15 +338,21 @@ function renewRequirements(adminId, body) {
         createdAt:     _now(),
         // 統計模組欄位必須一併複製，否則新學年匯入紀錄比對不到任務（靜默失效）
         audienceRules: req.audienceRules || '',
-        matchKeywords: req.matchKeywords || ''
+        matchKeywords: req.matchKeywords || '',
+        teacherNote:   req.teacherNote || '',
+        targetAudience: req.targetAudience || ''
       };
 
       allRows.push(schema.keys.map(k => newReq[k] !== undefined ? newReq[k] : ''));
       newIds.push(requirementId);
     });
 
+    // 補齊寬度：理由同 addRequirement()（R-2），新列已用新版 schema 長度寫入，
+    // 若舊列仍是舊欄寬會造成 ragged array
+    const W = Math.max(schema.keys.length, allRows[0].length);
+    const rows = allRows.map(r => { const a = r.slice(); while (a.length < W) a.push(''); return a; });
     sheet.clearContents();
-    sheet.getRange(1, 1, allRows.length, allRows[0].length).setValues(allRows);
+    sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
     SchoolPortalLib.logAction(adminId, 'RENEW_REQUIREMENTS', 'to_year_' + targetYear);
     return { success: true, created: newIds.length, targetYear, ids: newIds };
