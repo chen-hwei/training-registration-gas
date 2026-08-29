@@ -150,7 +150,7 @@
       <div class="form-group">
         <label class="form-label">負責處室</label>
         <input id="rqm-fowner" type="text" class="form-control"
-               placeholder="例：研習組（留空自動帶入管理者處室）">
+               placeholder="例：研習組（留空則不顯示負責處室）">
       </div>
 
       <div class="form-group">
@@ -166,9 +166,9 @@
       </div>
 
       <div class="form-group">
-        <label class="form-label">相關公文或連結<span style="color:var(--gray-500);font-weight:400">（一行一條，只有 http/https 開頭的行會在教師端顯示為按鈕）</span></label>
+        <label class="form-label">相關公文或連結<span style="color:var(--gray-500);font-weight:400">（一行一條，只有 http/https 開頭的行會在教師端顯示為按鈕；格式「顯示文字|網址」可自訂按鈕文字，不寫顯示文字則用預設「推薦課程」）</span></label>
         <textarea id="rqm-flinks" class="form-control" rows="3"
-                  placeholder="URL 或文字說明，一行一條（選填）"></textarea>
+                  placeholder="例：&#10;交通安全課程|https://moocs.moe.edu.tw/...&#10;https://ap1.elearning.taipei/...（沒寫文字用預設按鈕文字）&#10;純文字說明（選填）"></textarea>
       </div>
 
       <div class="form-group" style="margin-bottom:0">

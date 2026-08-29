@@ -379,15 +379,23 @@
         _e(r.teacherNote).replace(/\n/g, '<br>') + '</div>'
       : '';
 
-    /* 備註（推薦連結，一行一條，只有 http/https 開頭的行才產生按鈕，其餘純文字呈現）*/
+    /* 備註（推薦連結，一行一條；「顯示文字|網址」自訂按鈕文字，沒寫文字用預設「推薦課程」；
+       網址不是 http/https 開頭則整行視為純文字呈現，不產生連結）*/
     var linkHtml = '';
     if (r.links) {
       linkHtml = String(r.links).split('\n').map(function(line) {
         line = line.trim();
         if (!line) return '';
-        if (/^https?:\/\//i.test(line)) {
-          return '<a href="' + _e(line) + '" target="_blank" rel="noopener"' +
-            ' class="btn btn-sm btn-outline" style="margin-top:6px;margin-right:6px">📎 推薦課程 ↗</a>';
+        var label = '推薦課程';
+        var url = line;
+        var pipeIdx = line.indexOf('|');
+        if (pipeIdx >= 0) {
+          label = line.slice(0, pipeIdx).trim() || label;
+          url = line.slice(pipeIdx + 1).trim();
+        }
+        if (/^https?:\/\//i.test(url)) {
+          return '<a href="' + _e(url) + '" target="_blank" rel="noopener"' +
+            ' class="btn btn-sm btn-outline" style="margin-top:6px;margin-right:6px">📎 ' + _e(label) + ' ↗</a>';
         }
         return '<div style="font-size:0.78rem;color:var(--gray-500);margin-top:4px">' + _e(line) + '</div>';
       }).join('');

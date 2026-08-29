@@ -117,15 +117,14 @@ function _normalizeSemesterSplit_(v) {
  * body 選填：startDate, requiredHours, hoursNote, deliveryType, semesterSplit,
  *            notes, links, isRecurring, academicYear, owner, targetAudience,
  *            matchKeywords, audienceRules, teacherNote
- * owner：body.owner 有填即採用，留空才 fallback 帶入管理者所屬處室
+ * owner：純由前端傳入，留空即空字串。Hub 的 department 欄位語意是「部別（高中部／國中部）」，
+ * 不是「行政處室」，兩者不可互相 fallback，故不自動帶入。
  */
 function addRequirement(adminId, body) {
   if (!body.name)    return _err('MISSING_NAME');
   if (!body.endDate) return _err('MISSING_END_DATE');
 
-  // 主責單位：前端有填優先採用，留空才自動帶入管理者所屬處室
-  const adminUser = SchoolPortalLib.getUser(adminId);
-  const owner = String(body.owner || '').trim() || ((adminUser && adminUser.department) ? adminUser.department : '');
+  const owner = String(body.owner || '').trim();
 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
