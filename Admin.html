@@ -150,19 +150,25 @@
       <div class="form-group">
         <label class="form-label">負責處室</label>
         <input id="rqm-fowner" type="text" class="form-control"
-               placeholder="例：研習組（留空自動帶入管理者處室）">
+               placeholder="例：研習組（留空則不顯示負責處室）">
       </div>
 
       <div class="form-group">
-        <label class="form-label">備註說明</label>
+        <label class="form-label">備註說明<span style="color:var(--gray-500);font-weight:400">（僅管理者可見）</span></label>
         <textarea id="rqm-fnotes" class="form-control" rows="2"
                   placeholder="選填"></textarea>
       </div>
 
       <div class="form-group">
-        <label class="form-label">相關公文或連結</label>
-        <input id="rqm-flinks" type="text" class="form-control"
-               placeholder="URL 或文字說明（選填）">
+        <label class="form-label">教師公告<span style="color:var(--gray-500);font-weight:400">（會顯示在教師端首頁）</span></label>
+        <textarea id="rqm-fteachernote" class="form-control" rows="2"
+                  placeholder="例：完成4小時後請至學務處表單回報：https://forms.gle/xxx（選填）"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">相關公文或連結<span style="color:var(--gray-500);font-weight:400">（一行一條，只有 http/https 開頭的行會在教師端顯示為按鈕；格式「顯示文字|網址」可自訂按鈕文字，不寫顯示文字則用預設「推薦課程」）</span></label>
+        <textarea id="rqm-flinks" class="form-control" rows="3"
+                  placeholder="例：&#10;交通安全課程|https://moocs.moe.edu.tw/...&#10;https://ap1.elearning.taipei/...（沒寫文字用預設按鈕文字）&#10;純文字說明（選填）"></textarea>
       </div>
 
       <div class="form-group" style="margin-bottom:0">
@@ -1514,6 +1520,7 @@
     document.getElementById('rqm-faudience').value   = obj ? (obj.targetAudience || '') : '';
     document.getElementById('rqm-fowner').value      = obj ? (obj.owner || '') : '';
     document.getElementById('rqm-fnotes').value      = obj ? (obj.notes || '') : '';
+    document.getElementById('rqm-fteachernote').value= obj ? (obj.teacherNote || '') : '';
     document.getElementById('rqm-flinks').value      = obj ? (obj.links || '') : '';
     document.getElementById('rqm-frecurring').checked= obj ? !!obj.isRecurring : true;
     document.getElementById('rqm-err').style.display = 'none';
@@ -1543,6 +1550,7 @@
   }
 
   function saveReq() {
+    rqmAddKeyword();  // 回收輸入框內尚未按 Enter／點新增的關鍵字，避免存檔時靜默丟失
     var name    = document.getElementById('rqm-fname').value.trim();
     var yearStr = document.getElementById('rqm-fyear').value;
     var errEl   = document.getElementById('rqm-err');
@@ -1571,6 +1579,7 @@
       targetAudience: document.getElementById('rqm-faudience').value.trim(),
       owner:          document.getElementById('rqm-fowner').value.trim(),
       notes:          document.getElementById('rqm-fnotes').value.trim(),
+      teacherNote:    document.getElementById('rqm-fteachernote').value.trim(),
       links:          document.getElementById('rqm-flinks').value.trim(),
       isRecurring:    document.getElementById('rqm-frecurring').checked,
       matchKeywords:  JSON.stringify(_rqmKeywords)
@@ -3052,7 +3061,7 @@
       return '<span style="display:inline-flex;align-items:center;gap:4px;'
            + 'background:var(--primary-light);color:var(--primary);'
            + 'border-radius:20px;padding:3px 10px;font-size:0.82rem;font-weight:600">'
-           + kw
+           + _e(kw)
            + '<span style="cursor:pointer;font-size:1rem;line-height:1" '
            + 'onclick="rqmRemoveKeyword(' + i + ')">×</span>'
            + '</span>';

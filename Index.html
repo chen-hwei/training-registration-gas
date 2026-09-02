@@ -320,7 +320,7 @@
     if (r.isCompleted) cssClass = 'status-done';
 
     /* 標籤 */
-    var badges = '<span class="req-badge badge-owner">' + _e(r.owner) + '</span> ';
+    var badges = r.owner ? ('<span class="req-badge badge-owner">' + _e(r.owner) + '</span> ') : '';
     if (r.deliveryType === 'INPERSON') {
       badges += '<span class="req-badge badge-inperson">實體課程</span> ';
     }
@@ -373,14 +373,32 @@
           : '');
     }
 
-    /* 備註（推薦連結）*/
+    /* 教師公告 */
+    var teacherNoteHtml = r.teacherNote
+      ? '<div class="req-manual-note" style="margin-top:8px">📣 ' +
+        _e(r.teacherNote).replace(/\n/g, '<br>') + '</div>'
+      : '';
+
+    /* 備註（推薦連結，一行一條；「顯示文字|網址」自訂按鈕文字，沒寫文字用預設「推薦課程」；
+       網址不是 http/https 開頭則整行視為純文字呈現，不產生連結）*/
     var linkHtml = '';
     if (r.links) {
-      var firstLink = r.links.split('\n')[0].trim();
-      if (firstLink) {
-        linkHtml = '<a href="' + _e(firstLink) + '" target="_blank" rel="noopener"' +
-          ' class="btn btn-sm btn-outline" style="margin-top:10px">📎 推薦課程 ↗</a> ';
-      }
+      linkHtml = String(r.links).split('\n').map(function(line) {
+        line = line.trim();
+        if (!line) return '';
+        var label = '推薦課程';
+        var url = line;
+        var pipeIdx = line.indexOf('|');
+        if (pipeIdx >= 0) {
+          label = line.slice(0, pipeIdx).trim() || label;
+          url = line.slice(pipeIdx + 1).trim();
+        }
+        if (/^https?:\/\//i.test(url)) {
+          return '<a href="' + _e(url) + '" target="_blank" rel="noopener"' +
+            ' class="btn btn-sm btn-outline" style="margin-top:6px;margin-right:6px">📎 ' + _e(label) + ' ↗</a>';
+        }
+        return '<div style="font-size:0.78rem;color:var(--gray-500);margin-top:4px">' + _e(line) + '</div>';
+      }).join('');
     }
 
     /* 登錄按鈕（已完成則改為「再次登錄」樣式）*/
@@ -394,6 +412,7 @@
       '<div class="req-title">' + _e(r.name) + '</div>' +
       '<div class="req-meta">' + badges + (deadline ? ' ' + deadline : '') + '</div>' +
       progressHtml +
+      teacherNoteHtml +
       '<div>' + linkHtml + actionBtn + '</div>' +
     '</div>';
   }
