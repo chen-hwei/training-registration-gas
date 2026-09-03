@@ -210,10 +210,30 @@ function _healthCheckPreExport_(year) {
 
   // ⑦ TRAINING_RECORD 審核狀態列舉值不合法
   var VALID_STATUS = ['PENDING', 'APPROVED', 'REJECTED'];
-  var statusBad = parseSheetData(_getRecordSheet())
+  var recordRows = parseSheetData(_getRecordSheet());
+  var statusBad = recordRows
     .filter(function(r) { return VALID_STATUS.indexOf(r.status) < 0; })
     .map(function(r) { return '[' + r.recordId + '] ' + r.userId + '：審核狀態「' + r.status + '」非合法值'; });
   groups.push(_hcGroup_('preExport_recordStatusInvalid', '登錄紀錄審核狀態不合法', statusBad));
+
+  // ⑧ TRAINING_RECORD 研習日期年份異常（不限狀態：PENDING 尚未審核也可能已寫入髒值，
+  //   APPROVED／REJECTED 若曾中招會讓 Review.gs 依年度匯出時漏收或誤收，故全掃）
+  //   只驗年份是否落在合理範圍，不驗「年/月/日」格式本身——trainingDate 若能被 Sheets
+  //   判讀為合法日期會存成 Date 型別，parseSheetData 讀回時一律轉成「破折號」字串
+  //   （見 Schema.gs parseSheetData，trainingDate 不在 timeKeys 清單內）；只有 Sheets 無法辨識
+  //   的離譜值（如 6 位數年份）才會維持寫入時的原始「斜線」字串。兩種寫法都合法，不可用格式判斷。
+  //   年份下限採 2000（系統有 seedHistoricalRequirements() 灌入的歷史學年度資料），
+  //   不綁 _currentAcademicYear()——那是學年度邏輯，與「日期合理性」是兩回事。
+  var TRAINING_DATE_MIN_YEAR = 2000, TRAINING_DATE_MAX_YEAR = 2100;
+  var trainingDateBad = recordRows
+    .map(function(r) {
+      var m = String(r.trainingDate || '').match(/^(\d+)[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      var year = m ? Number(m[1]) : NaN;
+      var bad = !m || isNaN(year) || year < TRAINING_DATE_MIN_YEAR || year > TRAINING_DATE_MAX_YEAR;
+      return bad ? '[' + r.recordId + '] ' + r.userId + '（' + r.status + '）：研習日期「' + r.trainingDate + '」年份異常' : null;
+    })
+    .filter(function(msg) { return msg !== null; });
+  groups.push(_hcGroup_('preExport_recordTrainingDateInvalid', '登錄紀錄研習日期年份異常', trainingDateBad));
 
   return groups;
 }

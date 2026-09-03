@@ -23,6 +23,11 @@ function getMyRecords(userId) {
 function submitRecord(userId, body) {
   if (!body.title)        return _err('MISSING_TITLE');
   if (!body.trainingDate) return _err('MISSING_TRAINING_DATE');
+  // 後端寬鬆驗證：只擋年份離譜的值（前端已擋格式，此處防繞過前端直呼 API）
+  const _tdMatch = String(body.trainingDate).match(/^(\d+)[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!_tdMatch || Number(_tdMatch[1]) < 2000 || Number(_tdMatch[1]) > 2100) {
+    return _err('INVALID_TRAINING_DATE');
+  }
   if (!body.reuseFileId && (!body.base64 || !body.mimeType || !body.fileName)) {
     return _err('MISSING_FILE_DATA');
   }

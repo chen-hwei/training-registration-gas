@@ -149,7 +149,7 @@
         </div>
         <div class="form-group" style="flex:2;min-width:0">
           <label class="form-label">研習日期 <span class="req">*</span></label>
-          <input id="field-date" type="date" class="form-control">
+          <input id="field-date" type="date" class="form-control" min="2000-01-01" max="2100-12-31">
         </div>
       </div>
 
@@ -636,7 +636,14 @@
     if (!organizer)                          { showToast('請填寫主辦單位', 'error');           return; }
 
     var dp = dateStr.split('-');
-    var trainingDate = parseInt(dp[0]) + '/' + parseInt(dp[1]) + '/' + parseInt(dp[2]);
+    var dpYear  = parseInt(dp[0], 10);
+    var dpMonth = parseInt(dp[1], 10);
+    var dpDay   = parseInt(dp[2], 10);
+    if (dp.length !== 3 || isNaN(dpYear) || isNaN(dpMonth) || isNaN(dpDay) ||
+        dpYear < 2000 || dpYear > 2100 || dpMonth < 1 || dpMonth > 12 || dpDay < 1 || dpDay > 31) {
+      showToast('日期格式異常，請重新選擇研習日期', 'error'); return;
+    }
+    var trainingDate = dpYear + '/' + dpMonth + '/' + dpDay;
 
     var reuseChecked = false;
     var reuseEl = document.getElementById('opt-reuse');
