@@ -23,6 +23,14 @@ function getMyRecords(userId) {
 function submitRecord(userId, body) {
   if (!body.title)        return _err('MISSING_TITLE');
   if (!body.trainingDate) return _err('MISSING_TRAINING_DATE');
+  // 後端寬鬆驗證：只擋年份離譜的值（前端已擋格式，此處防繞過前端直呼 API）
+  const _tdMatch = String(body.trainingDate).match(/^(\d+)[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!_tdMatch || Number(_tdMatch[1]) < 2000 || Number(_tdMatch[1]) > 2100) {
+    return _err('INVALID_TRAINING_DATE');
+  }
+  // 正規化為斜線格式：Drive.gs 的資料夾／檔名邏輯只認 split('/')，若放行破折號格式
+  // （如 '2026-08-27'）會被當成整串塞進年份欄位，產生孤兒資料夾——這正是本任務要消滅的問題
+  body.trainingDate = Number(_tdMatch[1]) + '/' + Number(_tdMatch[2]) + '/' + Number(_tdMatch[3]);
   if (!body.reuseFileId && (!body.base64 || !body.mimeType || !body.fileName)) {
     return _err('MISSING_FILE_DATA');
   }
