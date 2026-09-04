@@ -227,10 +227,12 @@ function _healthCheckPreExport_(year) {
   var TRAINING_DATE_MIN_YEAR = 2000, TRAINING_DATE_MAX_YEAR = 2100;
   var trainingDateBad = recordRows
     .map(function(r) {
-      var m = String(r.trainingDate || '').match(/^(\d+)[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+      var raw = String(r.trainingDate || '').trim();
+      if (!raw) return '[' + r.recordId + '] ' + r.userId + '（' + r.status + '）：研習日期空白';
+      var m = raw.match(/^(\d+)[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
       var year = m ? Number(m[1]) : NaN;
       var bad = !m || isNaN(year) || year < TRAINING_DATE_MIN_YEAR || year > TRAINING_DATE_MAX_YEAR;
-      return bad ? '[' + r.recordId + '] ' + r.userId + '（' + r.status + '）：研習日期「' + r.trainingDate + '」年份異常' : null;
+      return bad ? '[' + r.recordId + '] ' + r.userId + '（' + r.status + '）：研習日期「' + raw + '」年份異常' : null;
     })
     .filter(function(msg) { return msg !== null; });
   groups.push(_hcGroup_('preExport_recordTrainingDateInvalid', '登錄紀錄研習日期年份異常', trainingDateBad));
