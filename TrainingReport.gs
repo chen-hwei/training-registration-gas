@@ -1244,6 +1244,60 @@ function overwriteSnapshotFromHub(academicYear) {
   return res;
 }
 
+/**
+ * 唯讀盤點（task_c5f2e08d R-6／R-7／S-3）：施工前先跑，了解「Sync.gs 現行邏輯會寫入
+ * Hub.TrainingStats，但新規則（在職/轉調 ＋ VALID_DEPT ＋ _isTeacherJob_()）會排除」的
+ * 人有多少、是誰，供 Q-1／Q-2 裁示依據。純讀取 Hub.UserStatusCache，不寫入任何資料。
+ * 於 GAS 編輯器手動執行，結果看「執行記錄」（Logger 輸出）。
+ */
+function surveyStatsExclusions() {
+  var hub    = SpreadsheetApp.openById(getHubSpreadsheetId_());
+  var data   = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
+  var hdr    = data[0];
+  var uidCol    = hdr.indexOf('userId');
+  var nameCol   = hdr.indexOf('name');
+  var deptCol   = hdr.indexOf('department');
+  var jobCol    = hdr.indexOf('jobPrimary');
+  var statusCol = hdr.indexOf('status');
+  var ACTIVE    = ['在職', '轉調'];
+
+  var comboCounts  = {};   // "jobPrimary ｜ status ｜ department" → 人數
+  var excludedList = [];   // 現行會寫入 TrainingStats、新規則會排除者
+
+  data.slice(1).forEach(function(row) {
+    var uid = row[uidCol];
+    if (!uid) return;
+
+    var name   = String(row[nameCol] || '').trim();
+    var dept   = String(row[deptCol] || '').trim();
+    var job    = String(row[jobCol]  || '').trim();
+    var status = statusCol >= 0 ? String(row[statusCol] || '').trim() : '';
+
+    var comboKey = (job || '(空白)') + ' ｜ ' + (status || '(空白)') + ' ｜ ' + (dept || '(空白)');
+    comboCounts[comboKey] = (comboCounts[comboKey] || 0) + 1;
+
+    // 現行 Sync.gs：uid 非空即寫入，無其他過濾條件
+    // 新規則：在職/轉調 ＋ VALID_DEPT ＋ _isTeacherJob_()；statusCol 找不到時保守視為不通過
+    var newRuleIncludes = statusCol >= 0 && ACTIVE.indexOf(status) >= 0 &&
+      VALID_DEPT.indexOf(dept) >= 0 && _isTeacherJob_(job);
+
+    if (!newRuleIncludes) {
+      excludedList.push(uid + ' / ' + name + ' / jobPrimary=' + (job || '(空白)') +
+        ' / status=' + (status || '(空白)') + ' / department=' + (dept || '(空白)'));
+    }
+  });
+
+  Logger.log('=== 各 jobPrimary ｜ status ｜ department 組合人數（共 ' + Object.keys(comboCounts).length + ' 種組合）===');
+  Object.keys(comboCounts).sort().forEach(function(key) {
+    Logger.log(comboCounts[key] + '　' + key);
+  });
+
+  Logger.log('=== 現行寫入 Hub.TrainingStats、新規則會排除的名單（共 ' + excludedList.length + ' 人）===');
+  excludedList.forEach(function(line) { Logger.log(line); });
+
+  return { comboCount: Object.keys(comboCounts).length, excludedCount: excludedList.length };
+}
+
 // ==================== 身分分類規則管理 ====================
 
 var IDENTITY_RULES_KEY_ = 'identityClassificationRules';
