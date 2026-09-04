@@ -140,6 +140,8 @@ function handleRequest(payload) {
       case 'get_identity_rules':              return getIdentityRules();
       case 'save_identity_rules':             return saveIdentityRules(body || {});
       case 'report_req_stats':                return calcRequirementStats(body || {});
+      case 'get_stats_settings':              return getStatsSettings();
+      case 'save_stats_settings':             return saveStatsSettings(body || {});
 
       default: return _err('UNKNOWN_ACTION');
     }

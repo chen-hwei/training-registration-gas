@@ -93,7 +93,7 @@ function syncTrainingStats() {
     return total;
   }
 
-  // ── Step 5：在職教師名單（userId／姓名／部別／身分分類），迴圈只做記憶體運算 ──
+  // ── Step 5：應受訓人員名單（userId／姓名／部別／身分分類），迴圈只做記憶體運算 ──
   const hub       = SpreadsheetApp.openById(getHubSpreadsheetId_());
   const cacheData = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
   const ch        = cacheData[0];
@@ -103,6 +103,11 @@ function syncTrainingStats() {
   const jpCol     = ch.indexOf('jobPrimary');
   const ttCol     = ch.indexOf('title');
   const jtCol     = ch.indexOf('jobTask');
+  const statusCol = ch.indexOf('status');
+  if (statusCol === -1) throw new Error('Sync.gs：Hub.UserStatusCache 找不到 status 欄，無法執行在職狀態過濾。');
+
+  const SYNC_ACTIVE = ['在職', '轉調'];
+  const includePartTime = _loadStatsIncludePartTime_();  // 迴圈外讀一次（task_c5f2e08d R-5.1）
 
   // 部別：僅保留「高中部／國中部」，其餘（行政人員等）一律顯示空白
   function toDivision_(dept) {
@@ -115,6 +120,12 @@ function syncTrainingStats() {
   cacheData.slice(1).forEach(row => {
     const uid = row[uidCol];
     if (!uid) return;
+    // 層 1：在職狀態（task_c5f2e08d R-10）——值空白視為不通過，一律排除
+    const status = String(row[statusCol] || '').trim();
+    if (!SYNC_ACTIVE.includes(status)) return;
+    // 應受訓人員名單：教師或行政人員（不套 VALID_DEPT，行政人員部別本就空白）
+    const jobPrimary = jpCol >= 0 ? String(row[jpCol] || '').trim() : '';
+    if (!_isTrainingTracked_(jobPrimary, includePartTime)) return;
     const name = String(row[nameCol] || '').trim();
 
     // 身分分類（供 audienceRules 分眾覆寫應達時數，口徑與 getRequirements 一致）

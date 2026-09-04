@@ -155,13 +155,14 @@ function _healthCheckPreExport_(year) {
     var nameCol = sHdr.indexOf('teacherName');
     var deptCol = sHdr.indexOf('department');
     var jobCol  = sHdr.indexOf('jobPrimary');
+    var includePartTime = _loadStatsIncludePartTime_();  // 迴圈外讀一次，讀不到用預設 false、不回寫
     snapData.slice(1).forEach(function(r) {
       if (Number(r[yearCol]) !== year) return;
       var name = String(r[nameCol] || '').trim();
       if (!name) return;
       var dept = String(r[deptCol] || '').trim();
       var job  = String(r[jobCol]  || '').trim();
-      if (!(VALID_DEPT.indexOf(dept) >= 0 && _isTeacherJob_(job))) {
+      if (!_isCountedInStats_(dept, job, includePartTime)) {
         excluded.push(name + '：部別「' + (dept || '空白') + '」／職務「' + (job || '空白') + '」未列入統計範圍');
       }
     });

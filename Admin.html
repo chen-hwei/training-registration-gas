@@ -668,6 +668,24 @@
         <div id="rpt-identity-summary" style="font-size:0.82rem;color:#888">（點「檢視規則」載入）</div>
       </div>
 
+      <!-- S3b2：兼課教師計入統計設定 -->
+      <div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-size:0.95rem;font-weight:700;color:var(--primary)">🕐 兼課教師計入統計設定</div>
+          <button class="btn btn-sm btn-ghost" onclick="rptLoadStatsSettings()">重新整理</button>
+        </div>
+        <div style="font-size:0.85rem;color:#555;margin-bottom:10px">
+          決定兼課教師是否計入全校研習統計母數（含達成率分母、Hub 同步、年度任務待完成清單）。
+          <strong>切換後會同時改變催辦信的收件範圍。</strong>實習老師一律排除，不受此開關影響。
+        </div>
+        <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px;min-height:44px">
+          <input type="checkbox" id="stats-parttime-toggle" style="width:22px;height:22px;cursor:pointer">
+          <span>計入兼課教師</span>
+        </label>
+        <div id="stats-parttime-summary" style="font-size:0.82rem;color:#888;margin-bottom:10px">（點「重新整理」載入）</div>
+        <button class="btn btn-sm btn-primary" onclick="rptSaveStatsSettings()">儲存設定</button>
+      </div>
+
       <!-- S3c：年度任務達成率 -->
       <div class="card" style="margin-bottom:16px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -3124,6 +3142,8 @@
   window.rptShowIdentityRules   = rptShowIdentityRules;
   window.closeIdentityModal     = closeIdentityModal;
   window.rptCalcReqStats        = rptCalcReqStats;
+  window.rptLoadStatsSettings   = rptLoadStatsSettings;
+  window.rptSaveStatsSettings   = rptSaveStatsSettings;
 
   /* ── S3b：身分分類規則 Modal ── */
   function rptShowIdentityRules() {
@@ -3176,6 +3196,37 @@
 
   function closeIdentityModal() {
     document.getElementById('identity-modal').style.display = 'none';
+  }
+
+  /* ── S3b2：兼課教師計入統計設定 ── */
+  function rptLoadStatsSettings() {
+    showSpinner();
+    api('get_stats_settings', {}).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '載入失敗', 'error'); return; }
+      document.getElementById('stats-parttime-toggle').checked = !!res.data.includePartTime;
+      document.getElementById('stats-parttime-summary').innerHTML =
+        '不含兼課 <strong>' + res.data.countExcluding + '</strong> 人／含兼課 <strong>' +
+        res.data.countIncluding + '</strong> 人' +
+        '<br>另排除實習老師 ' + res.data.permanentExcluded + ' 人（無開關，永久排除）';
+    }).catch(function(err) {
+      hideSpinner();
+      if (err && err.message !== 'TOKEN_EXPIRED') showToast('載入失敗：' + (err.message || '請稍後再試'), 'error');
+    });
+  }
+
+  function rptSaveStatsSettings() {
+    var checked = document.getElementById('stats-parttime-toggle').checked;
+    showSpinner();
+    api('save_stats_settings', { includePartTime: checked }).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '儲存失敗', 'error'); return; }
+      showToast('✅ 設定已儲存', 'success');
+      rptLoadStatsSettings();
+    }).catch(function(err) {
+      hideSpinner();
+      if (err && err.message !== 'TOKEN_EXPIRED') showToast('儲存失敗：' + (err.message || '請稍後再試'), 'error');
+    });
   }
 
   /* ── S3c：年度任務達成率 ── */

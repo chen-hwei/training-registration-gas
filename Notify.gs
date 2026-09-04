@@ -328,7 +328,11 @@ function _escapeHtml_(s) {
 
 // ── 輔助函式 ──
 
-/** 取得所有在職教師清單（從 Hub.UserStatusCache） */
+/**
+ * 取得應收催辦通知的人員清單（從 Hub.UserStatusCache）
+ * task_c5f2e08d Q-6：套用 _isTrainingTracked_()，兼課教師與實習老師不再收催辦信，
+ * 行政人員維持照收（與 Sync.gs／calcRequirementStats 口徑一致）
+ */
 function _getActiveTeachers() {
   const hub   = SpreadsheetApp.openById(getHubSpreadsheetId_());
   const data  = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
@@ -338,9 +342,15 @@ function _getActiveTeachers() {
   const emailCol  = hdr.indexOf('schoolEmail');
   const statusCol = hdr.indexOf('status');
   const deptCol   = hdr.indexOf('department');
+  const jobCol    = hdr.indexOf('jobPrimary');
   const ACTIVE    = ['在職', '轉調'];
+  const includePartTime = _loadStatsIncludePartTime_();
   return data.slice(1)
-    .filter(row => ACTIVE.includes(row[statusCol]) && row[uidCol])
+    .filter(row => {
+      if (!row[uidCol] || !ACTIVE.includes(row[statusCol])) return false;
+      const job = jobCol >= 0 ? String(row[jobCol] || '').trim() : '';
+      return _isTrainingTracked_(job, includePartTime);
+    })
     .map(row => ({
       userId:     row[uidCol],
       name:       row[nameCol]   || '',
