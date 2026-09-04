@@ -66,7 +66,7 @@ function _buildNotificationList() {
         }
       } else if (daysLeft <= 0) {
         if (!_hasNotifiedToday('N2', teacher.userId, course.catalogId)) {
-          const adminEmails = _getAdminEmailsByDept(teacher.department);
+          const adminEmails = _getTrainingAdminEmails_();
           list.push({ type: 'N2', teacher, course, daysLeft, adminEmails });
         }
       }
@@ -85,7 +85,7 @@ function _buildNotificationList() {
     .forEach(record => {
       const teacher = teachers.find(t => t.userId === record.userId);
       if (!teacher) return;
-      const adminEmails = _getAdminEmailsByDept(teacher.department);
+      const adminEmails = _getTrainingAdminEmails_();
       if (!adminEmails.length) return;
       list.push({ type: 'N3', teacher, record, adminEmails });
     });
@@ -349,12 +349,18 @@ function _getActiveTeachers() {
     }));
 }
 
-/** 取得指定處室的 training_admin 管理者 email 清單 */
-function _getAdminEmailsByDept(department) {
+/**
+ * 取得全校 training_admin 管理者 email 清單
+ * 不依部別（department）篩選——department 欄位語意是「部別（高中部/國中部）」，
+ * 本校為完全中學，研習管理者本就橫跨國中部/高中部，依部別分流對本校不適用，
+ * 且全校 training_admin 名單本就可能集中在單一部別，依部別篩會讓另一部別的
+ * 通知被靜默丟棄（task_4d81ba62）。未來處室分權（task_6e2d40af）會以
+ * training_scope 取代此處的全寄邏輯。
+ */
+function _getTrainingAdminEmails_() {
   const hub   = SpreadsheetApp.openById(getHubSpreadsheetId_());
   const data  = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
   const hdr   = data[0];
-  const deptCol   = hdr.indexOf('department');
   const accessCol = hdr.indexOf('systemAccess');
   const emailCol  = hdr.indexOf('schoolEmail');
   const statusCol = hdr.indexOf('status');
@@ -362,7 +368,6 @@ function _getAdminEmailsByDept(department) {
   return data.slice(1)
     .filter(row => {
       if (!ACTIVE.includes(row[statusCol])) return false;
-      if (row[deptCol] !== department)       return false;
       try { return JSON.parse(row[accessCol] || '{}').training_admin === true; }
       catch { return false; }
     })

@@ -22,7 +22,7 @@ const HUB_USC_HEADER_MAP = {
   // 中文標題（未來標準化後的規範格式）
   '教師ID':       'userId',
   '姓名':         'name',
-  '所屬處室':     'department',
+  '部別':         'department',
   'Email':        'email',
   '在職狀態':     'status',
   '狀態異動時間': 'statusChangedAt',
