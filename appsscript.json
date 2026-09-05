@@ -28,6 +28,6 @@
   ],
   "webapp": {
     "executeAs": "USER_DEPLOYING",
-    "access": "DOMAIN"
+    "access": "ANYONE_ANONYMOUS"
   }
 }
