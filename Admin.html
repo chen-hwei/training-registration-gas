@@ -271,6 +271,11 @@
                   placeholder="選填，顯示於課程卡片說明文字"></textarea>
       </div>
 
+      <div class="form-group">
+        <label class="form-label">所屬任務（選填，教師端會分組顯示為「推薦課程」）</label>
+        <select id="cm-ftask" class="form-control"></select>
+      </div>
+
       <div class="form-group" style="margin-bottom:0">
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;min-height:44px">
           <input type="checkbox" id="cm-frequired"
@@ -782,7 +787,9 @@
       document.getElementById('panel-' + t).style.display = (t === tab) ? '' : 'none';
     });
     if (tab === 'catalog' && _catalogRecords.length === 0) _loadCatalog();
-    if (tab === 'req'     && _reqRecords.length === 0)     _loadRequirements();
+    // 用獨立旗標而非 _reqRecords.length 判斷是否需要載入：課程分頁可能已經把任務清單一併撈回來，
+    // 但「年度任務」分頁自己的清單渲染（_buildReqYearFilter/_renderReqList）還沒跑過一次
+    if (tab === 'req'     && !_reqTabRendered)             _loadRequirements();
     if (tab === 'report') _rptInit();
   }
 
@@ -1085,10 +1092,15 @@
   ──────────────────────────────── */
   function _loadCatalog() {
     showSpinner();
-    api('v1/getCatalog', {})
-      .then(function(res) {
+    Promise.all([
+      api('v1/getCatalog', {}),
+      // 任務清單載入失敗不擋課程清單渲染；失敗時 _reqRecords 維持空陣列，
+      // saveCatalog 會因此略過 requirementId 這個 key（見 R-3-2）
+      _ensureRequirementsLoaded().catch(function() {})
+    ])
+      .then(function(results) {
         hideSpinner();
-        _catalogRecords = (res && res.data) ? res.data : [];
+        _catalogRecords = (results[0] && results[0].data) ? results[0].data : [];
         _renderCatalogAdmin();
       })
       .catch(function(err) {
@@ -1112,6 +1124,14 @@
         ? '<span class="badge-required" style="margin-right:6px">★ 必修</span>' : '';
       var deptBadge = c.department
         ? '<span class="badge-dept" style="margin-right:6px">' + _e(c.department) + '</span>' : '';
+      var taskBadge = '';
+      if (c.requirementId) {
+        var taskName = c.requirementId;
+        for (var ri = 0; ri < _reqRecords.length; ri++) {
+          if (_reqRecords[ri].requirementId === c.requirementId) { taskName = _reqRecords[ri].name; break; }
+        }
+        taskBadge = '<span class="badge-task" style="margin-right:6px">📌 ' + _e(taskName) + '</span>';
+      }
       var dateRange = '';
       if (c.startDate && c.endDate) dateRange = '📅 ' + _e(c.startDate) + ' ～ ' + _e(c.endDate);
 
@@ -1120,7 +1140,7 @@
           '<div style="font-size:0.92rem;font-weight:700;color:var(--primary);margin-bottom:4px">' +
             _e(c.title) +
           '</div>' +
-          '<div style="margin-bottom:4px">' + reqBadge + deptBadge + '</div>' +
+          '<div style="margin-bottom:4px">' + reqBadge + deptBadge + taskBadge + '</div>' +
           '<div style="font-size:0.78rem;color:var(--gray-700);line-height:1.9">' +
             '⏱ ' + (c.hours || '─') + ' 小時' +
             (c.organizer ? ' &nbsp; 🏛 ' + _e(c.organizer) : '') +
@@ -1137,6 +1157,39 @@
         '</div>' +
         '</div>';
     }).join('');
+  }
+
+  /* 建立「所屬任務」下拉選項：依學年度分組、排除已封存任務；
+     若目前選定值不在清單中（已封存、跨學年，或任務清單尚未成功載入），
+     額外補一個選項，避免 select.value 被 DOM 靜默重置為空字串（見 R-3） */
+  function _buildTaskOptions(selectedId) {
+    var opts = '<option value="">— 不掛任務 —</option>';
+    var years = [];
+    _reqRecords.forEach(function(r) {
+      if (r.status === 'ACTIVE' && years.indexOf(r.academicYear) === -1) years.push(r.academicYear);
+    });
+    years.sort(function(a, b) { return b - a; });
+
+    var matched = false;
+    years.forEach(function(y) {
+      opts += '<optgroup label="' + _e(y) + ' 學年度">';
+      _reqRecords.forEach(function(r) {
+        if (r.status !== 'ACTIVE' || r.academicYear !== y) return;
+        if (r.requirementId === selectedId) matched = true;
+        opts += '<option value="' + r.requirementId + '">' + _e(r.name) + '</option>';
+      });
+      opts += '</optgroup>';
+    });
+
+    if (selectedId && !matched) {
+      var found = null;
+      for (var i = 0; i < _reqRecords.length; i++) {
+        if (_reqRecords[i].requirementId === selectedId) { found = _reqRecords[i]; break; }
+      }
+      var label = found ? (found.name + '（已封存或非本學年）') : (selectedId + '（任務清單未完整載入）');
+      opts += '<option value="' + selectedId + '">' + _e(label) + '</option>';
+    }
+    return opts;
   }
 
   /* ── 新增 / 編輯 Modal ── */
@@ -1166,6 +1219,9 @@
     document.getElementById('cm-flink').value       = catalogObj ? (catalogObj.link     || '') : '';
     document.getElementById('cm-fdesc').value       = catalogObj ? (catalogObj.description|| '') : '';
     document.getElementById('cm-frequired').checked = catalogObj ? !!catalogObj.isRequired : false;
+    var curReqId = catalogObj ? (catalogObj.requirementId || '') : '';
+    document.getElementById('cm-ftask').innerHTML   = _buildTaskOptions(curReqId);
+    document.getElementById('cm-ftask').value       = curReqId;
     document.getElementById('cm-err').style.display = 'none';
 
     // 日期：YYYY/M/D → YYYY-MM-DD
@@ -1223,6 +1279,13 @@
       startDate:      toGasDate(document.getElementById('cm-fstart').value),
       endDate:        toGasDate(document.getElementById('cm-fend').value)
     };
+
+    // R-3-2：任務清單根本沒能成功載入時（_reqRecords 空），下拉只剩「不掛任務」與
+    // 補救選項，不代表管理者真的要清空既有關聯——整個不送這個 key，
+    // 讓 Catalog.gs 的 undefined 早退保留原值
+    if (_reqRecords.length) {
+      body.requirementId = document.getElementById('cm-ftask').value;
+    }
 
     var action = _editCatalogId
       ? 'v1/admin/editCatalog'
@@ -1418,17 +1481,28 @@
   /* ────────────────────────────────
      Tab 4：年度任務
   ──────────────────────────────── */
-  var _reqRecords   = [];  // 所有任務（getAllRequirements 回傳）
-  var _reqFiltered  = [];  // 目前篩選年度後的任務
-  var _editReqId    = null;
+  var _reqRecords     = [];    // 所有任務（getAllRequirements 回傳）
+  var _reqFiltered    = [];    // 目前篩選年度後的任務
+  var _editReqId      = null;
   var _reqCurrentYear = null;
+  var _reqTabRendered = false; // 「年度任務」分頁是否已渲染過一次（與 _reqRecords 是否已有資料分開判斷，
+                                // 因為研習目錄分頁可能已經先把 _reqRecords 撈回來了）
+
+  /* 確保 _reqRecords 有資料：已有資料就直接回傳已完成的 Promise，避免研習目錄／
+     年度任務兩個分頁重複打 API */
+  function _ensureRequirementsLoaded() {
+    if (_reqRecords.length) return Promise.resolve();
+    return api('v1/admin/getAllRequirements', {}).then(function(res) {
+      _reqRecords = (res && res.data) ? res.data : [];
+    });
+  }
 
   function _loadRequirements() {
     showSpinner();
-    api('v1/admin/getAllRequirements', {})
-      .then(function(res) {
+    _reqTabRendered = true;
+    _ensureRequirementsLoaded()
+      .then(function() {
         hideSpinner();
-        _reqRecords = (res && res.data) ? res.data : [];
         _buildReqYearFilter();
         _renderReqList();
       })
