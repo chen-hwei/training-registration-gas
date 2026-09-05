@@ -194,10 +194,19 @@ function snapshotTeacherRoster(body) {
 
       if (rosterRows.length > 0) {
         sourceTag = 'csv';
+        // CSV 名冊無 status 欄，母數判定只能套 VALID_DEPT ＋ _isTeacherJob_()（task_c5f2e08d Q-2）；
+        // 是否已離職這件事在 CSV 路徑無從得知，屬已知且刻意保留的結構性缺口
+        // includePartTime 固定傳 true：快照建立時一律保留兼課教師的列，開關判定完全留給
+        // 讀取端三條路徑（calcStats／exportDoubleColumnCSV／HealthCheck），開關才能對
+        // CSV 來源快照可逆（R-13）——否則關閉時建立的快照裡沒有兼課列，事後開啟開關
+        // 也讀不到，母數不會跟著變
         rosterRows.forEach(function(row) {
           var name = String(row.teacherName || '').trim();
           if (!name) return;
-          existMap[name] = [academicYear, name, String(row.department || '').trim(), String(row.jobPrimary || '').trim()];
+          var dept = String(row.department  || '').trim();
+          var job  = String(row.jobPrimary  || '').trim();
+          if (!_isCountedInStats_(dept, job, true)) return;
+          existMap[name] = [academicYear, name, dept, job];
         });
       } else {
         sourceTag = 'hub';
@@ -233,13 +242,18 @@ function snapshotTeacherRoster(body) {
 
     if (rosterRows.length > 0) {
       sourceTag = 'csv';
+      // CSV 名冊無 status 欄，母數判定只能套 VALID_DEPT ＋ _isTeacherJob_()（task_c5f2e08d Q-2）
+      // includePartTime 固定傳 true，理由同追加模式分支（R-13）
       rosterRows.forEach(function(row) {
         if (!row.teacherName) return;
+        var dept = String(row.department || '').trim();
+        var job  = String(row.jobPrimary || '').trim();
+        if (!_isCountedInStats_(dept, job, true)) return;
         newRows.push([
           academicYear,
           String(row.teacherName || '').trim(),
-          String(row.department  || '').trim(),
-          String(row.jobPrimary  || '').trim()
+          dept,
+          job
         ]);
       });
     } else {
@@ -337,19 +351,8 @@ function snapshotRosterBatch(body) {
   }
 }
 
-/**
- * 判斷 jobPrimary 是否屬於應計入統計的教師職務
- * 採關鍵字包含比對，相容「正式」「正式教師」等各種格式
- * 排除：兼課、校長、主任、組長、教官等純行政或兼課身分
- */
-function _isTeacherJob_(job) {
-  if (!job) return true;  // 空白＝尚未同步，不排除
-  var INCLUDE_KW = ['正式', '代理', '代課'];
-  for (var i = 0; i < INCLUDE_KW.length; i++) {
-    if (job.indexOf(INCLUDE_KW[i]) >= 0) return true;
-  }
-  return false;
-}
+// _isTeacherJob_() 已搬到 Schema.gs（task_c5f2e08d S-1），與 VALID_DEPT／
+// _isCountedInStats_／_isTrainingTracked_ 放在一起，GAS 全域作用域跨檔可直接呼叫
 
 /**
  * 從日期字串推算台灣學年度（民國年）
@@ -834,14 +837,14 @@ function calcStats(academicYear, mode) {
     var sJobCol   = sHdr.indexOf('jobPrimary');
 
     var teacherMap = {};   // { name → { department, jobPrimary } }
-    // jobPrimary 過濾：使用 _isTeacherJob_() 關鍵字比對，相容完整職稱格式
+    // 母數判定收斂至 _isCountedInStats_()（Schema.gs，task_c5f2e08d）
+    var includePartTime = _loadStatsIncludePartTime_();  // 迴圈外讀一次，禁止逐筆讀 PropertiesService
 
     snapData.slice(1).forEach(function(r) {
       if (Number(r[sYearCol]) !== academicYear) return;
       var dept = String(r[sDeptCol] || '').trim();
       var job  = String(r[sJobCol]  || '').trim();
-      if (!VALID_DEPT.includes(dept)) return;
-      if (!_isTeacherJob_(job)) return;  // 兼課、行政等排除
+      if (!_isCountedInStats_(dept, job, includePartTime)) return;
       teacherMap[String(r[sNameCol]).trim()] = { department: dept, jobPrimary: job };
     });
 
@@ -938,14 +941,14 @@ function exportDoubleColumnCSV(academicYear) {
     var sDeptCol  = sHdr.indexOf('department');
     var sJobCol   = sHdr.indexOf('jobPrimary');
 
-    // jobPrimary 過濾：使用 _isTeacherJob_() 關鍵字比對
+    // 母數判定收斂至 _isCountedInStats_()（Schema.gs，task_c5f2e08d）
+    var includePartTime = _loadStatsIncludePartTime_();  // 迴圈外讀一次
     var teachers   = [];
     snapData.slice(1).forEach(function(r) {
       if (Number(r[sYearCol]) !== academicYear) return;
       var dept = String(r[sDeptCol] || '').trim();
       var job  = String(r[sJobCol]  || '').trim();
-      if (!VALID_DEPT.includes(dept)) return;
-      if (!_isTeacherJob_(job)) return;  // 兼課、行政等排除
+      if (!_isCountedInStats_(dept, job, includePartTime)) return;
       teachers.push({ name: String(r[sNameCol]).trim(), department: dept, jobPrimary: job || dept });
     });
 
@@ -1244,6 +1247,75 @@ function overwriteSnapshotFromHub(academicYear) {
   return res;
 }
 
+/**
+ * 統計母數稽核（task_c5f2e08d R-6／R-7／S-3／S-5／S-7）：非一次性工具，保留為長期哨兵，
+ * 施工前後皆可執行，確認 Sync.gs／calcRequirementStats 現行邏輯（在職/轉調 ＋
+ * _isTrainingTracked_()）會排除哪些人，以及 jobPrimary 空白人數（S-5：_isTeacherJob_()
+ * 對空白值一律放行，此欄位是長期監控該風險是否真的發生的哨兵，而非資料巧合的假設）。
+ * 純讀取 Hub.UserStatusCache，不寫入任何資料。於 GAS 編輯器手動執行，看「執行記錄」。
+ */
+function surveyStatsExclusions() {
+  var hub    = SpreadsheetApp.openById(getHubSpreadsheetId_());
+  var data   = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
+  var hdr    = data[0];
+  var uidCol    = hdr.indexOf('userId');
+  var nameCol   = hdr.indexOf('name');
+  var deptCol   = hdr.indexOf('department');
+  var jobCol    = hdr.indexOf('jobPrimary');
+  var statusCol = hdr.indexOf('status');
+  var ACTIVE    = ['在職', '轉調'];
+  var includePartTime = _loadStatsIncludePartTime_();
+
+  var comboCounts    = {};   // "jobPrimary ｜ status ｜ department" → 人數
+  var excludedList   = [];   // 在職但 _isTrainingTracked_ 判定排除者（現行 Sync.gs 邏輯）
+  var blankJobActive = [];   // S-5 哨兵：在職但 jobPrimary 空白者（_isTeacherJob_ 對空白一律放行）
+
+  data.slice(1).forEach(function(row) {
+    var uid = row[uidCol];
+    if (!uid) return;
+
+    var name   = String(row[nameCol] || '').trim();
+    var dept   = String(row[deptCol] || '').trim();
+    var job    = String(row[jobCol]  || '').trim();
+    var status = statusCol >= 0 ? String(row[statusCol] || '').trim() : '';
+    var isActive = ACTIVE.indexOf(status) >= 0;
+
+    var comboKey = (job || '(空白)') + ' ｜ ' + (status || '(空白)') + ' ｜ ' + (dept || '(空白)');
+    comboCounts[comboKey] = (comboCounts[comboKey] || 0) + 1;
+
+    if (isActive && !job) {
+      blankJobActive.push(uid + ' / ' + name + ' / department=' + (dept || '(空白)'));
+    }
+
+    // 現行 Sync.gs 邏輯：在職/轉調 ＋ _isTrainingTracked_()（教師或行政人員，不含兼課/實習）
+    var newRuleIncludes = isActive && _isTrainingTracked_(job, includePartTime);
+
+    if (!newRuleIncludes) {
+      excludedList.push(uid + ' / ' + name + ' / jobPrimary=' + (job || '(空白)') +
+        ' / status=' + (status || '(空白)') + ' / department=' + (dept || '(空白)'));
+    }
+  });
+
+  Logger.log('=== 各 jobPrimary ｜ status ｜ department 組合人數（共 ' + Object.keys(comboCounts).length + ' 種組合）===');
+  Object.keys(comboCounts).sort().forEach(function(key) {
+    Logger.log(comboCounts[key] + '　' + key);
+  });
+
+  Logger.log('=== 現行邏輯（在職/轉調 ＋ _isTrainingTracked_，includePartTime=' + includePartTime +
+    '）排除的名單（共 ' + excludedList.length + ' 人）===');
+  excludedList.forEach(function(line) { Logger.log(line); });
+
+  Logger.log('=== S-5 哨兵：在職但 jobPrimary 空白者（共 ' + blankJobActive.length + ' 人，' +
+    '_isTeacherJob_() 對空白值一律視為教師放行，此數字非零時須人工確認）===');
+  blankJobActive.forEach(function(line) { Logger.log(line); });
+
+  return {
+    comboCount: Object.keys(comboCounts).length,
+    excludedCount: excludedList.length,
+    blankJobActiveCount: blankJobActive.length
+  };
+}
+
 // ==================== 身分分類規則管理 ====================
 
 var IDENTITY_RULES_KEY_ = 'identityClassificationRules';
@@ -1381,6 +1453,61 @@ function saveIdentityRules(body) {
   }
 }
 
+// ==================== 統計母數：兼課教師計入設定（task_c5f2e08d Q-5） ====================
+
+/**
+ * Level 2 API：取得兼課教師計入統計設定，並在同一次讀取 Hub.UserStatusCache 時
+ * 一併算出「不含兼課」「含兼課」兩個母數供後台對照顯示（同一次迭代算出，不重跑整個統計）
+ */
+function getStatsSettings() {
+  try {
+    var includePartTime = _loadStatsIncludePartTime_();
+    var hub    = SpreadsheetApp.openById(getHubSpreadsheetId_());
+    var data   = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
+    var hdr    = data[0];
+    var uidCol    = hdr.indexOf('userId');
+    var jobCol    = hdr.indexOf('jobPrimary');
+    var statusCol = hdr.indexOf('status');
+    if (statusCol === -1) return _err('Hub.UserStatusCache 找不到 status 欄，無法計算統計母數。');
+    var ACTIVE    = ['在職', '轉調'];
+
+    var countExcluding = 0;  // 開關關閉時的應受訓人數
+    var countIncluding = 0;  // 開關開啟時的應受訓人數
+    var permanentExcluded = 0;  // 開關不影響、永久排除者（實習老師等）
+
+    data.slice(1).forEach(function(row) {
+      if (!row[uidCol]) return;
+      var status = statusCol >= 0 ? String(row[statusCol] || '').trim() : '';
+      if (ACTIVE.indexOf(status) === -1) return;
+      var job = jobCol >= 0 ? String(row[jobCol] || '').trim() : '';
+      if (_isTrainingTracked_(job, false)) countExcluding++;
+      if (_isTrainingTracked_(job, true))  countIncluding++;
+      if (!_isTrainingTracked_(job, true)) permanentExcluded++;
+    });
+
+    return _ok({
+      includePartTime: includePartTime,
+      countExcluding: countExcluding,
+      countIncluding: countIncluding,
+      permanentExcluded: permanentExcluded
+    });
+  } catch (e) {
+    return _err('getStatsSettings 失敗：' + e.message);
+  }
+}
+
+/** Level 2 API：儲存兼課教師計入統計設定 */
+function saveStatsSettings(body) {
+  try {
+    var includePartTime = (body || {}).includePartTime === true;
+    PropertiesService.getScriptProperties()
+      .setProperty(STATS_PARTTIME_KEY, includePartTime ? 'true' : 'false');
+    return _ok({ includePartTime: includePartTime });
+  } catch (e) {
+    return _err('saveStatsSettings 失敗：' + e.message);
+  }
+}
+
 /**
  * 手動執行用：強制將 PropertiesService 的身分分類規則重設為程式碼中的預設值
  * 在 GAS 編輯器中直接執行此函式即可，無需傳入參數
@@ -1471,15 +1598,20 @@ function calcRequirementStats(body) {
 
     var userMap  = {};  // { userId → user }
     var nameMap  = {};  // { name → [userId, ...] }（用於同名偵測）
+    var includePartTime = _loadStatsIncludePartTime_();  // 迴圈外讀一次（task_c5f2e08d R-5.1）
     uscData.slice(1).forEach(function(r) {
       var uid    = String(r[uIdCol] || '').trim();
       var status = String(r[uStCol] || '').trim();
       if (!uid || !ACTIVE_STATUS.includes(status)) return;
+      var jobPrimary = uJpCol >= 0 ? String(r[uJpCol] || '').trim() : '';
+      // 應受訓人員名單：教師或行政人員（task_c5f2e08d 定案規格，isAllStaff 分支不動，
+      // 分眾任務的行政人員/教保員/相關專業人員類別因此不受影響）
+      if (!_isTrainingTracked_(jobPrimary, includePartTime)) return;
       var user = {
         userId:      uid,
         name:        String(r[uNmCol] || '').trim(),
         department:  String(r[uDpCol] || '').trim(),
-        jobPrimary:  uJpCol >= 0 ? String(r[uJpCol] || '').trim() : '',
+        jobPrimary:  jobPrimary,
         title:       uTtCol >= 0 ? String(r[uTtCol] || '').trim() : '',
         jobTask:     uJtCol >= 0 ? String(r[uJtCol] || '').trim() : ''
       };

@@ -202,6 +202,57 @@ const SCHOOL_NAME            = '臺北市立中崙高級中學';
 const PRINCIPAL_NAME         = '';        // fallback；正式值優先讀 PropertiesService（PRINCIPAL_NAME_KEY）
 const REPORT_TEMPLATE_ID_KEY = 'reportDocTemplateId';  // 簽呈範本文件 ID（createReportDocTemplate_ 自動寫入）
 const PRINCIPAL_NAME_KEY     = 'principalName';        // 校長姓名（管理後台「報告設定」可修改）
+const STATS_PARTTIME_KEY     = 'statsIncludePartTime'; // 兼課教師是否計入統計母數（管理後台可切換）
+
+// ==================== 統計母數共用判定（task_c5f2e08d） ====================
+// 兩支判定函式語意不同、不可合併：
+// - _isCountedInStats_：教師「達成率統計母數」，讀 TeacherSnapshot 的路徑用
+// - _isTrainingTracked_：Hub.UserStatusCache 的「應受訓人員名單」，含行政人員
+//   （audienceRules 分眾任務本就為行政人員設時數，不可用 VALID_DEPT 篩掉他們）
+
+/**
+ * 判斷 jobPrimary 是否屬於應計入統計的教師職務
+ * 採關鍵字包含比對，相容「正式」「正式教師」等各種格式
+ * 排除：兼課、校長、主任、組長、教官等純行政或兼課身分
+ * @param {string} job - jobPrimary 欄位值
+ * @param {boolean} [includePartTime] - 是否連兼課教師也算入（呼叫端在迴圈外讀一次
+ *   _loadStatsIncludePartTime_() 傳入，禁止在此函式內每次呼叫 PropertiesService）
+ */
+function _isTeacherJob_(job, includePartTime) {
+  if (!job) return true;  // 空白＝尚未同步，不排除
+  const INCLUDE_KW = includePartTime ? ['正式', '代理', '代課', '兼課教師'] : ['正式', '代理', '代課'];
+  for (let i = 0; i < INCLUDE_KW.length; i++) {
+    if (job.indexOf(INCLUDE_KW[i]) >= 0) return true;
+  }
+  return false;
+}
+
+/** 教師達成率統計母數：VALID_DEPT ＋ _isTeacherJob_()。用於讀 TeacherSnapshot 的三條路徑。 */
+function _isCountedInStats_(dept, job, includePartTime) {
+  return VALID_DEPT.includes(String(dept || '').trim()) && _isTeacherJob_(job, includePartTime);
+}
+
+/**
+ * 應受訓人員名單：_isTeacherJob_() 或行政人員。用於讀 Hub.UserStatusCache 的路徑
+ * （Sync.gs、calcRequirementStats、Notify.gs）。不套 VALID_DEPT——行政人員部別本就
+ * 空白，套了等於把他們全刪，而 audienceRules 分眾任務本就為行政人員設有應達時數。
+ * ⚠️ 行政人員判定用「嚴格相等」，與 _classifyIdentity_() 對同一欄位採「包含」比對
+ * （如 jobPrimary_equals／compound 的 indexOf）不一致——目前 Hub 資料值恰好都是
+ * 「行政人員」四字，兩邊結果相同；若日後出現「行政人員（約僱）」之類的變體值，
+ * 此處會排除、但 _classifyIdentity_ 仍會分類為相關行政人員，兩邊將出現分岔。
+ */
+function _isTrainingTracked_(job, includePartTime) {
+  const j = String(job || '').trim();
+  return _isTeacherJob_(j, includePartTime) || j === '行政人員';
+}
+
+/**
+ * 讀取「兼課教師是否計入統計」設定；讀不到用常數預設 false，不回寫
+ * （維持 HealthCheck.gs 的零寫入契約）。呼叫端須在迴圈外呼叫一次，不可逐筆呼叫。
+ */
+function _loadStatsIncludePartTime_() {
+  return PropertiesService.getScriptProperties().getProperty(STATS_PARTTIME_KEY) === 'true';
+}
 
 // ==================== ID 產生器（需在 LockService 內呼叫） ====================
 
