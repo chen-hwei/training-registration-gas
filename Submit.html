@@ -457,7 +457,14 @@
     for (var j = 0; j < _allRequirements.length; j++) {
       if (_allRequirements[j].requirementId === linkedReqId) { visible = true; break; }
     }
-    if (linkedReqId && visible) _selectReq(linkedReqId);
+    if (linkedReqId && visible) {
+      _selectReq(linkedReqId);
+    } else if (linkedReqId) {
+      // 任務存在但教師端看不到（跨學年）：明確停在「自由研習」，讓畫面上有 radio
+      // 亮著，不留「什麼都沒選」的曖昧狀態（A9 驗收要求）。課程本身完全沒掛任務
+      // 的情況（linkedReqId 為空）維持原樣，不強制觸發這個呼叫
+      _selectReq('');
+    }
 
     var sel = document.getElementById('catalog-select');
     sel.value = catalogId;
