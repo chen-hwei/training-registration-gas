@@ -196,13 +196,16 @@ function snapshotTeacherRoster(body) {
         sourceTag = 'csv';
         // CSV 名冊無 status 欄，母數判定只能套 VALID_DEPT ＋ _isTeacherJob_()（task_c5f2e08d Q-2）；
         // 是否已離職這件事在 CSV 路徑無從得知，屬已知且刻意保留的結構性缺口
-        var includePartTimeCsv = _loadStatsIncludePartTime_();
+        // includePartTime 固定傳 true：快照建立時一律保留兼課教師的列，開關判定完全留給
+        // 讀取端三條路徑（calcStats／exportDoubleColumnCSV／HealthCheck），開關才能對
+        // CSV 來源快照可逆（R-13）——否則關閉時建立的快照裡沒有兼課列，事後開啟開關
+        // 也讀不到，母數不會跟著變
         rosterRows.forEach(function(row) {
           var name = String(row.teacherName || '').trim();
           if (!name) return;
           var dept = String(row.department  || '').trim();
           var job  = String(row.jobPrimary  || '').trim();
-          if (!_isCountedInStats_(dept, job, includePartTimeCsv)) return;
+          if (!_isCountedInStats_(dept, job, true)) return;
           existMap[name] = [academicYear, name, dept, job];
         });
       } else {
@@ -240,12 +243,12 @@ function snapshotTeacherRoster(body) {
     if (rosterRows.length > 0) {
       sourceTag = 'csv';
       // CSV 名冊無 status 欄，母數判定只能套 VALID_DEPT ＋ _isTeacherJob_()（task_c5f2e08d Q-2）
-      var includePartTimeCsv2 = _loadStatsIncludePartTime_();
+      // includePartTime 固定傳 true，理由同追加模式分支（R-13）
       rosterRows.forEach(function(row) {
         if (!row.teacherName) return;
         var dept = String(row.department || '').trim();
         var job  = String(row.jobPrimary || '').trim();
-        if (!_isCountedInStats_(dept, job, includePartTimeCsv2)) return;
+        if (!_isCountedInStats_(dept, job, true)) return;
         newRows.push([
           academicYear,
           String(row.teacherName || '').trim(),
@@ -1465,6 +1468,7 @@ function getStatsSettings() {
     var uidCol    = hdr.indexOf('userId');
     var jobCol    = hdr.indexOf('jobPrimary');
     var statusCol = hdr.indexOf('status');
+    if (statusCol === -1) return _err('Hub.UserStatusCache 找不到 status 欄，無法計算統計母數。');
     var ACTIVE    = ['在職', '轉調'];
 
     var countExcluding = 0;  // 開關關閉時的應受訓人數

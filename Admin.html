@@ -677,6 +677,7 @@
         <div style="font-size:0.85rem;color:#555;margin-bottom:10px">
           決定兼課教師是否計入全校研習統計母數（含達成率分母、Hub 同步、年度任務待完成清單）。
           <strong>切換後會同時改變催辦信的收件範圍。</strong>實習老師一律排除，不受此開關影響。
+          <br><span style="color:#888">※ Hub.TrainingStats 只有每晚 23:30 才會重新同步，切換後門戶儀表板與個人頁最多要等 24 小時才會反映新設定。</span>
         </div>
         <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:10px;min-height:44px">
           <input type="checkbox" id="stats-parttime-toggle" style="width:22px;height:22px;cursor:pointer">
@@ -1845,6 +1846,7 @@
     _rptLoadIndicators();
     rptLoadStats();
     _rptLoadSettings();
+    rptLoadStatsSettings();
     // 載入名冊來源摘要
     api('report_get_roster_sources', {}).then(function(res) {
       if (res.success) _rptRenderRosterSources(res.data);
@@ -3208,7 +3210,7 @@
       document.getElementById('stats-parttime-summary').innerHTML =
         '不含兼課 <strong>' + res.data.countExcluding + '</strong> 人／含兼課 <strong>' +
         res.data.countIncluding + '</strong> 人' +
-        '<br>另排除實習老師 ' + res.data.permanentExcluded + ' 人（無開關，永久排除）';
+        '<br>另排除 ' + res.data.permanentExcluded + ' 人（在職但非教師亦非行政人員，目前為實習老師；不受開關影響）';
     }).catch(function(err) {
       hideSpinner();
       if (err && err.message !== 'TOKEN_EXPIRED') showToast('載入失敗：' + (err.message || '請稍後再試'), 'error');
@@ -3217,6 +3219,7 @@
 
   function rptSaveStatsSettings() {
     var checked = document.getElementById('stats-parttime-toggle').checked;
+    if (!confirm('確定要' + (checked ? '開啟' : '關閉') + '「計入兼課教師」嗎？\n這會同時改變催辦信的實際收件範圍，且 Hub.TrainingStats 要等每晚 23:30 同步後門戶才會反映。')) return;
     showSpinner();
     api('save_stats_settings', { includePartTime: checked }).then(function(res) {
       hideSpinner();

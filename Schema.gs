@@ -236,6 +236,10 @@ function _isCountedInStats_(dept, job, includePartTime) {
  * 應受訓人員名單：_isTeacherJob_() 或行政人員。用於讀 Hub.UserStatusCache 的路徑
  * （Sync.gs、calcRequirementStats、Notify.gs）。不套 VALID_DEPT——行政人員部別本就
  * 空白，套了等於把他們全刪，而 audienceRules 分眾任務本就為行政人員設有應達時數。
+ * ⚠️ 行政人員判定用「嚴格相等」，與 _classifyIdentity_() 對同一欄位採「包含」比對
+ * （如 jobPrimary_equals／compound 的 indexOf）不一致——目前 Hub 資料值恰好都是
+ * 「行政人員」四字，兩邊結果相同；若日後出現「行政人員（約僱）」之類的變體值，
+ * 此處會排除、但 _classifyIdentity_ 仍會分類為相關行政人員，兩邊將出現分岔。
  */
 function _isTrainingTracked_(job, includePartTime) {
   const j = String(job || '').trim();
