@@ -42,7 +42,8 @@ function addCatalog(userId, body) {
       link:           String(body.link           || ''),
       isRequired:     body.isRequired === true || body.isRequired === 'TRUE',
       status:         'ACTIVE',
-      createdAt:      _now()
+      createdAt:      _now(),
+      requirementId:  String(body.requirementId   || '')
     };
 
     const newRow = schema.keys.map(k => newCatalog[k] !== undefined ? newCatalog[k] : '');
@@ -71,7 +72,8 @@ function editCatalog(userId, body) {
     let found   = false;
 
     const EDITABLE = ['title', 'hours', 'organizer', 'department', 'startDate',
-                      'endDate', 'description', 'targetAudience', 'link', 'isRequired'];
+                      'endDate', 'description', 'targetAudience', 'link', 'isRequired',
+                      'requirementId'];
 
     for (let i = 1; i < data.length; i++) {
       if (data[i][idIdx] !== body.catalogId) continue;
