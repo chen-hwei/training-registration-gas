@@ -412,16 +412,11 @@
   /* ── 建立課程選單（可依 requirementId 篩選）── */
   function _buildCatalogSelect(requirementId) {
     var sel = document.getElementById('catalog-select');
-    var filtered = requirementId
-      ? _allCatalog.filter(function(c) {
-          return c.requirementId === requirementId || !c.requirementId;
-        })
-      : _allCatalog;
-
     var opts = '<option value="">— 請選擇研習課程 —</option>';
-    // 先顯示有關聯的課程
-    var linked   = filtered.filter(function(c) { return c.requirementId === requirementId && requirementId; });
-    var unlinked = filtered.filter(function(c) { return !c.requirementId || c.requirementId !== requirementId; });
+    // R-4：只依 requirementId 分組決定放進哪個 optgroup，不篩掉課程本身——
+    // 掛在其他任務的課程一律歸「其他課程」，教師端不會有課程從下拉消失
+    var linked   = requirementId ? _allCatalog.filter(function(c) { return c.requirementId === requirementId; }) : [];
+    var unlinked = requirementId ? _allCatalog.filter(function(c) { return c.requirementId !== requirementId; }) : _allCatalog;
 
     if (linked.length) {
       opts += '<optgroup label="推薦課程（與本任務相關）">';
@@ -445,16 +440,20 @@
 
   function _preselectCatalog(catalogId) {
     setMode('catalog');
-    var sel = document.getElementById('catalog-select');
-    sel.value = catalogId;
-    onCatalogSelect();
-    // 若課程有關聯任務，自動選取
+    // R-1：若課程有關聯任務，要先選任務（會連帶呼叫 _buildCatalogSelect 重建下拉），
+    // 再設定 sel.value，否則稍後的任務自動選取會把剛設好的課程值整個洗掉
+    var linkedReqId = '';
     for (var i = 0; i < _allCatalog.length; i++) {
       if (_allCatalog[i].catalogId === catalogId && _allCatalog[i].requirementId) {
-        _selectReq(_allCatalog[i].requirementId);
+        linkedReqId = _allCatalog[i].requirementId;
         break;
       }
     }
+    if (linkedReqId) _selectReq(linkedReqId);
+
+    var sel = document.getElementById('catalog-select');
+    sel.value = catalogId;
+    onCatalogSelect();
   }
 
   /* ── 退件重送：載入原紀錄 ── */
