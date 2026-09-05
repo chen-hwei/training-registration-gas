@@ -1164,9 +1164,15 @@
      額外補一個選項，避免 select.value 被 DOM 靜默重置為空字串（見 R-3） */
   function _buildTaskOptions(selectedId) {
     var opts = '<option value="">— 不掛任務 —</option>';
+    // Y-9：任務清單根本沒能成功載入時，除了「不掛任務」什麼選項都沒有，
+    // 管理者看不出是清單真的是空的還是載入失敗——加一個不可選的提示
+    if (!_reqRecords.length) {
+      opts += '<option value="" disabled>⚠️ 任務清單載入失敗，請重新整理頁面再試</option>';
+    }
     var years = [];
     _reqRecords.forEach(function(r) {
-      if (r.status === 'ACTIVE' && years.indexOf(r.academicYear) === -1) years.push(r.academicYear);
+      // Y-7：與 _buildReqYearFilter 一致，排除空白學年度，避免出現標籤空白的 optgroup
+      if (r.status === 'ACTIVE' && r.academicYear && years.indexOf(r.academicYear) === -1) years.push(r.academicYear);
     });
     years.sort(function(a, b) { return b - a; });
 
@@ -1176,7 +1182,8 @@
       _reqRecords.forEach(function(r) {
         if (r.status !== 'ACTIVE' || r.academicYear !== y) return;
         if (r.requirementId === selectedId) matched = true;
-        opts += '<option value="' + r.requirementId + '">' + _e(r.name) + '</option>';
+        // Y-6：requirementId 目前恆為系統產生（RQ+數字）不含特殊字元，但比照既有跳脫慣例補齊
+        opts += '<option value="' + _e(r.requirementId) + '">' + _e(r.name) + '</option>';
       });
       opts += '</optgroup>';
     });
@@ -1187,7 +1194,7 @@
         if (_reqRecords[i].requirementId === selectedId) { found = _reqRecords[i]; break; }
       }
       var label = found ? (found.name + '（已封存或非本學年）') : (selectedId + '（任務清單未完整載入）');
-      opts += '<option value="' + selectedId + '">' + _e(label) + '</option>';
+      opts += '<option value="' + _e(selectedId) + '">' + _e(label) + '</option>';
     }
     return opts;
   }
@@ -1508,6 +1515,9 @@
       })
       .catch(function(err) {
         hideSpinner();
+        // Y-5：載入失敗要讓 switchAdminTab 的 !_reqTabRendered 門檻恢復 false，
+        // 否則切走再切回不會重試，只能整頁重載
+        _reqTabRendered = false;
         if (err && err.message !== 'TOKEN_EXPIRED') {
           document.getElementById('req-admin-list').innerHTML =
             '<div class="empty-state"><div class="ei">❌</div><p>載入失敗。</p></div>';
@@ -1689,6 +1699,9 @@
         if (res && res.success) {
           showToast(_editReqId ? '✅ 任務已更新' : '✅ 任務已新增', 'success');
           _reqRecords = [];
+          // Y-8：任務改名／新增後，課程卡片的所屬任務徽章是用舊快照渲染的，
+          // 一併清空讓下次切回研習目錄分頁時強制重新 render
+          _catalogRecords = [];
           _loadRequirements();
         } else {
           showToast((res && res.error) || '儲存失敗', 'error');

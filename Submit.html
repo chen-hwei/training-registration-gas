@@ -449,7 +449,15 @@
         break;
       }
     }
-    if (linkedReqId) _selectReq(linkedReqId);
+    // R-5：課程可能掛在非當前學年度（管理者端任務下拉列出全部學年度、
+    // renewRequirements 也不封存來源學年），但教師端 _allRequirements 只有當前學年。
+    // 自動歸戶前先確認任務教師端看得到，看不到就不自動選，避免送出時
+    // requirementId 靜默寫進一個畫面上完全沒有 radio 亮著、教師無從得知的任務
+    var visible = false;
+    for (var j = 0; j < _allRequirements.length; j++) {
+      if (_allRequirements[j].requirementId === linkedReqId) { visible = true; break; }
+    }
+    if (linkedReqId && visible) _selectReq(linkedReqId);
 
     var sel = document.getElementById('catalog-select');
     sel.value = catalogId;
