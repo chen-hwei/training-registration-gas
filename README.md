@@ -23,7 +23,7 @@
 - 批次審核教師上傳的研習證明（核准 / 退件並附理由）
 - 匯出研習紀錄報表（CSV）
 - 預覽並手動觸發通知（即時掌握待通知教師名單）
-- **研習統計分析**：多來源研習資料匯入（全國進修網 + 臺北市研習網）、人事名冊多學年管理（含一鍵從 Hub 全量覆蓋目前學年度名冊）、政策指標達成率儀表板（累積/當年度，跨裝置快取）、未達成教師矩陣總覽（指標 checkbox 篩選 + CSV 匯出）、批次預計算
+- **研習統計分析**：多來源研習資料匯入（全國進修網 + 臺北市研習網）、人事名冊多學年管理（含一鍵從 Hub 全量覆蓋目前學年度名冊）、政策指標達成率儀表板（累積/當年度，跨裝置快取）、未達成教師矩陣總覽（指標 checkbox 篩選 + CSV 匯出）、批次預計算、**兼課教師計入統計母數可切換**（後台開關，同時影響 Hub 同步與催辦通知範圍，實習老師永久排除不受開關影響）
 - **年度任務達成率**：依身分分眾統計各任務達標率；計算區間採硬性學年/學期邊界（整學年 8/1–7/31、上學期 8/1–1/31、下學期 2/1–7/31），截止日期僅作催辦提醒
 - **報告匯出**：雙欄審查 CSV 與 Google 簽呈文件（公文範本存於 Drive，可直接以 Google Docs 維護內文；校長姓名於後台「報告設定」填寫）
 - **資料健檢**：學年切換前檢查任務資料/欄位/Hub 同步時效/名冊快照；簽呈匯出前檢查教師名單一致性/ImportedData 品質/審核狀態列舉值，警示式不阻擋流程
@@ -228,6 +228,10 @@
 | **v3.13** | 可移植性 P1-a：組態集中，`TRAINING_SS_ID`/`TRAINING_DRIVE_ROOT_FOLDER_ID`/`HUB_SPREADSHEET_ID` 改讀 Script Properties（fallback 兜底），移除零引用死碼 `LOG_SPREADSHEET_ID` | ✅ 完成（2026-07-19） |
 | **v3.14** | SSO 階段0/R5③：移除公開路由 `action:login`／`getTeachers`（全 repo 零呼叫的公開曝露入口，殘餘風險：門戶 `v1/login` 共用 PIN 通道仍在線，待 R5④ 完成才真正關閉） | ✅ 完成（2026-08-06） |
 | **v3.15** | SSO 方案 B Stage 2：新增 `train/redeemHandoff` 公開路由與前端 `_bootPage()`，接收門戶交換碼免重複登入（[PR #20](https://github.com/chen-hwei/training-registration-gas/pull/20)／[PR #21](https://github.com/chen-hwei/training-registration-gas/pull/21)） | ✅ 完成（2026-08-10） |
+| **v3.16** | 年度任務欄位修復批：owner／關鍵字／適用對象寫入失敗修正＋新增教師公告欄＋推薦連結多條化（[PR #23](https://github.com/chen-hwei/training-registration-gas/pull/23)） | ✅ 完成（2026-08-30） |
+| **v3.17** | 研習日期輸入防呆＋健檢新增日期年份異常偵測（[PR #24](https://github.com/chen-hwei/training-registration-gas/pull/24)） | ✅ 完成（2026-09-04） |
+| **v3.18** | 通知信管理者依部別分流失效改為全寄 training_admin（[PR #25](https://github.com/chen-hwei/training-registration-gas/pull/25)） | ✅ 完成（2026-09-04） |
+| **v3.19** | 收斂全校統計母數判定（六路徑統一）＋新增兼課教師計入統計後台開關（[PR #26](https://github.com/chen-hwei/training-registration-gas/pull/26)） | ✅ 完成（2026-09-05） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
@@ -295,7 +299,7 @@ clasp push
 - 所有試算表寫入操作（`submitRecord`、`reviewRecord`）均以 `LockService` 保護，防止多人同時送出時資料錯位
 - 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
 - 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 人次；教師信改分組 BCC 群發，`to` 固定為系統回信地址、教師名單一律走 `bcc`，嚴禁互見；以 `CacheService` 防止同一教師/同一管理者同一天重複收到相同通知
-- 管理者收件對象依**教師所屬處室**對應，不會跨處室通知
+- 管理者收件對象為**全校 training_admin**（v3.18 起不再依部別分流——本校為完全中學，依部別分流從根本不適用；未來處室分權上線後將改依任務所屬處室精準路由）
 
 ## 系統設計哲學
 
