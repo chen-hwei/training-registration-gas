@@ -459,10 +459,12 @@
     }
     if (linkedReqId && visible) {
       _selectReq(linkedReqId);
-    } else if (linkedReqId) {
-      // 任務存在但教師端看不到（跨學年）：明確停在「自由研習」，讓畫面上有 radio
-      // 亮著，不留「什麼都沒選」的曖昧狀態（A9 驗收要求）。課程本身完全沒掛任務
-      // 的情況（linkedReqId 為空）維持原樣，不強制觸發這個呼叫
+    } else if (linkedReqId && !_selectedReqId) {
+      // R-6：加 !_selectedReqId 條件——退件重送路徑會先 _selectReq(rec.requirementId)
+      // 還原紀錄原本的任務，才呼叫本函式。若這裡無條件清成自由研習，會把「課程後來被
+      // 掛到非當前學年任務」誤判成「這筆紀錄該歸自由研習」，靜默洗掉已還原好的原任務。
+      // 只在目前真的還沒選任何任務時（公告課程入口的預設狀態）才明確點亮自由研習，
+      // 已有選取值（不論是退件重送還原的，還是其他路徑設好的）一律不動
       _selectReq('');
     }
 

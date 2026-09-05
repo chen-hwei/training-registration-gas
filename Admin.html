@@ -1097,6 +1097,8 @@
       // 任務清單載入失敗不擋課程清單渲染；失敗時 _reqRecords 維持空陣列，
       // saveCatalog 會因此略過 requirementId 這個 key（見 R-3-2）
       _ensureRequirementsLoaded().catch(function() {})
+      // Y-10：_reqLoadFailed 的設置與重置集中在 _ensureRequirementsLoaded() 內部，
+      // 這裡的 .catch 只負責讓 Promise.all 不因任務清單失敗而整個 reject
     ])
       .then(function(results) {
         hideSpinner();
@@ -1164,9 +1166,9 @@
      額外補一個選項，避免 select.value 被 DOM 靜默重置為空字串（見 R-3） */
   function _buildTaskOptions(selectedId) {
     var opts = '<option value="">— 不掛任務 —</option>';
-    // Y-9：任務清單根本沒能成功載入時，除了「不掛任務」什麼選項都沒有，
-    // 管理者看不出是清單真的是空的還是載入失敗——加一個不可選的提示
-    if (!_reqRecords.length) {
+    // Y-9／Y-10：只在「真的載入失敗」時才顯示警示，跟「系統還沒建立任何任務」
+    // （成功但清單為空）分開——後者不該被誤導成故障
+    if (_reqLoadFailed) {
       opts += '<option value="" disabled>⚠️ 任務清單載入失敗，請重新整理頁面再試</option>';
     }
     var years = [];
@@ -1193,7 +1195,17 @@
       for (var i = 0; i < _reqRecords.length; i++) {
         if (_reqRecords[i].requirementId === selectedId) { found = _reqRecords[i]; break; }
       }
-      var label = found ? (found.name + '（已封存或非本學年）') : (selectedId + '（任務清單未完整載入）');
+      // Y-11：依實際原因給正確措辭，不再一律寫「已封存或非本學年」
+      var label;
+      if (!found) {
+        label = selectedId + '（任務清單未完整載入）';
+      } else if (found.status !== 'ACTIVE') {
+        label = found.name + '（已封存）';
+      } else if (!found.academicYear) {
+        label = found.name + '（學年度未填）';
+      } else {
+        label = found.name + '（非本學年）';
+      }
       opts += '<option value="' + _e(selectedId) + '">' + _e(label) + '</option>';
     }
     return opts;
@@ -1494,13 +1506,20 @@
   var _reqCurrentYear = null;
   var _reqTabRendered = false; // 「年度任務」分頁是否已渲染過一次（與 _reqRecords 是否已有資料分開判斷，
                                 // 因為研習目錄分頁可能已經先把 _reqRecords 撈回來了）
+  // Y-10：與「_reqRecords 是空的」分開判斷——空陣列可能是「系統真的還沒建任何任務」
+  // （成功但無資料），也可能是「API 打失敗」，兩者要給管理者看到不同的提示
+  var _reqLoadFailed  = false;
 
   /* 確保 _reqRecords 有資料：已有資料就直接回傳已完成的 Promise，避免研習目錄／
      年度任務兩個分頁重複打 API */
   function _ensureRequirementsLoaded() {
-    if (_reqRecords.length) return Promise.resolve();
+    if (_reqRecords.length) { _reqLoadFailed = false; return Promise.resolve(); }
     return api('v1/admin/getAllRequirements', {}).then(function(res) {
       _reqRecords = (res && res.data) ? res.data : [];
+      _reqLoadFailed = false;
+    }).catch(function(err) {
+      _reqLoadFailed = true;
+      throw err; // 保留原本的 reject 語意，_loadRequirements() 仍需要它來顯示「載入失敗」
     });
   }
 
