@@ -119,7 +119,7 @@
 
       <!-- 目錄選擇區 -->
       <div id="section-catalog">
-        <div class="form-group" style="margin-bottom:0">
+        <div id="catalog-select-group" class="form-group" style="margin-bottom:0">
           <label class="form-label">選擇研習課程 <span class="req">*</span></label>
           <select id="catalog-select" class="form-control" onchange="onCatalogSelect()">
             <option value="">— 載入中，請稍候 —</option>
@@ -334,14 +334,19 @@
   function onLoginSuccess() { _init(); }
 
   function _init() {
+    // R-2：getMyRecords 只服務 Y-4 的「已有紀錄」加分提示，不該成為整頁能不能 render 的
+    // 硬相依（跟同檔 _checkImported「靜默失敗，不影響登錄流程」的既有慣例一致）。
+    // 拆出獨立呼叫，失敗就靜默降級為空陣列，不擋 Promise.all 那兩支關鍵資料
+    api('v1/getMyRecords', {})
+      .then(function(res) { _myRecords = (res && res.data) ? res.data : []; })
+      .catch(function() { _myRecords = []; });
+
     Promise.all([
       api('v1/getCatalog', {}),
-      api('v1/getRequirements', {}),
-      api('v1/getMyRecords', {})
+      api('v1/getRequirements', {})
     ]).then(function(results) {
       _allCatalog      = (results[0] && results[0].data) ? results[0].data : [];
       _allRequirements = (results[1] && results[1].data) ? results[1].data : [];
-      _myRecords       = (results[2] && results[2].data) ? results[2].data : [];
       _buildReqOptions();
       _buildCatalogSelect('');
       _buildMultiToggle('');
@@ -558,8 +563,8 @@
     _multiSharedFile = null;
     _multiSharedFileObj = null;
     document.getElementById('multi-toggle-checkbox').checked = true;
-    document.getElementById('catalog-select').style.display = 'none';
-    document.getElementById('catalog-select-hint').style.display = 'none';
+    // Y-e：整組（含「選擇研習課程 *」標籤）一起藏，不是只藏下拉本身
+    document.getElementById('catalog-select-group').style.display = 'none';
     document.getElementById('single-submit-section').classList.add('hidden');
     document.getElementById('multi-section').classList.remove('hidden');
     document.getElementById('multi-result-panel').classList.add('hidden');
@@ -578,8 +583,7 @@
     _multiSharedFileObj = null;
     var cb = document.getElementById('multi-toggle-checkbox');
     if (cb) cb.checked = false;
-    document.getElementById('catalog-select').style.display = '';
-    document.getElementById('catalog-select-hint').style.display = '';
+    document.getElementById('catalog-select-group').style.display = '';
     document.getElementById('single-submit-section').classList.remove('hidden');
     document.getElementById('multi-section').classList.add('hidden');
   }
@@ -617,7 +621,8 @@
         'padding:10px 12px;margin-bottom:8px' + (disabled ? ';opacity:0.6' : '') + '">' +
       '<label style="display:flex;align-items:flex-start;gap:10px;' +
           'cursor:' + (disabled ? 'not-allowed' : 'pointer') + '">' +
-        '<input type="checkbox" class="multi-course-checkbox"' + (disabled ? ' disabled' : '') +
+        '<input type="checkbox" class="multi-course-checkbox" id="multi-checkbox-' + c.catalogId + '"' +
+          (disabled ? ' disabled data-y4-disabled="1"' : '') +
           ' onchange="onMultiCourseToggle(\'' + c.catalogId + '\', this.checked)"' +
           ' style="width:20px;height:20px;flex-shrink:0;margin-top:2px;' +
           'cursor:' + (disabled ? 'not-allowed' : 'pointer') + '">' +
@@ -732,8 +737,14 @@
 
   /** 送出全部：依序逐筆呼叫既有 v1/submitRecord，不合批、不改後端（R-2/R-3/R-4） */
   function submitMultiple() {
-    var catalogIds = Object.keys(_multiSelected);
-    if (!catalogIds.length) { showToast('請至少勾選一門課程', 'error'); return; }
+    // R-1：已成功的課不重送——按鈕再按一次不能整批重複建立紀錄
+    var catalogIds = Object.keys(_multiSelected).filter(function(cid) {
+      return _multiSelected[cid].status !== 'success';
+    });
+    if (!catalogIds.length) {
+      showToast(Object.keys(_multiSelected).length ? '本批已全部送出' : '請至少勾選一門課程', 'error');
+      return;
+    }
 
     var sharedMode = document.getElementById('multi-file-shared').checked;
     if (sharedMode && !_multiSharedFile) { showToast('請上傳共用證明檔案', 'error'); return; }
@@ -745,12 +756,13 @@
         showToast('請確認每一門課的研習日期都已正確填寫', 'error'); return;
       }
       if (!sharedMode && !item.file) {
-        showToast('請確認每一門課都已上傳證明檔案', 'error'); return;
+        showToast('請確認每一門尚未送出的課都已上傳證明檔案', 'error'); return;
       }
     }
 
     var btn = document.getElementById('multi-submit-btn');
     btn.disabled = true; btn.textContent = '送出中…';
+    _setMultiCheckboxesDisabled(true); // Y-c：送出期間鎖住勾選框，避免中途增減課程
     catalogIds.forEach(function(cid) {
       _multiSelected[cid].status = 'sending';
       _renderMultiStatus(cid);
@@ -766,7 +778,27 @@
     }).catch(function(err) {
       hideSpinner();
       btn.disabled = false; btn.textContent = '📤 送出全部';
+      _setMultiCheckboxesDisabled(false);
+      // Y-b：共用證明轉檔失敗時，把還停在「送出中」的列復原成失敗＋可重試，不留著騙人的假狀態
+      catalogIds.forEach(function(cid) {
+        var it = _multiSelected[cid];
+        if (it && it.status === 'sending') {
+          it.status = 'failed';
+          it.errorMsg = err && err.message ? err.message : '共用證明檔案處理失敗，請重試。';
+          _renderMultiStatus(cid);
+        }
+      });
       showToast(err && err.message ? err.message : '共用證明檔案處理失敗，請重試。', 'error');
+    });
+  }
+
+  /** Y-c：送出期間鎖住所有勾選框，避免中途勾新課程（不在本批快照內、送不到）或取消勾選
+      （讓 _finishMultiSubmit 讀不到對應的 _multiSelected 項目） */
+  function _setMultiCheckboxesDisabled(disabled) {
+    document.querySelectorAll('.multi-course-checkbox').forEach(function(cb) {
+      // 本來就因 Y-4 停用的課程（已有進行中紀錄）維持停用，不因這裡恢復成可勾
+      if (!disabled && cb.getAttribute('data-y4-disabled') === '1') return;
+      cb.disabled = disabled;
     });
   }
 
@@ -861,6 +893,15 @@
       _renderMultiStatus(catalogId);
       return;
     }
+    // R-3：共用模式下若共用檔案本身還沒選過（例如原本是各自上傳失敗後才切成共用），
+    // prepareFileForUpload(null) 會同步丟出例外，發生在 showSpinner() 之後就沒有 .catch
+    // 接得到、遮罩會卡死。這裡先擋在 showSpinner() 之前
+    if (sharedMode && !_multiSharedFileObj && !_multiSharedFile) {
+      item.status = 'failed';
+      item.errorMsg = '請先上傳共用證明檔案';
+      _renderMultiStatus(catalogId);
+      return;
+    }
 
     item.status = 'sending';
     _renderMultiStatus(catalogId);
@@ -874,24 +915,50 @@
       return _submitOneMultiCourse(catalogId, sharedMode, sharedFileObj);
     }).then(function() {
       hideSpinner();
+      _markCourseSubmittedIfSuccess(catalogId);
     }).catch(function() {
       hideSpinner();
     });
   }
 
+  /** Y-d：課程送出成功後同步進 _myRecords 並停用該列勾選框，單筆重試與批次送出共用 */
+  function _markCourseSubmittedIfSuccess(catalogId) {
+    var item = _multiSelected[catalogId];
+    if (!item || item.status !== 'success') return;
+    _myRecords.push({ catalogId: catalogId, status: 'PENDING' });
+    var cb = document.getElementById('multi-checkbox-' + catalogId);
+    if (cb) { cb.disabled = true; cb.setAttribute('data-y4-disabled', '1'); }
+  }
+
   function _finishMultiSubmit(catalogIds) {
-    var btn = document.getElementById('multi-submit-btn');
-    btn.disabled = false; btn.textContent = '📤 送出全部';
+    _setMultiCheckboxesDisabled(false); // Y-c：解除送出期間的鎖定（Y-4 停用的課程仍維持停用）
 
     var successCount = 0, failCount = 0;
     catalogIds.forEach(function(cid) {
+      // Y-c：防呆——理論上送出期間已鎖住勾選框，這裡不該讀到 undefined，仍加一層守衛
+      if (!_multiSelected[cid]) return;
       if (_multiSelected[cid].status === 'success') successCount++;
       else if (_multiSelected[cid].status === 'failed') failCount++;
     });
 
+    // Y-d：本批成功的課程同步進 _myRecords 並直接停用該列勾選框，不整段重繪清單
+    // （重繪會把剛顯示的「✅ 已送出」／「❌ 失敗＋重試這筆」都蓋掉，B2 要求的重試 UI 會憑空消失）
+    catalogIds.forEach(function(cid) { _markCourseSubmittedIfSuccess(cid); });
+
+    var btn = document.getElementById('multi-submit-btn');
+    if (failCount === 0) {
+      // R-1：全部送出成功後，這顆按鈕不該還能再按一次造成整批重送
+      btn.disabled = true; btn.textContent = '✅ 已全部送出';
+    } else {
+      btn.disabled = false; btn.textContent = '📤 送出全部（重試失敗項目）';
+    }
+
     var panel = document.getElementById('multi-result-panel');
     var msg = '✅ 成功 ' + successCount + ' 筆';
-    if (failCount) msg += '，❌ 失敗 ' + failCount + ' 筆（請於上方各筆按「重試這筆」）';
+    if (failCount) {
+      msg += '，❌ 失敗 ' + failCount + ' 筆（請於上方各筆按「重試這筆」。' +
+        '重試前建議先到「我的紀錄」確認該筆是否其實已送達伺服器，避免網路中斷造成的誤判）';
+    }
     panel.classList.remove('hidden');
     panel.innerHTML =
       '<div style="font-size:0.88rem;font-weight:600;margin-bottom:10px">' + msg + '</div>' +
@@ -939,7 +1006,10 @@
   /* ── 退件重送：載入原紀錄 ── */
   function _loadResubmitData() {
     showSpinner();
-    api('v1/getMyRecords', {})
+    // Y-f：_init() 已為了 Y-4 抓過一次 _myRecords（整表 parseSheetData，成本不低）；
+    // 若那支已經回來就直接沿用，不重打一次。仍未回來時退回原本各自抓取，
+    // 錯誤處理與訊息維持原樣，不改變既有行為
+    (_myRecords.length ? Promise.resolve({ data: _myRecords }) : api('v1/getMyRecords', {}))
       .then(function(res) {
         hideSpinner();
         var records = (res && res.data) ? res.data : [];
