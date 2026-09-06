@@ -412,16 +412,11 @@
   /* ── 建立課程選單（可依 requirementId 篩選）── */
   function _buildCatalogSelect(requirementId) {
     var sel = document.getElementById('catalog-select');
-    var filtered = requirementId
-      ? _allCatalog.filter(function(c) {
-          return c.requirementId === requirementId || !c.requirementId;
-        })
-      : _allCatalog;
-
     var opts = '<option value="">— 請選擇研習課程 —</option>';
-    // 先顯示有關聯的課程
-    var linked   = filtered.filter(function(c) { return c.requirementId === requirementId && requirementId; });
-    var unlinked = filtered.filter(function(c) { return !c.requirementId || c.requirementId !== requirementId; });
+    // R-4：只依 requirementId 分組決定放進哪個 optgroup，不篩掉課程本身——
+    // 掛在其他任務的課程一律歸「其他課程」，教師端不會有課程從下拉消失
+    var linked   = requirementId ? _allCatalog.filter(function(c) { return c.requirementId === requirementId; }) : [];
+    var unlinked = requirementId ? _allCatalog.filter(function(c) { return c.requirementId !== requirementId; }) : _allCatalog;
 
     if (linked.length) {
       opts += '<optgroup label="推薦課程（與本任務相關）">';
@@ -445,16 +440,37 @@
 
   function _preselectCatalog(catalogId) {
     setMode('catalog');
-    var sel = document.getElementById('catalog-select');
-    sel.value = catalogId;
-    onCatalogSelect();
-    // 若課程有關聯任務，自動選取
+    // R-1：若課程有關聯任務，要先選任務（會連帶呼叫 _buildCatalogSelect 重建下拉），
+    // 再設定 sel.value，否則稍後的任務自動選取會把剛設好的課程值整個洗掉
+    var linkedReqId = '';
     for (var i = 0; i < _allCatalog.length; i++) {
       if (_allCatalog[i].catalogId === catalogId && _allCatalog[i].requirementId) {
-        _selectReq(_allCatalog[i].requirementId);
+        linkedReqId = _allCatalog[i].requirementId;
         break;
       }
     }
+    // R-5：課程可能掛在非當前學年度（管理者端任務下拉列出全部學年度、
+    // renewRequirements 也不封存來源學年），但教師端 _allRequirements 只有當前學年。
+    // 自動歸戶前先確認任務教師端看得到，看不到就不自動選，避免送出時
+    // requirementId 靜默寫進一個畫面上完全沒有 radio 亮著、教師無從得知的任務
+    var visible = false;
+    for (var j = 0; j < _allRequirements.length; j++) {
+      if (_allRequirements[j].requirementId === linkedReqId) { visible = true; break; }
+    }
+    if (linkedReqId && visible) {
+      _selectReq(linkedReqId);
+    } else if (linkedReqId && !_selectedReqId) {
+      // R-6：加 !_selectedReqId 條件——退件重送路徑會先 _selectReq(rec.requirementId)
+      // 還原紀錄原本的任務，才呼叫本函式。若這裡無條件清成自由研習，會把「課程後來被
+      // 掛到非當前學年任務」誤判成「這筆紀錄該歸自由研習」，靜默洗掉已還原好的原任務。
+      // 只在目前真的還沒選任何任務時（公告課程入口的預設狀態）才明確點亮自由研習，
+      // 已有選取值（不論是退件重送還原的，還是其他路徑設好的）一律不動
+      _selectReq('');
+    }
+
+    var sel = document.getElementById('catalog-select');
+    sel.value = catalogId;
+    onCatalogSelect();
   }
 
   /* ── 退件重送：載入原紀錄 ── */
