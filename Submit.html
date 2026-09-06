@@ -664,6 +664,10 @@
       _multiSelected[catalogId] = _multiSelected[catalogId] ||
         { date: '', file: null, status: 'idle', errorMsg: '', recordId: null };
       sub.classList.remove('hidden');
+      // Y-i：上一批全部送出成功後按鈕會被停用改字，此時再勾一門新課要能送，
+      // 不能讓教師卡在「✅ 已全部送出」按不下去、得退出多選再進來
+      var btn = document.getElementById('multi-submit-btn');
+      if (btn.disabled) { btn.disabled = false; btn.textContent = '📤 送出全部'; }
     } else {
       delete _multiSelected[catalogId];
       sub.classList.add('hidden');
@@ -916,8 +920,14 @@
     }).then(function() {
       hideSpinner();
       _markCourseSubmittedIfSuccess(catalogId);
-    }).catch(function() {
+    }).catch(function(err) {
       hideSpinner();
+      // R-4：共用檔案在這裡（例如超過 8MB）再次轉檔失敗時，比照 :783-790 batch 路徑
+      // 還原成 failed 並重新 render，不能只關遮罩——否則這一列會永久停在「⏳ 送出中…」
+      // 且重試按鈕消失，使用者只能取消勾選再勾一次才能復原
+      item.status = 'failed';
+      item.errorMsg = (err && err.message) ? err.message : '送出失敗，請重試。';
+      _renderMultiStatus(catalogId);
     });
   }
 
@@ -925,7 +935,24 @@
   function _markCourseSubmittedIfSuccess(catalogId) {
     var item = _multiSelected[catalogId];
     if (!item || item.status !== 'success') return;
-    _myRecords.push({ catalogId: catalogId, status: 'PENDING' });
+    // Y-j：push 完整欄位而非只有 catalogId／status 的殘缺 stub——Y-f 讓 _loadResubmitData
+    // 也會讀 _myRecords，日後若有別的地方跟著讀更多欄位，殘缺 stub 會是埋著的坑
+    var course = null;
+    for (var i = 0; i < _allCatalog.length; i++) {
+      if (_allCatalog[i].catalogId === catalogId) { course = _allCatalog[i]; break; }
+    }
+    var parsedDate = _parseTrainingDate(item.date);
+    _myRecords.push({
+      recordId:      item.recordId || '',
+      catalogId:     catalogId,
+      title:         course ? course.title : '',
+      hours:         course ? course.hours : 0,
+      isCustom:      false,
+      trainingDate:  parsedDate.ok ? parsedDate.value : '',
+      organizer:     course ? course.organizer : '',
+      status:        'PENDING',
+      requirementId: _selectedReqId || ''
+    });
     var cb = document.getElementById('multi-checkbox-' + catalogId);
     if (cb) { cb.disabled = true; cb.setAttribute('data-y4-disabled', '1'); }
   }
