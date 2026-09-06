@@ -15,6 +15,7 @@
 - 上傳研習證明（PDF / JPG / PNG，上限 8MB）
 - 即時查詢審核狀態（待審核 / 已通過 / 已退件）
 - 退件時顯示原因，可一鍵重新送出；若證明檔案無誤可選擇「沿用上次上傳的證明」，避免重複上傳
+- **一次登錄多門課程**：同任務底下有 2 門以上推薦課程時，可勾選多門一次送出，支援「共用同一份證明」或「每門課各自上傳」
 - **跨學年紀錄查詢**：「已匯入」與「年度進度」支援 110 學年度起逐年查詢；年度選擇器隨學年自動更新，歷史學年任務進度照常計算但不顯示逾期標籤
 
 ### 管理者端（需 `training_admin` 權限）
@@ -86,6 +87,7 @@
 | `targetAudience` | 研習對象（如「全體教師」、「導師」）；留空表示不限 |
 | `link` | 研習公文 URL 或報名頁面；前端顯示為可點擊超連結 |
 | `isRequired` | 是否必修（TRUE / FALSE） |
+| `requirementId` | 所屬年度任務編號（可選）；教師端登錄頁依此分組顯示「推薦課程」 |
 | `status` | `ACTIVE`（可選）/ `ARCHIVED`（封存） |
 
 ### TRAINING_RECORD（登錄紀錄）
@@ -232,6 +234,8 @@
 | **v3.17** | 研習日期輸入防呆＋健檢新增日期年份異常偵測（[PR #24](https://github.com/chen-hwei/training-registration-gas/pull/24)） | ✅ 完成（2026-09-04） |
 | **v3.18** | 通知信管理者依部別分流失效改為全寄 training_admin（[PR #25](https://github.com/chen-hwei/training-registration-gas/pull/25)） | ✅ 完成（2026-09-04） |
 | **v3.19** | 收斂全校統計母數判定（六路徑統一）＋新增兼課教師計入統計後台開關（[PR #26](https://github.com/chen-hwei/training-registration-gas/pull/26)） | ✅ 完成（2026-09-05） |
+| **v3.20** | 研習目錄新增所屬任務欄位，教師端「推薦課程」分組恢復可用（[PR #28](https://github.com/chen-hwei/training-registration-gas/pull/28)） | ✅ 完成（2026-09-06） |
+| **v3.21** | 教師端一次登錄多門課程（合併勾選清單＋共用或各自證明＋逐筆送出）（[PR #29](https://github.com/chen-hwei/training-registration-gas/pull/29)） | ✅ 完成（2026-09-06） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
