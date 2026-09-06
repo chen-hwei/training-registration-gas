@@ -119,120 +119,192 @@
 
       <!-- 目錄選擇區 -->
       <div id="section-catalog">
-        <div class="form-group" style="margin-bottom:0">
+        <div id="catalog-select-group" class="form-group" style="margin-bottom:0">
           <label class="form-label">選擇研習課程 <span class="req">*</span></label>
           <select id="catalog-select" class="form-control" onchange="onCatalogSelect()">
             <option value="">— 載入中，請稍候 —</option>
           </select>
-          <div class="form-hint">選擇後將自動帶入課程資料</div>
+          <div id="catalog-select-hint" class="form-hint">選擇後將自動帶入課程資料</div>
+        </div>
+        <!-- 一次登錄多門課程：只在選了任務且該任務推薦課程 ≥ 2 門時出現 -->
+        <div id="multi-toggle-wrap" class="hidden" style="margin-top:12px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;
+                        font-size:0.86rem;color:var(--primary);font-weight:600">
+            <input type="checkbox" id="multi-toggle-checkbox" onchange="toggleMultiMode()"
+                   style="width:18px;height:18px;cursor:pointer">
+            一次登錄多門課程
+          </label>
         </div>
       </div>
     </div>
 
-    <!-- ③ 填寫研習資料 -->
-    <div class="card">
-      <div class="card-title">
-        <span class="step-num">3</span>填寫研習資料
-      </div>
-
-      <div class="form-group">
-        <label class="form-label">研習名稱 <span class="req">*</span></label>
-        <input id="field-title" type="text" class="form-control" placeholder="請輸入研習名稱">
-        <div id="hint-title-auto" class="form-hint hidden">✦ 由課程目錄自動帶入</div>
-      </div>
-
-      <div style="display:flex;gap:12px">
-        <div class="form-group" style="flex:1;min-width:0">
-          <label class="form-label">研習時數 <span class="req">*</span></label>
-          <input id="field-hours" type="number" min="0.5" step="0.5"
-                 class="form-control" placeholder="例：3">
+    <div id="single-submit-section">
+      <!-- ③ 填寫研習資料 -->
+      <div class="card">
+        <div class="card-title">
+          <span class="step-num">3</span>填寫研習資料
         </div>
-        <div class="form-group" style="flex:2;min-width:0">
-          <label class="form-label">研習日期 <span class="req">*</span></label>
-          <input id="field-date" type="date" class="form-control" min="2000-01-01" max="2100-12-31">
+
+        <div class="form-group">
+          <label class="form-label">研習名稱 <span class="req">*</span></label>
+          <input id="field-title" type="text" class="form-control" placeholder="請輸入研習名稱">
+          <div id="hint-title-auto" class="form-hint hidden">✦ 由課程目錄自動帶入</div>
         </div>
-      </div>
 
-      <div class="form-group" style="margin-bottom:0">
-        <label class="form-label">主辦單位 <span class="req">*</span></label>
-        <input id="field-organizer" type="text" class="form-control"
-               placeholder="例：教育部、臺北市教育局、本校">
-      </div>
-    </div>
-
-    <!-- ④ 上傳研習證明 -->
-    <div class="card">
-      <div class="card-title">
-        <span class="step-num">4</span>上傳研習證明
-      </div>
-
-      <!-- 沿用舊檔案選項（重新送出時才顯示） -->
-      <div id="reuse-section" class="hidden" style="margin-bottom:16px">
-        <div style="font-size:0.86rem;font-weight:600;color:var(--gray-700);margin-bottom:8px">
-          請選擇證明檔案方式：
-        </div>
-        <label id="opt-reuse-box"
-          style="display:flex;align-items:center;gap:12px;padding:12px 14px;
-                 border:2px solid var(--gray-300);border-radius:var(--radius);
-                 cursor:pointer;margin-bottom:8px;transition:border-color .15s">
-          <input type="radio" name="file-opt" id="opt-reuse" value="reuse"
-                 onchange="onFileOptChange()" style="width:20px;height:20px;cursor:pointer">
-          <div>
-            <div style="font-weight:600;font-size:0.88rem">沿用上次上傳的證明</div>
-            <div id="reuse-filename" style="font-size:0.78rem;color:var(--gray-500);margin-top:2px">─</div>
+        <div style="display:flex;gap:12px">
+          <div class="form-group" style="flex:1;min-width:0">
+            <label class="form-label">研習時數 <span class="req">*</span></label>
+            <input id="field-hours" type="number" min="0.5" step="0.5"
+                   class="form-control" placeholder="例：3">
           </div>
-        </label>
-        <label id="opt-upload-box"
-          style="display:flex;align-items:center;gap:12px;padding:12px 14px;
-                 border:2px solid var(--primary);border-radius:var(--radius);
-                 cursor:pointer;transition:border-color .15s">
-          <input type="radio" name="file-opt" id="opt-upload" value="upload"
-                 onchange="onFileOptChange()" checked
-                 style="width:20px;height:20px;cursor:pointer">
-          <div style="font-weight:600;font-size:0.88rem">重新上傳新檔案</div>
-        </label>
+          <div class="form-group" style="flex:2;min-width:0">
+            <label class="form-label">研習日期 <span class="req">*</span></label>
+            <input id="field-date" type="date" class="form-control" min="2000-01-01" max="2100-12-31">
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:0">
+          <label class="form-label">主辦單位 <span class="req">*</span></label>
+          <input id="field-organizer" type="text" class="form-control"
+                 placeholder="例：教育部、臺北市教育局、本校">
+        </div>
       </div>
 
-      <!-- 檔案上傳區塊 -->
-      <div id="upload-section">
-        <div id="upload-area" class="upload-area"
-             onclick="triggerFileInput()"
-             ondragover="onDragOver(event)"
-             ondragleave="onDragLeave(event)"
-             ondrop="onDrop(event)">
-          <div id="upload-hint">
-            <div style="font-size:2rem;margin-bottom:8px">📄</div>
-            <div style="font-size:0.90rem;font-weight:700;color:var(--primary)">
-              點擊或將檔案拖曳至此處
+      <!-- ④ 上傳研習證明 -->
+      <div class="card">
+        <div class="card-title">
+          <span class="step-num">4</span>上傳研習證明
+        </div>
+
+        <!-- 沿用舊檔案選項（重新送出時才顯示） -->
+        <div id="reuse-section" class="hidden" style="margin-bottom:16px">
+          <div style="font-size:0.86rem;font-weight:600;color:var(--gray-700);margin-bottom:8px">
+            請選擇證明檔案方式：
+          </div>
+          <label id="opt-reuse-box"
+            style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+                   border:2px solid var(--gray-300);border-radius:var(--radius);
+                   cursor:pointer;margin-bottom:8px;transition:border-color .15s">
+            <input type="radio" name="file-opt" id="opt-reuse" value="reuse"
+                   onchange="onFileOptChange()" style="width:20px;height:20px;cursor:pointer">
+            <div>
+              <div style="font-weight:600;font-size:0.88rem">沿用上次上傳的證明</div>
+              <div id="reuse-filename" style="font-size:0.78rem;color:var(--gray-500);margin-top:2px">─</div>
             </div>
-            <div class="form-hint" style="margin-top:4px">
-              支援 PDF、JPG、PNG、GIF &nbsp;|&nbsp; 最大 8MB
-            </div>
-            <div class="form-hint">手機拍攝的照片會自動壓縮，無需手動處理</div>
-          </div>
-          <div id="upload-preview" class="hidden"
-               style="font-size:0.88rem;font-weight:700;color:var(--success)">
-            ✅ <span id="upload-filename"></span>
-          </div>
+          </label>
+          <label id="opt-upload-box"
+            style="display:flex;align-items:center;gap:12px;padding:12px 14px;
+                   border:2px solid var(--primary);border-radius:var(--radius);
+                   cursor:pointer;transition:border-color .15s">
+            <input type="radio" name="file-opt" id="opt-upload" value="upload"
+                   onchange="onFileOptChange()" checked
+                   style="width:20px;height:20px;cursor:pointer">
+            <div style="font-weight:600;font-size:0.88rem">重新上傳新檔案</div>
+          </label>
         </div>
-        <input type="file" id="file-input"
-               accept=".pdf,.jpg,.jpeg,.png,.gif"
-               style="display:none" onchange="onFileSelected()">
+
+        <!-- 檔案上傳區塊 -->
+        <div id="upload-section">
+          <div id="upload-area" class="upload-area"
+               onclick="triggerFileInput()"
+               ondragover="onDragOver(event)"
+               ondragleave="onDragLeave(event)"
+               ondrop="onDrop(event)">
+            <div id="upload-hint">
+              <div style="font-size:2rem;margin-bottom:8px">📄</div>
+              <div style="font-size:0.90rem;font-weight:700;color:var(--primary)">
+                點擊或將檔案拖曳至此處
+              </div>
+              <div class="form-hint" style="margin-top:4px">
+                支援 PDF、JPG、PNG、GIF &nbsp;|&nbsp; 最大 8MB
+              </div>
+              <div class="form-hint">手機拍攝的照片會自動壓縮，無需手動處理</div>
+            </div>
+            <div id="upload-preview" class="hidden"
+                 style="font-size:0.88rem;font-weight:700;color:var(--success)">
+              ✅ <span id="upload-filename"></span>
+            </div>
+          </div>
+          <input type="file" id="file-input"
+                 accept=".pdf,.jpg,.jpeg,.png,.gif"
+                 style="display:none" onchange="onFileSelected()">
+        </div>
+
+        <div id="upload-error"
+             style="color:var(--danger);font-size:0.80rem;margin-top:8px;display:none"></div>
       </div>
 
-      <div id="upload-error"
-           style="color:var(--danger);font-size:0.80rem;margin-top:8px;display:none"></div>
+      <!-- ⑤ 送出 -->
+      <div style="margin-bottom:32px">
+        <button id="submit-btn" class="btn btn-primary btn-block"
+                style="font-size:1rem;padding:14px"
+                onclick="submitRecord()">
+          📤 送出研習登錄
+        </button>
+        <div class="form-hint" style="text-align:center;margin-top:8px">
+          送出後進入待審狀態，請等候處室管理者審核
+        </div>
+      </div>
     </div>
 
-    <!-- ⑤ 送出 -->
-    <div style="margin-bottom:32px">
-      <button id="submit-btn" class="btn btn-primary btn-block"
-              style="font-size:1rem;padding:14px"
-              onclick="submitRecord()">
-        📤 送出研習登錄
-      </button>
-      <div class="form-hint" style="text-align:center;margin-top:8px">
-        送出後進入待審狀態，請等候處室管理者審核
+    <!-- 多選登錄區塊：取代③④⑤，只在「一次登錄多門課程」開啟時顯示 -->
+    <div id="multi-section" class="hidden">
+      <div class="card">
+        <div class="card-title">
+          <span class="step-num">3</span>勾選要登錄的課程
+        </div>
+
+        <div class="form-group" style="margin-bottom:14px">
+          <label class="form-label" style="margin-bottom:8px">證明檔案方式</label>
+          <div style="display:flex;gap:18px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.86rem">
+              <input type="radio" name="multi-file-mode" id="multi-file-shared" checked
+                     onchange="onMultiFileModeChange()" style="width:18px;height:18px;cursor:pointer">
+              共用同一份證明
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:0.86rem">
+              <input type="radio" name="multi-file-mode" id="multi-file-each"
+                     onchange="onMultiFileModeChange()" style="width:18px;height:18px;cursor:pointer">
+              每門課各自上傳
+            </label>
+          </div>
+        </div>
+
+        <div id="multi-shared-upload-wrap">
+          <div class="form-hint" style="margin-bottom:6px">上傳一份證明，套用到下面勾選的每一門課</div>
+          <div id="multi-shared-upload-area" class="upload-area"
+               onclick="triggerMultiSharedFileInput()"
+               ondragover="onMultiSharedDragOver(event)"
+               ondragleave="onMultiSharedDragLeave()"
+               ondrop="onMultiSharedDrop(event)">
+            <div id="multi-shared-upload-hint">
+              <div style="font-size:1.6rem;margin-bottom:4px">📄</div>
+              <div style="font-size:0.86rem;font-weight:700;color:var(--primary)">點擊或拖曳上傳共用證明</div>
+              <div class="form-hint">支援 PDF、JPG、PNG、GIF｜最大 8MB</div>
+            </div>
+            <div id="multi-shared-upload-preview" class="hidden"
+                 style="font-size:0.84rem;font-weight:700;color:var(--success)">
+              ✅ <span id="multi-shared-upload-filename"></span>
+            </div>
+          </div>
+          <input type="file" id="multi-shared-file-input"
+                 accept=".pdf,.jpg,.jpeg,.png,.gif" style="display:none"
+                 onchange="onMultiSharedFileSelected()">
+        </div>
+
+        <div id="multi-course-list" style="margin-top:16px"></div>
+      </div>
+
+      <div style="margin-bottom:32px">
+        <button id="multi-submit-btn" class="btn btn-primary btn-block"
+                style="font-size:1rem;padding:14px"
+                onclick="submitMultiple()">
+          📤 送出全部
+        </button>
+        <div class="form-hint" style="text-align:center;margin-top:8px">
+          送出後進入待審狀態，請等候處室管理者審核
+        </div>
+        <div id="multi-result-panel" class="hidden" style="margin-top:16px"></div>
       </div>
     </div>
   </div>
@@ -245,16 +317,30 @@
 
   var _allCatalog        = [];
   var _allRequirements   = [];
+  var _myRecords         = [];      // 教師自己的所有紀錄（多選登錄用來判斷課程是否已有進行中紀錄，Y-4）
   var _selectedCatalog   = null;
   var _selectedReqId     = '';      // 選取的任務編號（空白 = 自由研習）
   var _currentMode       = 'catalog';
   var _resubmitRec       = null;
   var _selectedFile      = null;
 
+  /* ── 多選登錄（task_7d29e6a3）狀態 ── */
+  var _multiMode         = false;
+  var _multiSelected     = {};      // { catalogId: { date, file, status, errorMsg, recordId } }
+  var _multiSharedFile   = null;    // 共用模式選取的 File
+  var _multiSharedFileObj = null;   // 共用模式轉好的 base64（避免重複轉檔／重試時重用）
+
   /* ── 登入後初始化 ── */
   function onLoginSuccess() { _init(); }
 
   function _init() {
+    // R-2：getMyRecords 只服務 Y-4 的「已有紀錄」加分提示，不該成為整頁能不能 render 的
+    // 硬相依（跟同檔 _checkImported「靜默失敗，不影響登錄流程」的既有慣例一致）。
+    // 拆出獨立呼叫，失敗就靜默降級為空陣列，不擋 Promise.all 那兩支關鍵資料
+    api('v1/getMyRecords', {})
+      .then(function(res) { _myRecords = (res && res.data) ? res.data : []; })
+      .catch(function() { _myRecords = []; });
+
     Promise.all([
       api('v1/getCatalog', {}),
       api('v1/getRequirements', {})
@@ -263,6 +349,7 @@
       _allRequirements = (results[1] && results[1].data) ? results[1].data : [];
       _buildReqOptions();
       _buildCatalogSelect('');
+      _buildMultiToggle('');
 
       if (INIT_RESUBMIT_ID) {
         _loadResubmitData();
@@ -361,6 +448,8 @@
     }
     // 重建課程選單（依任務篩選）
     _buildCatalogSelect(requirementId);
+    // Y-6：切換任務一律重置多選狀態（強制退出多選模式），並依新任務重算是否顯示切換
+    _buildMultiToggle(requirementId);
     // 觸發匯入預檢
     _checkImported(requirementId);
   }
@@ -409,13 +498,18 @@
     _renderImportedWarnList(records, _importWarnDetailVisible);
   }
 
+  /* 該任務的推薦課程（供單選下拉分組與多選勾選清單共用） */
+  function _linkedCourses(requirementId) {
+    return requirementId ? _allCatalog.filter(function(c) { return c.requirementId === requirementId; }) : [];
+  }
+
   /* ── 建立課程選單（可依 requirementId 篩選）── */
   function _buildCatalogSelect(requirementId) {
     var sel = document.getElementById('catalog-select');
     var opts = '<option value="">— 請選擇研習課程 —</option>';
     // R-4：只依 requirementId 分組決定放進哪個 optgroup，不篩掉課程本身——
     // 掛在其他任務的課程一律歸「其他課程」，教師端不會有課程從下拉消失
-    var linked   = requirementId ? _allCatalog.filter(function(c) { return c.requirementId === requirementId; }) : [];
+    var linked   = _linkedCourses(requirementId);
     var unlinked = requirementId ? _allCatalog.filter(function(c) { return c.requirementId !== requirementId; }) : _allCatalog;
 
     if (linked.length) {
@@ -436,6 +530,469 @@
     // 若已選取課程，重置
     _selectedCatalog = null;
     _unlockFields();
+  }
+
+  /* ==================== 多選登錄（task_7d29e6a3） ==================== */
+
+  /** 該課程是否已有進行中或已通過的紀錄（Y-4，減少重複登錄摩擦） */
+  function _hasActiveRecord(catalogId) {
+    for (var i = 0; i < _myRecords.length; i++) {
+      if (_myRecords[i].catalogId === catalogId &&
+          (_myRecords[i].status === 'PENDING' || _myRecords[i].status === 'APPROVED')) return true;
+    }
+    return false;
+  }
+
+  /** 依目前任務決定是否顯示「一次登錄多門課程」切換；任務一變動就強制退出多選（Y-6） */
+  function _buildMultiToggle(requirementId) {
+    if (_multiMode) _exitMultiMode();
+    var wrap = document.getElementById('multi-toggle-wrap');
+    // A7：退件重送一律不出現多選切換——那是修改既有單筆紀錄，不是新增多筆
+    var show = !INIT_RESUBMIT_ID && _linkedCourses(requirementId).length >= 2;
+    wrap.classList.toggle('hidden', !show);
+  }
+
+  function toggleMultiMode() {
+    if (document.getElementById('multi-toggle-checkbox').checked) _enterMultiMode();
+    else _exitMultiMode();
+  }
+
+  function _enterMultiMode() {
+    _multiMode = true;
+    _multiSelected = {};
+    _multiSharedFile = null;
+    _multiSharedFileObj = null;
+    document.getElementById('multi-toggle-checkbox').checked = true;
+    // Y-e：整組（含「選擇研習課程 *」標籤）一起藏，不是只藏下拉本身
+    document.getElementById('catalog-select-group').style.display = 'none';
+    document.getElementById('single-submit-section').classList.add('hidden');
+    document.getElementById('multi-section').classList.remove('hidden');
+    document.getElementById('multi-result-panel').classList.add('hidden');
+    document.getElementById('multi-result-panel').innerHTML = '';
+    document.getElementById('multi-file-shared').checked = true;
+    document.getElementById('multi-shared-upload-hint').classList.remove('hidden');
+    document.getElementById('multi-shared-upload-preview').classList.add('hidden');
+    _renderMultiCourseList(_selectedReqId);
+    onMultiFileModeChange(); // 需在課程清單 render 之後，才找得到 .multi-each-upload 元素
+  }
+
+  function _exitMultiMode() {
+    _multiMode = false;
+    _multiSelected = {};
+    _multiSharedFile = null;
+    _multiSharedFileObj = null;
+    var cb = document.getElementById('multi-toggle-checkbox');
+    if (cb) cb.checked = false;
+    document.getElementById('catalog-select-group').style.display = '';
+    document.getElementById('single-submit-section').classList.remove('hidden');
+    document.getElementById('multi-section').classList.add('hidden');
+  }
+
+  function onMultiFileModeChange() {
+    var shared = document.getElementById('multi-file-shared').checked;
+    document.getElementById('multi-shared-upload-wrap').classList.toggle('hidden', !shared);
+    document.querySelectorAll('.multi-each-upload').forEach(function(el) {
+      el.classList.toggle('hidden', shared);
+    });
+  }
+
+  /** 建立勾選清單：推薦課程與其他課程合併為同一份清單（R-5 全改勾選） */
+  function _renderMultiCourseList(requirementId) {
+    var linked   = _linkedCourses(requirementId);
+    var unlinked = requirementId ? _allCatalog.filter(function(c) { return c.requirementId !== requirementId; }) : _allCatalog;
+    var html = '';
+    if (linked.length) {
+      html += '<div style="font-size:0.78rem;font-weight:700;color:var(--gray-600);margin:10px 0 6px">推薦課程（與本任務相關）</div>';
+      linked.forEach(function(c) { html += _renderMultiCourseRow(c); });
+    }
+    if (unlinked.length) {
+      html += '<div style="font-size:0.78rem;font-weight:700;color:var(--gray-600);margin:14px 0 6px">其他課程</div>';
+      unlinked.forEach(function(c) { html += _renderMultiCourseRow(c); });
+    }
+    document.getElementById('multi-course-list').innerHTML = html;
+  }
+
+  function _renderMultiCourseRow(c) {
+    var disabled = _hasActiveRecord(c.catalogId);
+    var noteHtml = disabled
+      ? '<div style="font-size:0.74rem;color:var(--warning);margin-top:2px">⚠ 已有待審核或已通過的紀錄</div>'
+      : '';
+    return '<div style="border:1px solid var(--gray-300);border-radius:var(--radius);' +
+        'padding:10px 12px;margin-bottom:8px' + (disabled ? ';opacity:0.6' : '') + '">' +
+      '<label style="display:flex;align-items:flex-start;gap:10px;' +
+          'cursor:' + (disabled ? 'not-allowed' : 'pointer') + '">' +
+        '<input type="checkbox" class="multi-course-checkbox" id="multi-checkbox-' + c.catalogId + '"' +
+          (disabled ? ' disabled data-y4-disabled="1"' : '') +
+          ' onchange="onMultiCourseToggle(\'' + c.catalogId + '\', this.checked)"' +
+          ' style="width:20px;height:20px;flex-shrink:0;margin-top:2px;' +
+          'cursor:' + (disabled ? 'not-allowed' : 'pointer') + '">' +
+        '<div style="min-width:0;flex:1">' +
+          '<div style="font-weight:600;font-size:0.88rem">' + _e(c.title) + '（' + c.hours + ' 小時）</div>' +
+          noteHtml +
+        '</div>' +
+      '</label>' +
+      '<div class="hidden" id="multi-sub-' + c.catalogId + '" ' +
+          'style="margin:10px 0 2px 30px;padding:10px 12px;background:var(--gray-100);border-radius:var(--radius)">' +
+        '<div class="form-group" style="margin-bottom:8px">' +
+          '<label class="form-label" style="font-size:0.78rem">研習日期 <span class="req">*</span></label>' +
+          '<input type="date" class="form-control" min="2000-01-01" max="2100-12-31" style="padding:8px"' +
+            ' onchange="onMultiDateChange(\'' + c.catalogId + '\', this.value)">' +
+        '</div>' +
+        '<div class="multi-each-upload hidden" id="multi-each-upload-' + c.catalogId + '">' +
+          '<div class="upload-area" style="padding:14px"' +
+            ' onclick="triggerMultiEachFileInput(\'' + c.catalogId + '\')"' +
+            ' ondragover="onMultiEachDragOver(event)" ondragleave="onMultiEachDragLeave(event)"' +
+            ' ondrop="onMultiEachDrop(event,\'' + c.catalogId + '\')">' +
+            '<div id="multi-each-hint-' + c.catalogId + '" style="font-size:0.80rem;font-weight:700;color:var(--primary)">' +
+              '📎 點擊或拖曳上傳此門課的證明（PDF/JPG/PNG/GIF，8MB）</div>' +
+            '<div id="multi-each-preview-' + c.catalogId + '" class="hidden" ' +
+              'style="font-size:0.80rem;font-weight:700;color:var(--success)">' +
+              '✅ <span id="multi-each-filename-' + c.catalogId + '"></span></div>' +
+          '</div>' +
+          '<input type="file" id="multi-each-file-input-' + c.catalogId + '"' +
+            ' accept=".pdf,.jpg,.jpeg,.png,.gif" style="display:none"' +
+            ' onchange="onMultiEachFileSelected(\'' + c.catalogId + '\')">' +
+        '</div>' +
+        '<div class="multi-status" id="multi-status-' + c.catalogId + '" style="font-size:0.78rem;margin-top:8px"></div>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function onMultiCourseToggle(catalogId, checked) {
+    var sub = document.getElementById('multi-sub-' + catalogId);
+    if (checked) {
+      _multiSelected[catalogId] = _multiSelected[catalogId] ||
+        { date: '', file: null, status: 'idle', errorMsg: '', recordId: null };
+      sub.classList.remove('hidden');
+      // Y-i：上一批全部送出成功後按鈕會被停用改字，此時再勾一門新課要能送，
+      // 不能讓教師卡在「✅ 已全部送出」按不下去、得退出多選再進來
+      var btn = document.getElementById('multi-submit-btn');
+      if (btn.disabled) { btn.disabled = false; btn.textContent = '📤 送出全部'; }
+    } else {
+      delete _multiSelected[catalogId];
+      sub.classList.add('hidden');
+    }
+  }
+
+  function onMultiDateChange(catalogId, value) {
+    if (_multiSelected[catalogId]) _multiSelected[catalogId].date = value;
+  }
+
+  /* ── 共用證明檔案上傳互動 ── */
+  function triggerMultiSharedFileInput() { document.getElementById('multi-shared-file-input').click(); }
+  function onMultiSharedFileSelected() {
+    var input = document.getElementById('multi-shared-file-input');
+    if (input.files && input.files[0]) _setMultiSharedFile(input.files[0]);
+  }
+  function onMultiSharedDragOver(e) {
+    e.preventDefault();
+    document.getElementById('multi-shared-upload-area').classList.add('dragover');
+  }
+  function onMultiSharedDragLeave() {
+    document.getElementById('multi-shared-upload-area').classList.remove('dragover');
+  }
+  function onMultiSharedDrop(e) {
+    e.preventDefault();
+    document.getElementById('multi-shared-upload-area').classList.remove('dragover');
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files[0]) _setMultiSharedFile(files[0]);
+  }
+  function _setMultiSharedFile(f) {
+    var allowed = ['application/pdf','image/jpeg','image/png','image/gif'];
+    if (allowed.indexOf(f.type) === -1) {
+      showToast('僅支援 PDF、JPG、PNG、GIF 格式，請重新選擇。', 'error'); return;
+    }
+    _multiSharedFile = f;
+    _multiSharedFileObj = null; // 換了檔案，先前轉好的 base64 失效
+    document.getElementById('multi-shared-upload-hint').classList.add('hidden');
+    document.getElementById('multi-shared-upload-preview').classList.remove('hidden');
+    document.getElementById('multi-shared-upload-filename').textContent =
+      f.name + '（' + (f.size/1024/1024).toFixed(2) + ' MB）';
+  }
+
+  /* ── 各自上傳（每門課獨立一個檔案）互動 ── */
+  function triggerMultiEachFileInput(catalogId) {
+    document.getElementById('multi-each-file-input-' + catalogId).click();
+  }
+  function onMultiEachFileSelected(catalogId) {
+    var input = document.getElementById('multi-each-file-input-' + catalogId);
+    if (input.files && input.files[0]) _setMultiEachFile(catalogId, input.files[0]);
+  }
+  function onMultiEachDragOver(e) { e.preventDefault(); e.currentTarget.classList.add('dragover'); }
+  function onMultiEachDragLeave(e) { e.currentTarget.classList.remove('dragover'); }
+  function onMultiEachDrop(e, catalogId) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('dragover');
+    var files = e.dataTransfer && e.dataTransfer.files;
+    if (files && files[0]) _setMultiEachFile(catalogId, files[0]);
+  }
+  function _setMultiEachFile(catalogId, f) {
+    var allowed = ['application/pdf','image/jpeg','image/png','image/gif'];
+    if (allowed.indexOf(f.type) === -1) {
+      showToast('僅支援 PDF、JPG、PNG、GIF 格式，請重新選擇。', 'error'); return;
+    }
+    if (!_multiSelected[catalogId]) return;
+    _multiSelected[catalogId].file = f;
+    document.getElementById('multi-each-hint-' + catalogId).classList.add('hidden');
+    document.getElementById('multi-each-preview-' + catalogId).classList.remove('hidden');
+    document.getElementById('multi-each-filename-' + catalogId).textContent =
+      f.name + '（' + (f.size/1024/1024).toFixed(2) + ' MB）';
+  }
+
+  /** 送出全部：依序逐筆呼叫既有 v1/submitRecord，不合批、不改後端（R-2/R-3/R-4） */
+  function submitMultiple() {
+    // R-1：已成功的課不重送——按鈕再按一次不能整批重複建立紀錄
+    var catalogIds = Object.keys(_multiSelected).filter(function(cid) {
+      return _multiSelected[cid].status !== 'success';
+    });
+    if (!catalogIds.length) {
+      showToast(Object.keys(_multiSelected).length ? '本批已全部送出' : '請至少勾選一門課程', 'error');
+      return;
+    }
+
+    var sharedMode = document.getElementById('multi-file-shared').checked;
+    if (sharedMode && !_multiSharedFile) { showToast('請上傳共用證明檔案', 'error'); return; }
+
+    // Y-3：逐筆驗證日期（複用單筆模式那套邏輯，見 _parseTrainingDate），與（各自模式下的）檔案
+    for (var i = 0; i < catalogIds.length; i++) {
+      var item = _multiSelected[catalogIds[i]];
+      if (!_parseTrainingDate(item.date).ok) {
+        showToast('請確認每一門課的研習日期都已正確填寫', 'error'); return;
+      }
+      if (!sharedMode && !item.file) {
+        showToast('請確認每一門尚未送出的課都已上傳證明檔案', 'error'); return;
+      }
+    }
+
+    var btn = document.getElementById('multi-submit-btn');
+    btn.disabled = true; btn.textContent = '送出中…';
+    _setMultiCheckboxesDisabled(true); // Y-c：送出期間鎖住勾選框，避免中途增減課程
+    catalogIds.forEach(function(cid) {
+      _multiSelected[cid].status = 'sending';
+      _renderMultiStatus(cid);
+    });
+
+    showSpinner();
+    var sharedReady = sharedMode
+      ? prepareFileForUpload(_multiSharedFile).then(function(fo) { _multiSharedFileObj = fo; return fo; })
+      : Promise.resolve(null);
+
+    sharedReady.then(function(sharedFileObj) {
+      return _submitMultiSequential(catalogIds, 0, sharedMode, sharedFileObj);
+    }).catch(function(err) {
+      hideSpinner();
+      btn.disabled = false; btn.textContent = '📤 送出全部';
+      _setMultiCheckboxesDisabled(false);
+      // Y-b：共用證明轉檔失敗時，把還停在「送出中」的列復原成失敗＋可重試，不留著騙人的假狀態
+      catalogIds.forEach(function(cid) {
+        var it = _multiSelected[cid];
+        if (it && it.status === 'sending') {
+          it.status = 'failed';
+          it.errorMsg = err && err.message ? err.message : '共用證明檔案處理失敗，請重試。';
+          _renderMultiStatus(cid);
+        }
+      });
+      showToast(err && err.message ? err.message : '共用證明檔案處理失敗，請重試。', 'error');
+    });
+  }
+
+  /** Y-c：送出期間鎖住所有勾選框，避免中途勾新課程（不在本批快照內、送不到）或取消勾選
+      （讓 _finishMultiSubmit 讀不到對應的 _multiSelected 項目） */
+  function _setMultiCheckboxesDisabled(disabled) {
+    document.querySelectorAll('.multi-course-checkbox').forEach(function(cb) {
+      // 本來就因 Y-4 停用的課程（已有進行中紀錄）維持停用，不因這裡恢復成可勾
+      if (!disabled && cb.getAttribute('data-y4-disabled') === '1') return;
+      cb.disabled = disabled;
+    });
+  }
+
+  function _submitMultiSequential(catalogIds, index, sharedMode, sharedFileObj) {
+    if (index >= catalogIds.length) {
+      hideSpinner();
+      _finishMultiSubmit(catalogIds);
+      return Promise.resolve();
+    }
+    return _submitOneMultiCourse(catalogIds[index], sharedMode, sharedFileObj)
+      .then(function() { return _submitMultiSequential(catalogIds, index + 1, sharedMode, sharedFileObj); });
+  }
+
+  /** 送出單一課程（多選迴圈與單筆重試共用）。R-3：每門課各自模式下就地呼叫
+      prepareFileForUpload，送完即釋放，不在送出前一次把所有檔案都轉成 base64 */
+  function _submitOneMultiCourse(catalogId, sharedMode, sharedFileObj) {
+    var item = _multiSelected[catalogId];
+    if (!item) return Promise.resolve();
+
+    var course = null;
+    for (var i = 0; i < _allCatalog.length; i++) {
+      if (_allCatalog[i].catalogId === catalogId) { course = _allCatalog[i]; break; }
+    }
+    if (!course) {
+      item.status = 'failed'; item.errorMsg = '找不到課程資料';
+      _renderMultiStatus(catalogId);
+      return Promise.resolve();
+    }
+    // Y-5：主辦單位理論上由課程資料強制必填帶入，這裡比照單筆模式多一層防呆
+    if (!course.organizer) {
+      item.status = 'failed'; item.errorMsg = '課程缺少主辦單位資料，請聯絡管理者確認課程設定';
+      _renderMultiStatus(catalogId);
+      return Promise.resolve();
+    }
+
+    var parsed = _parseTrainingDate(item.date);
+    var body = {
+      catalogId:     catalogId,
+      title:         course.title,
+      hours:         course.hours,
+      isCustom:      false,
+      trainingDate:  parsed.value,
+      organizer:     course.organizer,
+      requirementId: _selectedReqId || ''
+    };
+
+    var filePromise = sharedMode ? Promise.resolve(sharedFileObj) : prepareFileForUpload(item.file);
+
+    return filePromise.then(function(fileObj) {
+      body.base64   = fileObj.base64;
+      body.mimeType = fileObj.mimeType;
+      body.fileName = fileObj.fileName;
+      return api('v1/submitRecord', body);
+    }).then(function(res) {
+      if (res && res.success) {
+        item.status = 'success'; item.recordId = res.recordId;
+        if (!sharedMode) item.file = null; // 成功後即釋放；失敗則保留供單筆重試
+      } else {
+        item.status = 'failed'; item.errorMsg = (res && res.error) || '送出失敗';
+      }
+      _renderMultiStatus(catalogId);
+    }).catch(function(err) {
+      item.status = 'failed';
+      item.errorMsg = (err && err.message && err.message !== 'TOKEN_EXPIRED') ? err.message : '系統錯誤，請稍後再試';
+      _renderMultiStatus(catalogId);
+    });
+  }
+
+  function _renderMultiStatus(catalogId) {
+    var item = _multiSelected[catalogId];
+    var el = document.getElementById('multi-status-' + catalogId);
+    if (!el || !item) return;
+    if (item.status === 'sending') {
+      el.innerHTML = '<span style="color:var(--gray-500)">⏳ 送出中…</span>';
+    } else if (item.status === 'success') {
+      el.innerHTML = '<span style="color:var(--success);font-weight:700">✅ 已送出</span>';
+    } else if (item.status === 'failed') {
+      el.innerHTML = '<span style="color:var(--danger)">❌ ' + _e(item.errorMsg) + '</span> ' +
+        '<button class="btn btn-xs btn-outline" onclick="retryOneMultiCourse(\'' + catalogId + '\')">重試這筆</button>';
+    }
+  }
+
+  /** Y-7：部分失敗支援單筆重試，不必整批重來 */
+  function retryOneMultiCourse(catalogId) {
+    var item = _multiSelected[catalogId];
+    if (!item) return;
+    var sharedMode = document.getElementById('multi-file-shared').checked;
+
+    if (!sharedMode && !item.file) {
+      item.status = 'failed';
+      item.errorMsg = '證明檔案已被清除，請重新上傳這門課的證明後再試';
+      _renderMultiStatus(catalogId);
+      return;
+    }
+    // R-3：共用模式下若共用檔案本身還沒選過（例如原本是各自上傳失敗後才切成共用），
+    // prepareFileForUpload(null) 會同步丟出例外，發生在 showSpinner() 之後就沒有 .catch
+    // 接得到、遮罩會卡死。這裡先擋在 showSpinner() 之前
+    if (sharedMode && !_multiSharedFileObj && !_multiSharedFile) {
+      item.status = 'failed';
+      item.errorMsg = '請先上傳共用證明檔案';
+      _renderMultiStatus(catalogId);
+      return;
+    }
+
+    item.status = 'sending';
+    _renderMultiStatus(catalogId);
+    showSpinner();
+
+    var ready = (sharedMode && !_multiSharedFileObj)
+      ? prepareFileForUpload(_multiSharedFile).then(function(fo) { _multiSharedFileObj = fo; return fo; })
+      : Promise.resolve(_multiSharedFileObj);
+
+    ready.then(function(sharedFileObj) {
+      return _submitOneMultiCourse(catalogId, sharedMode, sharedFileObj);
+    }).then(function() {
+      hideSpinner();
+      _markCourseSubmittedIfSuccess(catalogId);
+    }).catch(function(err) {
+      hideSpinner();
+      // R-4：共用檔案在這裡（例如超過 8MB）再次轉檔失敗時，比照 :783-790 batch 路徑
+      // 還原成 failed 並重新 render，不能只關遮罩——否則這一列會永久停在「⏳ 送出中…」
+      // 且重試按鈕消失，使用者只能取消勾選再勾一次才能復原
+      item.status = 'failed';
+      item.errorMsg = (err && err.message) ? err.message : '送出失敗，請重試。';
+      _renderMultiStatus(catalogId);
+    });
+  }
+
+  /** Y-d：課程送出成功後同步進 _myRecords 並停用該列勾選框，單筆重試與批次送出共用 */
+  function _markCourseSubmittedIfSuccess(catalogId) {
+    var item = _multiSelected[catalogId];
+    if (!item || item.status !== 'success') return;
+    // Y-j：push 完整欄位而非只有 catalogId／status 的殘缺 stub——Y-f 讓 _loadResubmitData
+    // 也會讀 _myRecords，日後若有別的地方跟著讀更多欄位，殘缺 stub 會是埋著的坑
+    var course = null;
+    for (var i = 0; i < _allCatalog.length; i++) {
+      if (_allCatalog[i].catalogId === catalogId) { course = _allCatalog[i]; break; }
+    }
+    var parsedDate = _parseTrainingDate(item.date);
+    _myRecords.push({
+      recordId:      item.recordId || '',
+      catalogId:     catalogId,
+      title:         course ? course.title : '',
+      hours:         course ? course.hours : 0,
+      isCustom:      false,
+      trainingDate:  parsedDate.ok ? parsedDate.value : '',
+      organizer:     course ? course.organizer : '',
+      status:        'PENDING',
+      requirementId: _selectedReqId || ''
+    });
+    var cb = document.getElementById('multi-checkbox-' + catalogId);
+    if (cb) { cb.disabled = true; cb.setAttribute('data-y4-disabled', '1'); }
+  }
+
+  function _finishMultiSubmit(catalogIds) {
+    _setMultiCheckboxesDisabled(false); // Y-c：解除送出期間的鎖定（Y-4 停用的課程仍維持停用）
+
+    var successCount = 0, failCount = 0;
+    catalogIds.forEach(function(cid) {
+      // Y-c：防呆——理論上送出期間已鎖住勾選框，這裡不該讀到 undefined，仍加一層守衛
+      if (!_multiSelected[cid]) return;
+      if (_multiSelected[cid].status === 'success') successCount++;
+      else if (_multiSelected[cid].status === 'failed') failCount++;
+    });
+
+    // Y-d：本批成功的課程同步進 _myRecords 並直接停用該列勾選框，不整段重繪清單
+    // （重繪會把剛顯示的「✅ 已送出」／「❌ 失敗＋重試這筆」都蓋掉，B2 要求的重試 UI 會憑空消失）
+    catalogIds.forEach(function(cid) { _markCourseSubmittedIfSuccess(cid); });
+
+    var btn = document.getElementById('multi-submit-btn');
+    if (failCount === 0) {
+      // R-1：全部送出成功後，這顆按鈕不該還能再按一次造成整批重送
+      btn.disabled = true; btn.textContent = '✅ 已全部送出';
+    } else {
+      btn.disabled = false; btn.textContent = '📤 送出全部（重試失敗項目）';
+    }
+
+    var panel = document.getElementById('multi-result-panel');
+    var msg = '✅ 成功 ' + successCount + ' 筆';
+    if (failCount) {
+      msg += '，❌ 失敗 ' + failCount + ' 筆（請於上方各筆按「重試這筆」。' +
+        '重試前建議先到「我的紀錄」確認該筆是否其實已送達伺服器，避免網路中斷造成的誤判）';
+    }
+    panel.classList.remove('hidden');
+    panel.innerHTML =
+      '<div style="font-size:0.88rem;font-weight:600;margin-bottom:10px">' + msg + '</div>' +
+      '<button class="btn btn-outline btn-block" onclick="_navigate(\'?page=records\')">📋 前往我的紀錄</button>';
+
+    if (failCount === 0) showToast('✅ 全部登錄成功！請等候管理者審核。', 'success');
+    else showToast('部分登錄失敗，請重試失敗的項目', 'error');
   }
 
   function _preselectCatalog(catalogId) {
@@ -476,7 +1033,10 @@
   /* ── 退件重送：載入原紀錄 ── */
   function _loadResubmitData() {
     showSpinner();
-    api('v1/getMyRecords', {})
+    // Y-f：_init() 已為了 Y-4 抓過一次 _myRecords（整表 parseSheetData，成本不低）；
+    // 若那支已經回來就直接沿用，不重打一次。仍未回來時退回原本各自抓取，
+    // 錯誤處理與訊息維持原樣，不改變既有行為
+    (_myRecords.length ? Promise.resolve({ data: _myRecords }) : api('v1/getMyRecords', {}))
       .then(function(res) {
         hideSpinner();
         var records = (res && res.data) ? res.data : [];
@@ -545,6 +1105,8 @@
     }
     document.getElementById('section-catalog').style.display = isCatalog ? '' : 'none';
     if (!isCatalog) {
+      // A5：切到自訂課程模式時，多選登錄（只適用於「從研習目錄選擇」）一併強制退出
+      if (_multiMode) _exitMultiMode();
       _selectedCatalog = null;
       document.getElementById('catalog-select').value = '';
       _unlockFields();
@@ -637,6 +1199,21 @@
     el.style.display = 'none'; el.textContent = '';
   }
 
+  /* Y-3：日期解析＋範圍檢查，單筆與多選送出共用同一套邏輯，嚴禁 new Date(字串)
+     （gas-limitations 鐵律：字串建構的 Date 在不同瀏覽器/地區解析行為不一致） */
+  function _parseTrainingDate(dateStr) {
+    if (!dateStr) return { ok: false };
+    var dp = dateStr.split('-');
+    var dpYear  = parseInt(dp[0], 10);
+    var dpMonth = parseInt(dp[1], 10);
+    var dpDay   = parseInt(dp[2], 10);
+    if (dp.length !== 3 || isNaN(dpYear) || isNaN(dpMonth) || isNaN(dpDay) ||
+        dpYear < 2000 || dpYear > 2100 || dpMonth < 1 || dpMonth > 12 || dpDay < 1 || dpDay > 31) {
+      return { ok: false };
+    }
+    return { ok: true, value: dpYear + '/' + dpMonth + '/' + dpDay };
+  }
+
   /* ── 表單送出 ── */
   function submitRecord() {
     _clearUploadError();
@@ -651,15 +1228,11 @@
     if (!dateStr)                            { showToast('請選擇研習日期', 'error');           return; }
     if (!organizer)                          { showToast('請填寫主辦單位', 'error');           return; }
 
-    var dp = dateStr.split('-');
-    var dpYear  = parseInt(dp[0], 10);
-    var dpMonth = parseInt(dp[1], 10);
-    var dpDay   = parseInt(dp[2], 10);
-    if (dp.length !== 3 || isNaN(dpYear) || isNaN(dpMonth) || isNaN(dpDay) ||
-        dpYear < 2000 || dpYear > 2100 || dpMonth < 1 || dpMonth > 12 || dpDay < 1 || dpDay > 31) {
+    var parsedDate = _parseTrainingDate(dateStr);
+    if (!parsedDate.ok) {
       showToast('日期格式異常，請重新選擇研習日期', 'error'); return;
     }
-    var trainingDate = dpYear + '/' + dpMonth + '/' + dpDay;
+    var trainingDate = parsedDate.value;
 
     var reuseChecked = false;
     var reuseEl = document.getElementById('opt-reuse');
@@ -749,6 +1322,23 @@
   window.onDrop                = onDrop;
   window.submitRecord          = submitRecord;
   window.toggleImportedDetail  = toggleImportedDetail;
+  /* Y-1：多選登錄（task_7d29e6a3）新增的 inline handler 一併掛 window */
+  window.toggleMultiMode           = toggleMultiMode;
+  window.onMultiFileModeChange     = onMultiFileModeChange;
+  window.onMultiCourseToggle       = onMultiCourseToggle;
+  window.onMultiDateChange         = onMultiDateChange;
+  window.triggerMultiSharedFileInput = triggerMultiSharedFileInput;
+  window.onMultiSharedFileSelected = onMultiSharedFileSelected;
+  window.onMultiSharedDragOver     = onMultiSharedDragOver;
+  window.onMultiSharedDragLeave    = onMultiSharedDragLeave;
+  window.onMultiSharedDrop         = onMultiSharedDrop;
+  window.triggerMultiEachFileInput = triggerMultiEachFileInput;
+  window.onMultiEachFileSelected   = onMultiEachFileSelected;
+  window.onMultiEachDragOver       = onMultiEachDragOver;
+  window.onMultiEachDragLeave      = onMultiEachDragLeave;
+  window.onMultiEachDrop           = onMultiEachDrop;
+  window.submitMultiple            = submitMultiple;
+  window.retryOneMultiCourse       = retryOneMultiCourse;
   </script>
 </body>
 </html>
