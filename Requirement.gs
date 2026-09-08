@@ -125,6 +125,7 @@ function addRequirement(adminId, body) {
   if (!body.endDate) return _err('MISSING_END_DATE');
 
   const owner = String(body.owner || '').trim();
+  if (owner && !OWNER_DEPTS.includes(owner)) return _err('INVALID_OWNER');
 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
@@ -194,6 +195,11 @@ function editRequirement(adminId, body) {
 
     const rowIdx = data.findIndex((row, i) => i > 0 && row[idIdx] === body.requirementId);
     if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
+
+    if (body.owner !== undefined) {
+      const ownerVal = String(body.owner || '').trim();
+      if (ownerVal && !OWNER_DEPTS.includes(ownerVal)) return _err('INVALID_OWNER');
+    }
 
     const EDITABLE = ['name', 'startDate', 'endDate', 'requiredHours', 'hoursNote',
                       'deliveryType', 'semesterSplit', 'notes', 'links', 'isRecurring',
