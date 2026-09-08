@@ -196,6 +196,9 @@ const TEACHER_SNAPSHOT_SHEET = 'TeacherSnapshot';
 const INDICATOR_RULES_KEY    = 'indicatorRules';
 const ROSTER_SOURCES_KEY     = 'rosterSources';   // 各學年度名冊來源記錄（PropertiesService）
 const VALID_DEPT             = ['高中部', '國中部'];  // 納入統計範圍的部別（HealthCheck.gs / TrainingReport.gs / Sync.gs 共用）
+const OWNER_DEPTS            = ['教務處', '學務處', '輔導室', '圖書館'];  // 年度任務「負責處室」受控清單（task_6e2d40af Stage A，Requirement.gs 白名單驗證用）
+// ⚠️ 同步維護點：Admin.html 的 rqm-fowner <select> 選項是硬寫的靜態 HTML（S-A-2 刻意偏離，
+// 未採前端動態讀此常數），異動本清單時務必回頭同步該處 <option>，否則後端放行、前端選不到。
 const STATS_CACHE_SHEET      = 'StatsCache';       // 伺服器端統計快取工作表
 const REPORT_DOC_TEMPLATE_ID = '';        // fallback；正式值優先讀 PropertiesService（REPORT_TEMPLATE_ID_KEY）
 const SCHOOL_NAME            = '臺北市立中崙高級中學';
