@@ -214,6 +214,8 @@ function editRequirement(adminId, body) {
         data[rowIdx][colIdx] = body[key] === true || body[key] === 'TRUE';
       } else if (key === 'semesterSplit') {
         data[rowIdx][colIdx] = _normalizeSemesterSplit_(body[key]);
+      } else if (key === 'owner') {
+        data[rowIdx][colIdx] = String(body[key] || '').trim();
       } else {
         data[rowIdx][colIdx] = String(body[key]);
       }
