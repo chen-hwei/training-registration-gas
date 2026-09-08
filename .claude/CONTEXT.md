@@ -25,6 +25,13 @@
 **管理者識別** —— `systemAccess.training_admin = true`（存於 `Hub.UserStatusCache`）。
 改了這個欄位必須登出重新登入，Token 才會帶到新的 `systemAccess`。
 
+**`owner`（負責處室）與 `OWNER_DEPTS`** —— `TRAINING_REQUIREMENT.owner` 是任務的
+「主責單位」，v3.22（`task_6e2d40af` Stage A）起收斂為受控清單 `OWNER_DEPTS`
+（`Schema.gs`：教務處／學務處／輔導室／圖書館，可留空）。**與 `VALID_DEPT`
+（`Hub.UserStatusCache.department`，教師部別：高中部／國中部）是完全不同的兩個概念**，
+前者是行政處室、後者是學制部別，命名相近但不可互相 fallback。`TRAINING_CATALOG.department`
+（推薦處室）同樣不等於 `owner`，且**永不參與權限判定**（`task_6e2d40af` §S1/S2 裁示）。
+
 ## 平台陷阱
 
 **消費者 URL 白屏** —— 使用 `script.google.com/macros/s/...`（消費者 URL）時，
