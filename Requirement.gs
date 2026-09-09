@@ -119,13 +119,15 @@ function _normalizeSemesterSplit_(v) {
  *            matchKeywords, audienceRules, teacherNote
  * owner：純由前端傳入，留空即空字串。Hub 的 department 欄位語意是「部別（高中部／國中部）」，
  * 不是「行政處室」，兩者不可互相 fallback，故不自動帶入。
+ * scope 限制下，寫入的 owner 須 ∈ scope（或留空不限制）（B-4／C-3：寫入 owner 的入口驗改後 owner）
  */
-function addRequirement(adminId, body) {
+function addRequirement(adminId, body, scope) {
   if (!body.name)    return _err('MISSING_NAME');
   if (!body.endDate) return _err('MISSING_END_DATE');
 
   const owner = String(body.owner || '').trim();
   if (owner && !OWNER_DEPTS.includes(owner)) return _err('INVALID_OWNER');
+  if (!_inScope_(owner, scope)) return _err('FORBIDDEN');
 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
@@ -180,25 +182,32 @@ function addRequirement(adminId, body) {
  * body 選填：name, startDate, endDate, requiredHours, hoursNote, deliveryType,
  *            semesterSplit, notes, links, isRecurring, owner, targetAudience,
  *            teacherNote, audienceRules, matchKeywords
+ * scope 限制下，改前 owner 與改後 owner 皆須 ∈ scope（或空），任一不符即 FORBIDDEN（B-4）：
+ * 防止管理者把任務單方面轉出自己 scope 後無法復原
  */
-function editRequirement(adminId, body) {
+function editRequirement(adminId, body, scope) {
   if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');
 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
 
   try {
-    const sheet   = _getRequirementSheet();
-    const data    = sheet.getDataRange().getValues();
-    const schema  = SHEET_SCHEMA.TRAINING_REQUIREMENT;
-    const idIdx   = schema.keys.indexOf('requirementId');
+    const sheet    = _getRequirementSheet();
+    const data     = sheet.getDataRange().getValues();
+    const schema   = SHEET_SCHEMA.TRAINING_REQUIREMENT;
+    const idIdx    = schema.keys.indexOf('requirementId');
+    const ownerIdx = schema.keys.indexOf('owner');
 
     const rowIdx = data.findIndex((row, i) => i > 0 && row[idIdx] === body.requirementId);
     if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
 
+    const currentOwner = String(data[rowIdx][ownerIdx] || '').trim();
+    if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');
+
     if (body.owner !== undefined) {
       const ownerVal = String(body.owner || '').trim();
       if (ownerVal && !OWNER_DEPTS.includes(ownerVal)) return _err('INVALID_OWNER');
+      if (!_inScope_(ownerVal, scope)) return _err('FORBIDDEN');
     }
 
     const EDITABLE = ['name', 'startDate', 'endDate', 'requiredHours', 'hoursNote',
@@ -238,22 +247,27 @@ function editRequirement(adminId, body) {
 /**
  * 封存年度研習任務（status → ARCHIVED）
  * body 必填：requirementId
+ * scope 限制下，改前 owner 須 ∈ scope（或空）（B-4／C-3：改動既有任務的入口驗改前 owner）
  */
-function archiveRequirement(adminId, body) {
+function archiveRequirement(adminId, body, scope) {
   if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');
 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
 
   try {
-    const sheet   = _getRequirementSheet();
-    const data    = sheet.getDataRange().getValues();
-    const schema  = SHEET_SCHEMA.TRAINING_REQUIREMENT;
-    const idIdx    = schema.keys.indexOf('requirementId');
+    const sheet    = _getRequirementSheet();
+    const data     = sheet.getDataRange().getValues();
+    const schema   = SHEET_SCHEMA.TRAINING_REQUIREMENT;
+    const idIdx     = schema.keys.indexOf('requirementId');
     const statusIdx = schema.keys.indexOf('status');
+    const ownerIdx  = schema.keys.indexOf('owner');
 
     const rowIdx = data.findIndex((row, i) => i > 0 && row[idIdx] === body.requirementId);
     if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
+
+    const currentOwner = String(data[rowIdx][ownerIdx] || '').trim();
+    if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');
 
     data[rowIdx][statusIdx] = 'ARCHIVED';
     sheet.clearContents();

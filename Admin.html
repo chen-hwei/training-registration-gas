@@ -385,7 +385,7 @@
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-sm btn-outline" onclick="previewNotification()">🔍 預覽名單</button>
-          <button class="btn btn-sm btn-primary" onclick="triggerNotification()">📨 立即發送通知</button>
+          <button id="btn-trigger-notify" class="btn btn-sm btn-primary" onclick="triggerNotification()">📨 立即發送通知</button>
         </div>
       </div>
 
@@ -403,7 +403,7 @@
           </select>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-sm btn-outline" onclick="renewRequirements()">📋 複製到下學年</button>
+          <button id="btn-renew-req" class="btn btn-sm btn-outline" onclick="renewRequirements()">📋 複製到下學年</button>
           <button class="btn btn-sm btn-outline" onclick="runYearSwitchHealthCheck()">🩺 學年切換健檢</button>
           <button class="btn btn-sm btn-primary" onclick="openReqModal(null)">＋ 新增任務</button>
         </div>
@@ -769,6 +769,13 @@
   var _rejectTargetId = null; // 目前正在退件的 recordId
   var _editCatalogId  = null; // null = 新增；string = 編輯
 
+  /* ── 處室權限（task_6e2d40af Stage B）：owner 為空一律視為全體可操作 ── */
+  function _inMyScope(owner) {
+    if (!owner) return true;
+    return (typeof isAllScope === 'function' ? isAllScope() : true) ||
+      (getTrainingScope() || []).indexOf(owner) !== -1;
+  }
+
   /* ── 登入成功後初始化（必須重新驗證管理者身分）── */
   function onLoginSuccess() {
     if (!isAdmin()) {
@@ -879,7 +886,7 @@
       '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:100px">' +
         (r.fileId
           ? '<button class="btn btn-xs btn-outline" onclick="viewFile(\'' +
-            r.fileId + '\')">📎 查看證明</button>'
+            r.recordId + '\')">📎 查看證明</button>'
           : '') +
         '<button class="btn btn-xs btn-success"' +
         ' onclick="approveOne(\'' + r.recordId + '\')">✅ 核准</button>' +
@@ -980,21 +987,25 @@
       });
   }
 
-  /* ── 查看證明檔案 ── */
-  function viewFile(fileId) {
+  /* ── 查看證明檔案（B-2：改送 recordId，後端反查處室套 scope）── */
+  function viewFile(recordId) {
     showSpinner();
-    api('v1/admin/getFileUrl', { fileId: fileId })
+    api('v1/admin/getFileUrl', { recordId: recordId })
       .then(function(res) {
         hideSpinner();
         if (res && res.url) {
           window.open(res.url, '_blank');
+        } else if (res && res.error === 'STALE_CLIENT') {
+          // C-5：部署過渡期，舊分頁仍用舊格式呼叫，與權限拒絕分開提示
+          showToast('頁面版本過舊，請重新整理', 'error');
         } else {
           showToast('無法取得檔案連結', 'error');
         }
       })
       .catch(function(err) {
         hideSpinner();
-        if (err && err.message !== 'TOKEN_EXPIRED') {
+        // Y-C2：FORBIDDEN 已由 api() 統一跳過 toast（config.html:109-110），這裡略過避免連跳兩次
+        if (err && err.message !== 'TOKEN_EXPIRED' && err.message !== 'FORBIDDEN') {
           showToast('取得檔案失敗', 'error');
         }
       });
@@ -1119,6 +1130,33 @@
       });
   }
 
+  /** 依課程 requirementId 反查所屬任務的 owner（_reqRecords 已於載入時一併取得） */
+  function _catalogOwnerOf(c) {
+    if (!c.requirementId) return '';
+    for (var i = 0; i < _reqRecords.length; i++) {
+      if (_reqRecords[i].requirementId === c.requirementId) return _reqRecords[i].owner || '';
+    }
+    return '';
+  }
+
+  /**
+   * 課程列的編輯/封存鈕（Y-C4）：任務清單載入失敗（_reqLoadFailed）時，
+   * 掛了任務的課程無法反查 owner，_catalogOwnerOf 會回 ''而誤判為全體可操作——
+   * 此時改顯示中性狀態，不讓前端「看起來」對所有人開放（後端仍會擋，這是體驗層修正）
+   */
+  function _catalogActionsHtml(c) {
+    if (c.requirementId && _reqLoadFailed) {
+      return '<span style="font-size:0.72rem;color:var(--gray-500)">⚠️ 任務清單載入失敗，無法確認處室</span>';
+    }
+    return _inMyScope(_catalogOwnerOf(c))
+      ? '<button class="btn btn-xs btn-outline"' +
+        ' onclick="openCatalogModal(\'' + c.catalogId + '\')">✏️ 編輯</button>' +
+        '<button class="btn btn-xs btn-outline"' +
+        ' style="border-color:var(--warning);color:var(--warning)"' +
+        ' onclick="archiveCatalog(\'' + c.catalogId + '\')">🗃 封存</button>'
+      : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非本處室</span>';
+  }
+
   function _renderCatalogAdmin() {
     var list = document.getElementById('catalog-admin-list');
     if (!_catalogRecords.length) {
@@ -1156,11 +1194,7 @@
           '</div>' +
         '</div>' +
         '<div class="catalog-admin-actions">' +
-          '<button class="btn btn-xs btn-outline"' +
-          ' onclick="openCatalogModal(\'' + c.catalogId + '\')">✏️ 編輯</button>' +
-          '<button class="btn btn-xs btn-outline"' +
-          ' style="border-color:var(--warning);color:var(--warning)"' +
-          ' onclick="archiveCatalog(\'' + c.catalogId + '\')">🗃 封存</button>' +
+          _catalogActionsHtml(c) +
         '</div>' +
         '</div>';
     }).join('');
@@ -1618,13 +1652,36 @@
         '</div>' +
         '<div class="req-admin-actions">' +
           (r.status !== 'ARCHIVED'
-            ? '<button class="btn btn-xs btn-outline" onclick="openReqModal(\'' + r.requirementId + '\')">✏️ 編輯</button>' +
-              '<button class="btn btn-xs btn-outline" style="border-color:var(--warning);color:var(--warning)"' +
-              ' onclick="archiveReq(\'' + r.requirementId + '\')">🗃 封存</button>'
+            ? (_inMyScope(r.owner)
+                ? '<button class="btn btn-xs btn-outline" onclick="openReqModal(\'' + r.requirementId + '\')">✏️ 編輯</button>' +
+                  '<button class="btn btn-xs btn-outline" style="border-color:var(--warning);color:var(--warning)"' +
+                  ' onclick="archiveReq(\'' + r.requirementId + '\')">🗃 封存</button>'
+                : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非本處室</span>')
             : '') +
         '</div>' +
         '</div>';
     }).join('');
+  }
+
+  /**
+   * 依呼叫者 scope 過濾 rqm-fowner 選項（Y-B3，B-4 前端配套）：
+   * 全權管理者看到全部 4 處室；處室管理者只看到自己 scope 內的處室（＋若編輯中的既有值
+   * 不在允許清單內，額外補一個選項讓既有值仍可顯示，不因下拉重建而被靜默改掉）。
+   * 單一 scope 帳號新增任務時，預設值直接帶入該處室（C-2 配套）。
+   */
+  function _rqmPopulateOwnerOptions(currentOwner, isNew) {
+    var sel  = document.getElementById('rqm-fowner');
+    var all  = ['教務處', '學務處', '輔導室', '圖書館'];
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    var allowed = isAll ? all : (getTrainingScope() || []).filter(function(d) { return d !== 'ALL'; });
+
+    var html = '<option value="">（未指定）</option>' +
+      allowed.map(function(d) { return '<option value="' + _e(d) + '">' + _e(d) + '</option>'; }).join('');
+    if (currentOwner && allowed.indexOf(currentOwner) === -1) {
+      html += '<option value="' + _e(currentOwner) + '">' + _e(currentOwner) + '</option>';
+    }
+    sel.innerHTML = html;
+    sel.value = (isNew && !isAll && allowed.length === 1) ? allowed[0] : (currentOwner || '');
   }
 
   /* ── 新增 / 編輯 Modal ── */
@@ -1645,7 +1702,7 @@
     document.getElementById('rqm-fdelivery').value   = obj ? (obj.deliveryType || '') : '';
     document.getElementById('rqm-fsemester').value   = obj ? (obj.semesterSplit || '') : '';
     document.getElementById('rqm-faudience').value   = obj ? (obj.targetAudience || '') : '';
-    document.getElementById('rqm-fowner').value      = obj ? (obj.owner || '') : '';
+    _rqmPopulateOwnerOptions(obj ? (obj.owner || '') : '', !obj);
     document.getElementById('rqm-fnotes').value      = obj ? (obj.notes || '') : '';
     document.getElementById('rqm-fteachernote').value= obj ? (obj.teacherNote || '') : '';
     document.getElementById('rqm-flinks').value      = obj ? (obj.links || '') : '';
@@ -3156,9 +3213,29 @@
     });
   }
 
+  /**
+   * 依 scope 調整跨處室操作的 UI（Y-B1）：「複製到下學年」為跨處室批次寫入，
+   * 僅全權管理者可執行（renewRequirements 已裁示 ALL-only），非全權一律停用
+   */
+  function _applyScopeUI() {
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    if (isAll) return;
+    var renewBtn = document.getElementById('btn-renew-req');
+    if (renewBtn) {
+      renewBtn.disabled = true;
+      renewBtn.title = '僅全權管理者可執行跨處室批次複製';
+    }
+    // Y-C1：立即發送通知（triggerNotification）為 ALL-only 路由，會寄出全校通知信
+    var notifyBtn = document.getElementById('btn-trigger-notify');
+    if (notifyBtn) {
+      notifyBtn.disabled = true;
+      notifyBtn.title = '僅全權管理者可執行，此操作會寄出全校通知信';
+    }
+  }
+
   /* ── 初始化（管理者限定）── */
   document.addEventListener('DOMContentLoaded', function() {
-    _bootPage({ adminOnly: true }, function(ok) { if (ok) _loadReviews(); });
+    _bootPage({ adminOnly: true }, function(ok) { if (ok) { _loadReviews(); _applyScopeUI(); } });
   });
 
   /* ── GAS Warden 作用域隔離修正 ── */

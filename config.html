@@ -74,6 +74,23 @@ function isAdmin() {
   try { return JSON.parse(localStorage.getItem(_SK.access) || '{}').training_admin === true; }
   catch { return false; }
 }
+/** 讀取處室權限 scope（task_6e2d40af Stage B）；未設定回 null，Admin.html 一律呼叫這裡，
+ *  不得自行 JSON.parse(localStorage) 形成第二判定來源（Y-B2）。
+ *  S-B-2：字串（人工填 Hub 時漏寫中括號，如 "學務處"）正規化為單元素陣列，判準須與
+ *  後端 Schema.gs 的 _normalizeScope_() 同步，避免 fail-open 成全權管理者 */
+function getTrainingScope() {
+  try {
+    var s = JSON.parse(localStorage.getItem(_SK.access) || '{}').training_scope;
+    if (Array.isArray(s)) return s;
+    if (typeof s === 'string' && s.trim() !== '') return [s.trim()];
+    return null;
+  } catch { return null; }
+}
+/** scope 未設定或含 "ALL" 視為全權管理者，判準與後端 Schema.gs 的 _isAllScope_() 一致 */
+function isAllScope() {
+  var s = getTrainingScope();
+  return !s || s.length === 0 || s.indexOf('ALL') !== -1;
+}
 
 function saveSession(d) {
   localStorage.setItem(_SK.token,  d.token);
@@ -450,5 +467,7 @@ window.getToken          = getToken;
 window.getUserId         = getUserId;
 window.getUserName       = getUserName;
 window.isAdmin           = isAdmin;
+window.getTrainingScope  = getTrainingScope;
+window.isAllScope        = isAllScope;
 window._navigate         = _navigate;
 </script>
