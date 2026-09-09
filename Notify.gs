@@ -56,6 +56,10 @@ function _buildNotificationList() {
     }
   });
 
+  // S-D-2：fallback 留痕的 owner 去重集合，整個執行只留一次痕跡（不隨教師/紀錄
+  // 筆數重複寫入 Hub AuditLog，避免退化狀態下的雙層迴圈拖死執行時間）
+  const loggedFallbackOwners = new Set();
+
   const list = [];
 
   catalog.forEach(course => {
@@ -66,6 +70,8 @@ function _buildNotificationList() {
     const daysLeft = Math.ceil((endDate - today) / 86400000);
     const owner    = _resolveRecordOwner_(course, ownerIndex);
     const replyTo  = _replyToForOwner_(owner, buckets);
+    // S-D-2：每門課程只算一次（原寫法在 teachers.forEach 內層，等同每位教師呼叫一次）
+    const adminEmails = daysLeft <= 0 ? _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners) : null;
 
     teachers.forEach(teacher => {
       const key       = teacher.userId + '_' + course.catalogId;
@@ -78,7 +84,6 @@ function _buildNotificationList() {
         }
       } else if (daysLeft <= 0) {
         if (!_hasNotifiedToday('N2', teacher.userId, course.catalogId)) {
-          const adminEmails = _adminEmailsForOwner_(owner, buckets);
           list.push({ type: 'N2', teacher, course, daysLeft, adminEmails, owner, replyTo });
         }
       }
@@ -88,6 +93,9 @@ function _buildNotificationList() {
   // N3：PENDING 紀錄超過 3 天（改為管理者每日彙整，不再逐筆做記錄層級防重複，
   // dedupe 改在 _sendAdminDigest 呼叫端以 adminEmail + 當日 做一次性判斷）
   const threeDaysAgo = new Date(today.getTime() - 3 * 86400000);
+  const teacherById = {};
+  teachers.forEach(t => { teacherById[t.userId] = t; }); // Y-F1：取代 O(n×m) 的 teachers.find()
+  const ownerAdminCache = {}; // S-D-2：N3 依 owner memoize，同一 owner 在本次執行只算一次
   records
     .filter(r => {
       if (r.status !== 'PENDING' || !r.submittedAt) return false;
@@ -95,10 +103,13 @@ function _buildNotificationList() {
       return submitted < threeDaysAgo;
     })
     .forEach(record => {
-      const teacher = teachers.find(t => t.userId === record.userId);
+      const teacher = teacherById[record.userId];
       if (!teacher) return;
-      const owner       = _resolveRecordOwner_(record, ownerIndex);
-      const adminEmails = _adminEmailsForOwner_(owner, buckets);
+      const owner = _resolveRecordOwner_(record, ownerIndex);
+      if (!(owner in ownerAdminCache)) {
+        ownerAdminCache[owner] = _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners);
+      }
+      const adminEmails = ownerAdminCache[owner];
       if (!adminEmails.length) return; // 理論上 _adminEmailsForOwner_ 已保底退回全體，此判斷僅作防禦
       const replyTo = _replyToForOwner_(owner, buckets);
       list.push({ type: 'N3', teacher, record, adminEmails, owner, replyTo });
@@ -110,6 +121,8 @@ function _buildNotificationList() {
 /**
  * 將名單依「課程 × 剩餘天數」（N1）／「課程」（N2 教師）／「管理者信箱」（N2/N3 彙整）分組
  * checkAndNotifyOverdue 與 previewNotification 共用，確保預覽與實發口徑一致
+ * （Y-F4：Stage D 起兩邊共用同一份 _buildNotificationList() 算出的 owner／
+ * adminEmails，Y-B4 登記的「Stage B～D 之間暫時性偏離」至此結案）
  */
 function _groupNotificationList(list) {
   const n1Map = {}, n2Map = {}, n2AdminMap = {}, n3AdminMap = {};
@@ -451,6 +464,9 @@ function _buildAdminBuckets_(preReadRows) {
     if (_isAllScope_(scopeVal)) {
       all.push(email);
     } else {
+      // Y-F6：scopeVal 含受控清單外的值（如舊「研習組」）時 scoped[dept] 不存在，
+      // 該筆靜默跳過，此人不進 all[] 也不進任何 scoped[]——這是刻意結果，與
+      // Stage B _inScope_() 的語意一致（後台同樣看不到清單外處室的資料），非缺陷
       scopeVal.forEach(dept => { if (scoped[dept]) scoped[dept].push(email); });
     }
   });
@@ -465,13 +481,19 @@ function _buildAdminBuckets_(preReadRows) {
  * owner 為受控清單外的舊值時，因 scoped[owner] 不存在，直接落到 union 判斷，
  * 邏輯與「該處室無 scoped 管理者」共用同一條退路，唯有 union 真的為空
  * （全校無任何 ALL-scope 管理者、該處室也無 scoped 管理者）才退回全體 ＋ 留痕（Q-I）。
+ * @param {Set} [loggedFallbackOwners] 呼叫端傳入、跨迴圈共用的 owner 去重集合
+ *   （S-D-2）：同一 owner 在本次執行只寫一筆 _logOp_ 留痕，避免雙層迴圈（N2 每位
+ *   教師、N3 每筆紀錄）在退化狀態下對 Hub AuditLog 造成數百次寫入而拖死執行時間。
  */
-function _adminEmailsForOwner_(owner, buckets) {
+function _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners) {
   if (!owner) return _allAdminEmails_(buckets);
   const scoped = (OWNER_DEPTS.includes(owner) && buckets.scoped[owner]) || [];
   const union = Array.from(new Set(scoped.concat(buckets.all)));
   if (union.length) return union;
-  _logOp_('', 'NOTIFY_FALLBACK_ALL_ADMINS', 'owner=' + owner + ' 查無對應管理者，改發全體管理者');
+  if (!loggedFallbackOwners || !loggedFallbackOwners.has(owner)) {
+    if (loggedFallbackOwners) loggedFallbackOwners.add(owner);
+    _logOp_('', 'NOTIFY_FALLBACK_ALL_ADMINS', 'owner=' + owner + ' 查無對應管理者，改發全體管理者');
+  }
   return _allAdminEmails_(buckets);
 }
 
@@ -495,13 +517,18 @@ function _replyToForOwner_(owner, buckets) {
 
 /**
  * 管理者彙整信的 Reply-To（D-3／Q-H：維持一人一封，單處室才動態化）：
- * 信內所有 items 各自帶的 replyTo，去除 null 後取不重複值集合——
- * 集合大小恰好 1（該封信只橫跨一個處室）才用該值，0（全部無法歸屬處室或該處室
- * 皆無 scoped 管理者）或 2 以上（橫跨多個處室）一律退回系統信箱。
+ * 判定基準是信內所有 items 各自帶的 **owner**（不是 replyTo，S-D-3 訂正）——
+ * 非空 owner 的相異值恰好 1 個時，才用該筆的 replyTo（若為 null 則退回系統信箱）；
+ * 0 個（全部無法歸屬處室）或 2 個以上（橫跨多個處室）一律退回系統信箱。
+ * 用 replyTo 直接去重會誤判：A 處室有承辦人、B 處室無承辦人混在同一封信時，
+ * 非 null 的 replyTo 只剩 A 一個，會誤指向 A（讓 A 收到含 B 處室內容的回信），
+ * 但 owner 相異值其實是 2 個，裁示要求此情況退回系統信箱。
  */
 function _digestReplyTo_(items) {
-  const distinct = Array.from(new Set(items.map(it => it.replyTo).filter(Boolean)));
-  return distinct.length === 1 ? distinct[0] : getMailReplyTo_();
+  const distinctOwners = Array.from(new Set(items.map(it => it.owner).filter(Boolean)));
+  if (distinctOwners.length !== 1) return getMailReplyTo_();
+  const matched = items.find(it => it.owner === distinctOwners[0]);
+  return (matched && matched.replyTo) || getMailReplyTo_();
 }
 
 /** 除錯用：逐步印出通知邏輯各關卡的狀態，不發送任何信件 */
