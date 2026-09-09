@@ -1574,7 +1574,11 @@ function _importDateTs_(rawDate) {
   return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
 }
 
-function calcRequirementStats(body) {
+/**
+ * scope 限制下（Q-F 使用者裁示，2026-09-09）：passed／total／rate 三個統計數字對所有呼叫者
+ * 逐字一致，僅 pendingList 依 req.owner 收斂為自己 scope 內（或無法歸屬）的未達成教師名單
+ */
+function calcRequirementStats(body, scope) {
   try {
     var academicYear = Number((body || {}).academicYear || _currentAcademicYear());
 
@@ -1729,13 +1733,14 @@ function calcRequirementStats(body) {
           }
         });
 
+        var ownerInScope = _isAllScope_(scope) || _inScope_(String(req.owner || '').trim(), scope);
         return {
           group:         g.group,
           requiredHours: g.requiredHours,
           total:         members.length,
           passed:        passed,
           rate:          members.length ? Math.round(passed / members.length * 100) : null,  // null = 無此類人員
-          pendingList:   pending
+          pendingList:   ownerInScope ? pending : []  // B-6／Q-F：統計數字不因 scope 縮水，僅名單收斂
         };
       });
 

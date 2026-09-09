@@ -35,6 +35,8 @@ function _buildNotificationList() {
     .filter(c => c.status === 'ACTIVE' && (c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE'));
   const records  = parseSheetData(_getRecordSheet());
   const teachers = _getActiveTeachers();
+  // Y-B5：迴圈外讀一次，取代原本雙層迴圈（N2）與 records 迴圈（N3）內逐次呼叫整表重讀 Hub
+  const adminEmails = _getTrainingAdminEmails_();
 
   // Hash Map：「userId_catalogId」→ 最高狀態（APPROVED > PENDING > REJECTED）
   const statusPriority = { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 };
@@ -66,7 +68,6 @@ function _buildNotificationList() {
         }
       } else if (daysLeft <= 0) {
         if (!_hasNotifiedToday('N2', teacher.userId, course.catalogId)) {
-          const adminEmails = _getTrainingAdminEmails_();
           list.push({ type: 'N2', teacher, course, daysLeft, adminEmails });
         }
       }
@@ -85,7 +86,6 @@ function _buildNotificationList() {
     .forEach(record => {
       const teacher = teachers.find(t => t.userId === record.userId);
       if (!teacher) return;
-      const adminEmails = _getTrainingAdminEmails_();
       if (!adminEmails.length) return;
       list.push({ type: 'N3', teacher, record, adminEmails });
     });
@@ -129,10 +129,28 @@ function _groupNotificationList(list) {
   };
 }
 
-/** 預覽通知名單（不發送，供管理者確認後再手動觸發）*/
-function previewNotification() {
+/**
+ * 預覽通知名單（不發送，供管理者確認後再手動觸發）
+ * scope 限制下（Y-4）：n1／n2 教師名單只含解析到自己 scope（或無法歸屬）的課程；
+ * n2Admin／n3Admin 只含呼叫者自己的 email 那一份彙整——見「Y-4 揭露面收斂的實際邊界」節，
+ * 這是 Stage B 對「預覽」的收斂，與 Stage D 才會改的實際寄信路由是兩件事（Y-B4，已知暫時性偏離）
+ */
+function previewNotification(callerUserId, scope) {
   const list = _buildNotificationList();
-  const { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList(list);
+  let { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList(list);
+
+  if (!_isAllScope_(scope)) {
+    const index = _buildOwnerIndex_();
+    const courseInScope = course => _inScope_(_resolveRecordOwner_(course, index), scope);
+    n1Groups = n1Groups.filter(g => courseInScope(g.course));
+    n2Groups = n2Groups.filter(g => courseInScope(g.course));
+
+    const callerUser  = _getHubUser_(callerUserId);
+    const callerEmail = callerUser ? String(callerUser.email || '') : '';
+    const onlyMine = digest => (callerEmail && digest[callerEmail]) ? { [callerEmail]: digest[callerEmail] } : {};
+    n2AdminDigest = onlyMine(n2AdminDigest);
+    n3AdminDigest = onlyMine(n3AdminDigest);
+  }
 
   const toTeacherRow = t => ({ userId: t.userId, teacherName: t.name, department: t.department });
 
@@ -168,7 +186,15 @@ function previewNotification() {
     }))
   }));
 
-  return { success: true, count: list.length, groups: { n1, n2, n2Admin, n3Admin } };
+  // scope 限制下，count 須反映過濾後的實際項目數，否則會出現「有數字、卻看不到內容」的誤導
+  const count = _isAllScope_(scope)
+    ? list.length
+    : n1Groups.reduce((s, g) => s + g.teachers.length, 0) +
+      n2Groups.reduce((s, g) => s + g.teachers.length, 0) +
+      Object.keys(n2AdminDigest).reduce((s, e) => s + n2AdminDigest[e].length, 0) +
+      Object.keys(n3AdminDigest).reduce((s, e) => s + n3AdminDigest[e].length, 0);
+
+  return { success: true, count, groups: { n1, n2, n2Admin, n3Admin } };
 }
 
 /** 實際發送通知（分組 BCC + 管理者每日彙整），回傳 { mails, recipients } */

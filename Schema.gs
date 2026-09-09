@@ -257,6 +257,50 @@ function _loadStatsIncludePartTime_() {
   return PropertiesService.getScriptProperties().getProperty(STATS_PARTTIME_KEY) === 'true';
 }
 
+// ==================== 處室權限（training_scope，task_6e2d40af Stage B） ====================
+// scope 存放於 Hub.UserStatusCache.systemAccess.training_scope（既有 JSON 字串內新增 key）
+// 未設定或含 "ALL" 視為全權管理者；4 個受控處室見 OWNER_DEPTS。
+
+/** scope 未設定（含 undefined／null）或含 "ALL" 視為全權管理者 */
+function _isAllScope_(scope) {
+  return !Array.isArray(scope) || scope.length === 0 || scope.indexOf('ALL') !== -1;
+}
+
+/** owner 為空字串（三段瀑布查不到處室）一律視為全體管理者可見／可操作 */
+function _inScope_(owner, scope) {
+  if (!owner) return true;
+  return _isAllScope_(scope) || scope.indexOf(owner) !== -1;
+}
+
+/**
+ * 建立處室解析索引：TRAINING_REQUIREMENT／TRAINING_CATALOG 各讀一次（B-5）
+ * 呼叫端於單次執行內只建一次，供 _resolveRecordOwner_() 重複查詢，避免逐筆查表
+ */
+function _buildOwnerIndex_() {
+  const reqOwner = {};
+  parseSheetData(_getRequirementSheet()).forEach(r => {
+    reqOwner[r.requirementId] = String(r.owner || '').trim();
+  });
+  const catReq = {};
+  parseSheetData(_getCatalogSheet()).forEach(c => {
+    catReq[c.catalogId] = String(c.requirementId || '').trim();
+  });
+  return { reqOwner, catReq };
+}
+
+/**
+ * 三段瀑布解析單筆紀錄／課程所屬處室（純函式，零 I/O）
+ * 1. requirementId → requirement.owner
+ * 2. 上一步為空 → catalogId → catalog.requirementId → requirement.owner
+ * 3. 仍為空 → ''（歸全體處室管理者可見，即 _inScope_ 的 owner='' 分支）
+ */
+function _resolveRecordOwner_(item, index) {
+  let rid = String(item.requirementId || '').trim();
+  if (!rid && item.catalogId) rid = index.catReq[String(item.catalogId).trim()] || '';
+  if (!rid) return '';
+  return index.reqOwner[rid] || '';
+}
+
 // ==================== ID 產生器（需在 LockService 內呼叫） ====================
 
 /**

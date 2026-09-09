@@ -41,6 +41,18 @@ function doPost(e) {
 
 // ==================== 路由分流（handleRequest） ====================
 
+// 僅全權管理者（scope 含 "ALL" 或未設 training_scope）可執行的路由（task_6e2d40af Stage B）
+// 對應任務單 Stage B 路由表：renewRequirements（跨處室批次寫入）、triggerNotification（全校寄信）、
+// TRAIN-REPORT 設定／資料寫入 8 支（Q-B：全校統計口徑限全權）、匯出 2 支（Q-G：明文排除揭露面收斂）
+const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
+  'v1/admin/renewRequirements',
+  'v1/admin/triggerNotification',
+  'report_import', 'report_snapshot', 'report_snapshot_batch',
+  'report_save_settings', 'save_indicator', 'delete_indicator',
+  'save_identity_rules', 'save_stats_settings',
+  'report_export_csv', 'report_export_doc'
+]);
+
 /** 中央 AuditLog 寫入 wrapper：logAction 失敗不可阻斷主流程（比照圖書館 _logOp_） */
 function _logOp_(actorId, action, detail) {
   try {
@@ -105,20 +117,26 @@ function handleRequest(payload) {
     } catch (_) {}
     if (!access.training_admin) return _err('FORBIDDEN');
 
+    // Stage B：僅全權管理者可執行的路由，統一在 switch 前攔截（單一事實來源，見上方常數）
+    const scope = access.training_scope;
+    if (TRAINING_SCOPE_ALL_ONLY_ACTIONS.has(action) && !_isAllScope_(scope)) {
+      return _err('FORBIDDEN');
+    }
+
     switch (action) {
-      case 'v1/admin/addCatalog':           return addCatalog(userId, body || {});
-      case 'v1/admin/editCatalog':          return editCatalog(userId, body || {});
-      case 'v1/admin/archiveCatalog':       return archiveCatalog(body || {});
-      case 'v1/admin/getPendingReviews':    return { success: true, data: getPendingReviews() };
-      case 'v1/admin/reviewRecord':         return reviewRecord(userId, body || {});
-      case 'v1/admin/getFileUrl':           return getFileUrl(body || {});
-      case 'v1/admin/exportRecords':        return exportRecords(body || {});
-      case 'v1/admin/previewNotification':  return previewNotification();
+      case 'v1/admin/addCatalog':           return addCatalog(userId, body || {}, scope);
+      case 'v1/admin/editCatalog':          return editCatalog(userId, body || {}, scope);
+      case 'v1/admin/archiveCatalog':       return archiveCatalog(body || {}, scope);
+      case 'v1/admin/getPendingReviews':    return { success: true, data: getPendingReviews(scope) };
+      case 'v1/admin/reviewRecord':         return reviewRecord(userId, body || {}, scope);
+      case 'v1/admin/getFileUrl':           return getFileUrl(body || {}, scope);
+      case 'v1/admin/exportRecords':        return exportRecords(body || {}, scope);
+      case 'v1/admin/previewNotification':  return previewNotification(userId, scope);
       case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, checkAndNotifyOverdue());
       case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements(body || {}) };
-      case 'v1/admin/addRequirement':       return addRequirement(userId, body || {});
-      case 'v1/admin/editRequirement':      return editRequirement(userId, body || {});
-      case 'v1/admin/archiveRequirement':   return archiveRequirement(userId, body || {});
+      case 'v1/admin/addRequirement':       return addRequirement(userId, body || {}, scope);
+      case 'v1/admin/editRequirement':      return editRequirement(userId, body || {}, scope);
+      case 'v1/admin/archiveRequirement':   return archiveRequirement(userId, body || {}, scope);
       case 'v1/admin/renewRequirements':    return renewRequirements(userId, body || {});
       case 'v1/admin/runHealthCheck':       return runDataHealthCheck(userId, (body || {}).scope, (body || {}).academicYear);
 
@@ -139,7 +157,7 @@ function handleRequest(payload) {
       case 'delete_indicator':           return deleteIndicator((body || {}).id);
       case 'get_identity_rules':              return getIdentityRules();
       case 'save_identity_rules':             return saveIdentityRules(body || {});
-      case 'report_req_stats':                return calcRequirementStats(body || {});
+      case 'report_req_stats':                return calcRequirementStats(body || {}, scope);
       case 'get_stats_settings':              return getStatsSettings();
       case 'save_stats_settings':             return saveStatsSettings(body || {});
 
