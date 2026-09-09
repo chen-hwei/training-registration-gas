@@ -130,7 +130,7 @@ function handleRequest(payload) {
       case 'v1/admin/getPendingReviews':    return { success: true, data: getPendingReviews(scope) };
       case 'v1/admin/reviewRecord':         return reviewRecord(userId, body || {}, scope);
       case 'v1/admin/getFileUrl':           return getFileUrl(body || {}, scope);
-      case 'v1/admin/exportRecords':        return exportRecords(body || {}, scope);
+      case 'v1/admin/exportRecords':        return { success: true, data: exportRecords(body || {}, scope) };
       case 'v1/admin/previewNotification':  return previewNotification(userId, scope);
       case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, checkAndNotifyOverdue());
       case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements(body || {}) };

@@ -150,5 +150,5 @@ function exportRecords(body, scope) {
       .join(',')
   );
   const csv = [csvHeader, ...csvRows].join('\n');
-  return { success: true, csv, count: records.length };
+  return { csv, count: records.length };
 }
