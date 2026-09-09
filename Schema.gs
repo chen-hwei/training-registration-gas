@@ -261,6 +261,24 @@ function _loadStatsIncludePartTime_() {
 // scope 存放於 Hub.UserStatusCache.systemAccess.training_scope（既有 JSON 字串內新增 key）
 // 未設定或含 "ALL" 視為全權管理者；4 個受控處室見 OWNER_DEPTS。
 
+/**
+ * 正規化 training_scope 原始值（S-B-2）：Hub 的 systemAccess 是人工填寫的 JSON 字串，
+ * `"training_scope":"學務處"`（漏寫中括號）是高機率手誤，若不正規化會被 `_isAllScope_()`
+ * 的 `!Array.isArray()` fail-open 成全權管理者。前端 `config.html getTrainingScope()`
+ * 須同步採用相同規則，避免前後端判準分岔。
+ * - undefined／null → 原樣傳回（維持「未設定＝ALL」，t1106／t1370 迴歸不受影響）
+ * - 陣列 → 原樣傳回
+ * - 非空字串 → 包成單一元素陣列
+ * - 其餘（數字、物件等格式錯誤）→ 空陣列（`_isAllScope_()` 現行語意仍視為 ALL，
+ *   語意是否收斂為「無任何處室」須使用者另外裁示，本次不動）
+ */
+function _normalizeScope_(raw) {
+  if (raw === undefined || raw === null) return raw;
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string' && raw.trim() !== '') return [raw.trim()];
+  return [];
+}
+
 /** scope 未設定（含 undefined／null）或含 "ALL" 視為全權管理者 */
 function _isAllScope_(scope) {
   return !Array.isArray(scope) || scope.length === 0 || scope.indexOf('ALL') !== -1;

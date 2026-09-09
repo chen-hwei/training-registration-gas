@@ -385,7 +385,7 @@
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
           <button class="btn btn-sm btn-outline" onclick="previewNotification()">🔍 預覽名單</button>
-          <button class="btn btn-sm btn-primary" onclick="triggerNotification()">📨 立即發送通知</button>
+          <button id="btn-trigger-notify" class="btn btn-sm btn-primary" onclick="triggerNotification()">📨 立即發送通知</button>
         </div>
       </div>
 
@@ -1004,7 +1004,8 @@
       })
       .catch(function(err) {
         hideSpinner();
-        if (err && err.message !== 'TOKEN_EXPIRED') {
+        // Y-C2：FORBIDDEN 已由 api() 統一跳過 toast（config.html:109-110），這裡略過避免連跳兩次
+        if (err && err.message !== 'TOKEN_EXPIRED' && err.message !== 'FORBIDDEN') {
           showToast('取得檔案失敗', 'error');
         }
       });
@@ -1138,6 +1139,24 @@
     return '';
   }
 
+  /**
+   * 課程列的編輯/封存鈕（Y-C4）：任務清單載入失敗（_reqLoadFailed）時，
+   * 掛了任務的課程無法反查 owner，_catalogOwnerOf 會回 ''而誤判為全體可操作——
+   * 此時改顯示中性狀態，不讓前端「看起來」對所有人開放（後端仍會擋，這是體驗層修正）
+   */
+  function _catalogActionsHtml(c) {
+    if (c.requirementId && _reqLoadFailed) {
+      return '<span style="font-size:0.72rem;color:var(--gray-500)">⚠️ 任務清單載入失敗，無法確認處室</span>';
+    }
+    return _inMyScope(_catalogOwnerOf(c))
+      ? '<button class="btn btn-xs btn-outline"' +
+        ' onclick="openCatalogModal(\'' + c.catalogId + '\')">✏️ 編輯</button>' +
+        '<button class="btn btn-xs btn-outline"' +
+        ' style="border-color:var(--warning);color:var(--warning)"' +
+        ' onclick="archiveCatalog(\'' + c.catalogId + '\')">🗃 封存</button>'
+      : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非本處室</span>';
+  }
+
   function _renderCatalogAdmin() {
     var list = document.getElementById('catalog-admin-list');
     if (!_catalogRecords.length) {
@@ -1175,13 +1194,7 @@
           '</div>' +
         '</div>' +
         '<div class="catalog-admin-actions">' +
-          (_inMyScope(_catalogOwnerOf(c))
-            ? '<button class="btn btn-xs btn-outline"' +
-              ' onclick="openCatalogModal(\'' + c.catalogId + '\')">✏️ 編輯</button>' +
-              '<button class="btn btn-xs btn-outline"' +
-              ' style="border-color:var(--warning);color:var(--warning)"' +
-              ' onclick="archiveCatalog(\'' + c.catalogId + '\')">🗃 封存</button>'
-            : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非本處室</span>') +
+          _catalogActionsHtml(c) +
         '</div>' +
         '</div>';
     }).join('');
@@ -1663,9 +1676,9 @@
     var allowed = isAll ? all : (getTrainingScope() || []).filter(function(d) { return d !== 'ALL'; });
 
     var html = '<option value="">（未指定）</option>' +
-      allowed.map(function(d) { return '<option value="' + d + '">' + d + '</option>'; }).join('');
+      allowed.map(function(d) { return '<option value="' + _e(d) + '">' + _e(d) + '</option>'; }).join('');
     if (currentOwner && allowed.indexOf(currentOwner) === -1) {
-      html += '<option value="' + currentOwner + '">' + currentOwner + '</option>';
+      html += '<option value="' + _e(currentOwner) + '">' + _e(currentOwner) + '</option>';
     }
     sel.innerHTML = html;
     sel.value = (isNew && !isAll && allowed.length === 1) ? allowed[0] : (currentOwner || '');
@@ -3206,10 +3219,17 @@
    */
   function _applyScopeUI() {
     var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
-    var btn = document.getElementById('btn-renew-req');
-    if (btn && !isAll) {
-      btn.disabled = true;
-      btn.title = '僅全權管理者可執行跨處室批次複製';
+    if (isAll) return;
+    var renewBtn = document.getElementById('btn-renew-req');
+    if (renewBtn) {
+      renewBtn.disabled = true;
+      renewBtn.title = '僅全權管理者可執行跨處室批次複製';
+    }
+    // Y-C1：立即發送通知（triggerNotification）為 ALL-only 路由，會寄出全校通知信
+    var notifyBtn = document.getElementById('btn-trigger-notify');
+    if (notifyBtn) {
+      notifyBtn.disabled = true;
+      notifyBtn.title = '僅全權管理者可執行，此操作會寄出全校通知信';
     }
   }
 

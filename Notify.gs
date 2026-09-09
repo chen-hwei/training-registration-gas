@@ -132,8 +132,12 @@ function _groupNotificationList(list) {
 /**
  * 預覽通知名單（不發送，供管理者確認後再手動觸發）
  * scope 限制下（Y-4）：n1／n2 教師名單只含解析到自己 scope（或無法歸屬）的課程；
- * n2Admin／n3Admin 只含呼叫者自己的 email 那一份彙整——見「Y-4 揭露面收斂的實際邊界」節，
- * 這是 Stage B 對「預覽」的收斂，與 Stage D 才會改的實際寄信路由是兩件事（Y-B4，已知暫時性偏離）
+ * n2Admin／n3Admin 只含呼叫者自己的 email，且該 email 底下的 items 本身也只含解析到
+ * 自己 scope（或無法歸屬）的課程／紀錄——見「Y-4 揭露面收斂的實際邊界」節。
+ * S-B-1：Stage D 尚未施工，_buildNotificationList() 給每筆 N2/N3 的 adminEmails 仍是
+ * 全體管理者，只留自己 email 這把 key 不夠，key 底下的 items 陣列本身仍是全校內容，
+ * 必須再對 items 逐筆過濾。這是 Stage B 對「預覽」的收斂，與 Stage D 才會改的實際
+ * 寄信路由是兩件事（Y-B4，已知暫時性偏離）
  */
 function previewNotification(callerUserId, scope) {
   const list = _buildNotificationList();
@@ -147,9 +151,15 @@ function previewNotification(callerUserId, scope) {
 
     const callerUser  = _getHubUser_(callerUserId);
     const callerEmail = callerUser ? String(callerUser.email || '') : '';
-    const onlyMine = digest => (callerEmail && digest[callerEmail]) ? { [callerEmail]: digest[callerEmail] } : {};
-    n2AdminDigest = onlyMine(n2AdminDigest);
-    n3AdminDigest = onlyMine(n3AdminDigest);
+
+    const myN2Items = (callerEmail && n2AdminDigest[callerEmail])
+      ? n2AdminDigest[callerEmail].filter(it => courseInScope(it.course))
+      : [];
+    const myN3Items = (callerEmail && n3AdminDigest[callerEmail])
+      ? n3AdminDigest[callerEmail].filter(it => _inScope_(_resolveRecordOwner_(it.record, index), scope))
+      : [];
+    n2AdminDigest = myN2Items.length ? { [callerEmail]: myN2Items } : {};
+    n3AdminDigest = myN3Items.length ? { [callerEmail]: myN3Items } : {};
   }
 
   const toTeacherRow = t => ({ userId: t.userId, teacherName: t.name, department: t.department });

@@ -118,7 +118,9 @@ function handleRequest(payload) {
     if (!access.training_admin) return _err('FORBIDDEN');
 
     // Stage B：僅全權管理者可執行的路由，統一在 switch 前攔截（單一事實來源，見上方常數）
-    const scope = access.training_scope;
+    // S-B-2：_normalizeScope_() 把人工填寫 Hub 時漏寫中括號的字串（如 "學務處"）轉為
+    // 單元素陣列，避免 _isAllScope_() 的 !Array.isArray() fail-open 成全權管理者
+    const scope = _normalizeScope_(access.training_scope);
     if (TRAINING_SCOPE_ALL_ONLY_ACTIONS.has(action) && !_isAllScope_(scope)) {
       return _err('FORBIDDEN');
     }

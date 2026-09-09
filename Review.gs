@@ -44,13 +44,13 @@ function reviewRecord(reviewerId, body, scope) {
     const sheet = _getRecordSheet();
     const data  = sheet.getDataRange().getValues();
 
-    // Hash Map O(1) 查詢：recordId → 原始列（供 scope 檢查與後續更新共用）
-    const idToRow = {};
-    for (let i = 1; i < data.length; i++) {
-      idToRow[String(data[i][idIdx]).trim()] = data[i];
-    }
-
     if (!_isAllScope_(scope)) {
+      // Hash Map O(1) 查詢：recordId → 原始列（Y-C5：僅 scope 受限時才需要，
+      // 全權管理者不做逐筆處室檢查，不必多花一輪整表掃描與物件配置）
+      const idToRow = {};
+      for (let i = 1; i < data.length; i++) {
+        idToRow[String(data[i][idIdx]).trim()] = data[i];
+      }
       const index = _buildOwnerIndex_();
       for (const r of body.records) {
         const row = idToRow[r.recordId];
