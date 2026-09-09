@@ -32,6 +32,16 @@
 前者是行政處室、後者是學制部別，命名相近但不可互相 fallback。`TRAINING_CATALOG.department`
 （推薦處室）同樣不等於 `owner`，且**永不參與權限判定**（`task_6e2d40af` §S1/S2 裁示）。
 
+**`training_scope`** —— 存於 `Hub.UserStatusCache.systemAccess.training_scope`
+（既有 JSON 字串欄內的 key，非新增欄位），v3.23（`task_6e2d40af` Stage B）起生效。
+未設定或含 `"ALL"` ＝全權管理者；設處室清單（如 `["教務處"]`）則僅能操作/檢視
+落在該處室、或三段瀑布查不到處室（自訂研習等）的資料。判準函式 `Schema.gs`
+`_isAllScope_()`／`_inScope_()`，前端 `config.html getTrainingScope()`／
+`isAllScope()` 須同步套用相同正規化規則（`_normalizeScope_()`），
+避免人工填寫漏寫中括號時 fail-open 成全權。**與 `owner` 是同一組概念的一體兩面**：
+`owner` 是資料的歸屬標記，`training_scope` 是使用者的存取範圍，兩者靠三段瀑布
+（`_resolveRecordOwner_()`）串起來判定。
+
 ## 平台陷阱
 
 **消費者 URL 白屏** —— 使用 `script.google.com/macros/s/...`（消費者 URL）時，
