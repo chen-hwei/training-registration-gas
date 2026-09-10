@@ -579,6 +579,30 @@ function debugNotify() {
   console.log('=== debugNotify 結束 ===');
 }
 
+/**
+ * 除錯用：印出每位管理者 N2 彙整信的 _digestReplyTo_() 實際計算結果，不發送任何信件。
+ * task_6e2d40af Stage D UAT：驗證橫跨多處室的彙整信是否正確退回系統信箱（Q-H 裁示）。
+ * 不寫死查特定帳號，逐一印出所有管理者，橫跨處室的自然會在輸出裡現形。
+ */
+function debugDigestReplyTo() {
+  console.log('=== debugDigestReplyTo 開始 ===');
+  const list = _buildNotificationList();
+  const { n2AdminDigest } = _groupNotificationList(list);
+  const systemReplyTo = getMailReplyTo_();
+  console.log('系統預設 Reply-To（getMailReplyTo_）：' + systemReplyTo);
+
+  Object.keys(n2AdminDigest).forEach(email => {
+    const items = n2AdminDigest[email];
+    const owners = Array.from(new Set(items.map(it => it.owner).filter(Boolean)));
+    const replyTo = _digestReplyTo_(items);
+    console.log('管理者 ' + email + '：' + items.length + ' 筆，涉及處室 owner=' +
+      JSON.stringify(owners) + '，_digestReplyTo_ 結果=' + replyTo +
+      (owners.length > 1 ? '　← 橫跨多處室，應等於系統預設信箱' : ''));
+  });
+
+  console.log('=== debugDigestReplyTo 結束 ===');
+}
+
 /** 建立定時觸發器（可重複執行：會先刪除同名舊觸發器再重建，不疊加） */
 function setupNotifyTriggers() {
   ScriptApp.getProjectTriggers().forEach(function(t) {

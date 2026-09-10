@@ -237,6 +237,8 @@
 | **v3.20** | 研習目錄新增所屬任務欄位，教師端「推薦課程」分組恢復可用（[PR #28](https://github.com/chen-hwei/training-registration-gas/pull/28)） | ✅ 完成（2026-09-06） |
 | **v3.21** | 教師端一次登錄多門課程（合併勾選清單＋共用或各自證明＋逐筆送出）（[PR #29](https://github.com/chen-hwei/training-registration-gas/pull/29)） | ✅ 完成（2026-09-06） |
 | **v3.22** | 處室權限三級化 Stage A：owner 欄位收斂為受控清單，前後端白名單驗證（[PR #31](https://github.com/chen-hwei/training-registration-gas/pull/31)） | ✅ 完成（2026-09-09） |
+| **v3.23** | 處室權限三級化 Stage B：`training_scope` 權限模型＋34 支管理路由依處室過濾，處室管理者僅能操作/檢視自己處室資料（[PR #33](https://github.com/chen-hwei/training-registration-gas/pull/33)） | ✅ 完成（2026-09-09） |
+| **v3.24** | 處室權限三級化 Stage D：通知收件者改綁任務所屬處室，彙整信 Reply-To 依處室動態化，跨處室或查無管理者退回系統信箱（[PR #35](https://github.com/chen-hwei/training-registration-gas/pull/35)） | ✅ 完成（2026-09-10） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
@@ -304,7 +306,7 @@ clasp push
 - 所有試算表寫入操作（`submitRecord`、`reviewRecord`）均以 `LockService` 保護，防止多人同時送出時資料錯位
 - 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
 - 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 人次；教師信改分組 BCC 群發，`to` 固定為系統回信地址、教師名單一律走 `bcc`，嚴禁互見；以 `CacheService` 防止同一教師/同一管理者同一天重複收到相同通知
-- 管理者**實際收信**對象仍為**全校 training_admin**（v3.18 起不再依部別分流；處室分權（`task_6e2d40af`）Stage A／B 已完成，**Stage B 起「預覽通知」（`previewNotification`）已依 `training_scope` 收斂**，但實際寄信路由要 Stage D 完成後才會改依任務所屬處室精準路由——目前預覽畫面與實際收信範圍暫時不一致，屬已知過渡狀態）
+- 管理者**實際收信**對象依任務/紀錄所屬處室精準路由（v3.24 起，`task_6e2d40af` Stage D）：單一處室彙整信 Reply-To 動態指向該處室承辦人，橫跨多處室或查無對應管理者時退回系統信箱並留痕；`previewNotification`（預覽）與 `checkAndNotifyOverdue`（實際寄信）共用同一份計算結果，兩者口徑保證一致，Stage A／B／D 過渡狀態至此結案
 
 ## 系統設計哲學
 
