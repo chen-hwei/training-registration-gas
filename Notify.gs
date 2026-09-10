@@ -1,8 +1,9 @@
 // ==================== 通知系統（Notify.gs） ====================
 // 三種情境：
 //   N1 — 必修課程距截止日 ≤ 7 天，分組 BCC 寄給教師（每週一 07:00）
-//   N2 — 必修課程已逾期且無 APPROVED 紀錄，分組 BCC 寄給教師 + 管理者每日彙整（每日 07:00）
-//   N3 — PENDING 紀錄超過 3 天未審核，管理者每日彙整（每日 07:00）
+//   N2 — 必修課程已逾期且無 APPROVED 紀錄，分組 BCC 寄給教師 + 該課程所屬處室管理者
+//        每日彙整（task_6e2d40af Stage D 起依 training_scope 路由，查無管理者退回全體）
+//   N3 — PENDING 紀錄超過 3 天未審核，該紀錄所屬處室管理者每日彙整（同上，Stage D 起）
 // 防重複：
 //   教師信（N1/N2）— 同一 type + userId + courseId，24 小時內最多寄一封（逐人標記，維持原邏輯）
 //   管理者彙整信（N2_DIGEST/N3_DIGEST）— 同一 type + adminEmail，24 小時內最多寄一封
@@ -27,16 +28,23 @@ function _markNotified(type, targetId, courseOrRecordId) {
 
 /**
  * 建立本次通知名單（不發送）
- * @returns {Object[]} 通知項目陣列，每項含 type, teacher, course/record, daysLeft, adminEmails
+ * @returns {Object[]} 通知項目陣列，每項含 type, teacher, course/record, daysLeft,
+ *   adminEmails, owner, replyTo（task_6e2d40af Stage D：owner／replyTo 依課程或
+ *   紀錄解析出的處室動態決定，N1 的 adminEmails 維持 [] 不變，Y-D1）
  */
 function _buildNotificationList() {
-  const today    = new Date();
-  const catalog  = parseSheetData(_getCatalogSheet())
-    .filter(c => c.status === 'ACTIVE' && (c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE'));
-  const records  = parseSheetData(_getRecordSheet());
-  const teachers = _getActiveTeachers();
-  // Y-B5：迴圈外讀一次，取代原本雙層迴圈（N2）與 records 迴圈（N3）內逐次呼叫整表重讀 Hub
-  const adminEmails = _getTrainingAdminEmails_();
+  const today = new Date();
+
+  // D-5：Hub UserStatusCache／TRAINING_CATALOG 各只讀一次，分別餵給下游函式
+  const hubRows     = _readHubUserStatusRows_();
+  const teachers     = _getActiveTeachers(hubRows);
+  const buckets      = _buildAdminBuckets_(hubRows);
+  const fullCatalog  = parseSheetData(_getCatalogSheet());
+  const catalog      = fullCatalog.filter(c => c.status === 'ACTIVE' &&
+    (c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE'));
+  const ownerIndex   = _buildOwnerIndex_(fullCatalog);
+
+  const records = parseSheetData(_getRecordSheet());
 
   // Hash Map：「userId_catalogId」→ 最高狀態（APPROVED > PENDING > REJECTED）
   const statusPriority = { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 };
@@ -48,6 +56,10 @@ function _buildNotificationList() {
     }
   });
 
+  // S-D-2：fallback 留痕的 owner 去重集合，整個執行只留一次痕跡（不隨教師/紀錄
+  // 筆數重複寫入 Hub AuditLog，避免退化狀態下的雙層迴圈拖死執行時間）
+  const loggedFallbackOwners = new Set();
+
   const list = [];
 
   catalog.forEach(course => {
@@ -56,6 +68,10 @@ function _buildNotificationList() {
     if (!y || !m || !d) return;
     const endDate  = new Date(y, m - 1, d);
     const daysLeft = Math.ceil((endDate - today) / 86400000);
+    const owner    = _resolveRecordOwner_(course, ownerIndex);
+    const replyTo  = _replyToForOwner_(owner, buckets);
+    // S-D-2：每門課程只算一次（原寫法在 teachers.forEach 內層，等同每位教師呼叫一次）
+    const adminEmails = daysLeft <= 0 ? _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners) : null;
 
     teachers.forEach(teacher => {
       const key       = teacher.userId + '_' + course.catalogId;
@@ -64,11 +80,11 @@ function _buildNotificationList() {
 
       if (daysLeft > 0 && daysLeft <= 7) {
         if (!_hasNotifiedToday('N1', teacher.userId, course.catalogId)) {
-          list.push({ type: 'N1', teacher, course, daysLeft, adminEmails: [] });
+          list.push({ type: 'N1', teacher, course, daysLeft, adminEmails: [], owner, replyTo });
         }
       } else if (daysLeft <= 0) {
         if (!_hasNotifiedToday('N2', teacher.userId, course.catalogId)) {
-          list.push({ type: 'N2', teacher, course, daysLeft, adminEmails });
+          list.push({ type: 'N2', teacher, course, daysLeft, adminEmails, owner, replyTo });
         }
       }
     });
@@ -77,6 +93,9 @@ function _buildNotificationList() {
   // N3：PENDING 紀錄超過 3 天（改為管理者每日彙整，不再逐筆做記錄層級防重複，
   // dedupe 改在 _sendAdminDigest 呼叫端以 adminEmail + 當日 做一次性判斷）
   const threeDaysAgo = new Date(today.getTime() - 3 * 86400000);
+  const teacherById = {};
+  teachers.forEach(t => { teacherById[t.userId] = t; }); // Y-F1：取代 O(n×m) 的 teachers.find()
+  const ownerAdminCache = {}; // S-D-2：N3 依 owner memoize，同一 owner 在本次執行只算一次
   records
     .filter(r => {
       if (r.status !== 'PENDING' || !r.submittedAt) return false;
@@ -84,10 +103,16 @@ function _buildNotificationList() {
       return submitted < threeDaysAgo;
     })
     .forEach(record => {
-      const teacher = teachers.find(t => t.userId === record.userId);
+      const teacher = teacherById[record.userId];
       if (!teacher) return;
-      if (!adminEmails.length) return;
-      list.push({ type: 'N3', teacher, record, adminEmails });
+      const owner = _resolveRecordOwner_(record, ownerIndex);
+      if (!(owner in ownerAdminCache)) {
+        ownerAdminCache[owner] = _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners);
+      }
+      const adminEmails = ownerAdminCache[owner];
+      if (!adminEmails.length) return; // 理論上 _adminEmailsForOwner_ 已保底退回全體，此判斷僅作防禦
+      const replyTo = _replyToForOwner_(owner, buckets);
+      list.push({ type: 'N3', teacher, record, adminEmails, owner, replyTo });
     });
 
   return list;
@@ -96,6 +121,8 @@ function _buildNotificationList() {
 /**
  * 將名單依「課程 × 剩餘天數」（N1）／「課程」（N2 教師）／「管理者信箱」（N2/N3 彙整）分組
  * checkAndNotifyOverdue 與 previewNotification 共用，確保預覽與實發口徑一致
+ * （Y-F4：Stage D 起兩邊共用同一份 _buildNotificationList() 算出的 owner／
+ * adminEmails，Y-B4 登記的「Stage B～D 之間暫時性偏離」至此結案）
  */
 function _groupNotificationList(list) {
   const n1Map = {}, n2Map = {}, n2AdminMap = {}, n3AdminMap = {};
@@ -103,20 +130,20 @@ function _groupNotificationList(list) {
   list.forEach(item => {
     if (item.type === 'N1') {
       const key = item.course.catalogId + '_' + item.daysLeft;
-      if (!n1Map[key]) n1Map[key] = { course: item.course, daysLeft: item.daysLeft, teachers: [] };
+      if (!n1Map[key]) n1Map[key] = { course: item.course, daysLeft: item.daysLeft, teachers: [], owner: item.owner, replyTo: item.replyTo };
       n1Map[key].teachers.push(item.teacher);
     } else if (item.type === 'N2') {
       const key = item.course.catalogId;
-      if (!n2Map[key]) n2Map[key] = { course: item.course, teachers: [] };
+      if (!n2Map[key]) n2Map[key] = { course: item.course, teachers: [], owner: item.owner, replyTo: item.replyTo };
       n2Map[key].teachers.push(item.teacher);
       item.adminEmails.forEach(email => {
         if (!n2AdminMap[email]) n2AdminMap[email] = [];
-        n2AdminMap[email].push({ teacher: item.teacher, course: item.course });
+        n2AdminMap[email].push({ teacher: item.teacher, course: item.course, owner: item.owner, replyTo: item.replyTo });
       });
     } else if (item.type === 'N3') {
       item.adminEmails.forEach(email => {
         if (!n3AdminMap[email]) n3AdminMap[email] = [];
-        n3AdminMap[email].push({ teacher: item.teacher, record: item.record });
+        n3AdminMap[email].push({ teacher: item.teacher, record: item.record, owner: item.owner, replyTo: item.replyTo });
       });
     }
   });
@@ -134,29 +161,26 @@ function _groupNotificationList(list) {
  * scope 限制下（Y-4）：n1／n2 教師名單只含解析到自己 scope（或無法歸屬）的課程；
  * n2Admin／n3Admin 只含呼叫者自己的 email，且該 email 底下的 items 本身也只含解析到
  * 自己 scope（或無法歸屬）的課程／紀錄——見「Y-4 揭露面收斂的實際邊界」節。
- * S-B-1：Stage D 尚未施工，_buildNotificationList() 給每筆 N2/N3 的 adminEmails 仍是
- * 全體管理者，只留自己 email 這把 key 不夠，key 底下的 items 陣列本身仍是全校內容，
- * 必須再對 items 逐筆過濾。這是 Stage B 對「預覽」的收斂，與 Stage D 才會改的實際
- * 寄信路由是兩件事（Y-B4，已知暫時性偏離）
+ * Y-E3：items 已在 _buildNotificationList() 階段掛好 owner，這裡直接讀用，
+ * 不重建 _buildOwnerIndex_()，省一次 TRAINING_CATALOG／TRAINING_REQUIREMENT 重讀。
  */
 function previewNotification(callerUserId, scope) {
   const list = _buildNotificationList();
   let { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList(list);
 
   if (!_isAllScope_(scope)) {
-    const index = _buildOwnerIndex_();
-    const courseInScope = course => _inScope_(_resolveRecordOwner_(course, index), scope);
-    n1Groups = n1Groups.filter(g => courseInScope(g.course));
-    n2Groups = n2Groups.filter(g => courseInScope(g.course));
+    const inScope = owner => _inScope_(owner, scope);
+    n1Groups = n1Groups.filter(g => inScope(g.owner));
+    n2Groups = n2Groups.filter(g => inScope(g.owner));
 
     const callerUser  = _getHubUser_(callerUserId);
     const callerEmail = callerUser ? String(callerUser.email || '') : '';
 
     const myN2Items = (callerEmail && n2AdminDigest[callerEmail])
-      ? n2AdminDigest[callerEmail].filter(it => courseInScope(it.course))
+      ? n2AdminDigest[callerEmail].filter(it => inScope(it.owner))
       : [];
     const myN3Items = (callerEmail && n3AdminDigest[callerEmail])
-      ? n3AdminDigest[callerEmail].filter(it => _inScope_(_resolveRecordOwner_(it.record, index), scope))
+      ? n3AdminDigest[callerEmail].filter(it => inScope(it.owner))
       : [];
     n2AdminDigest = myN2Items.length ? { [callerEmail]: myN2Items } : {};
     n3AdminDigest = myN3Items.length ? { [callerEmail]: myN3Items } : {};
@@ -217,7 +241,7 @@ function checkAndNotifyOverdue() {
   n1Groups.forEach(g => {
     _chunkArray(g.teachers, 50).forEach(chunk => {
       try {
-        _sendGroupedReminder('N1', g.course, g.daysLeft, chunk);
+        _sendGroupedReminder('N1', g.course, g.daysLeft, chunk, g.replyTo);
         chunk.forEach(t => _markNotified('N1', t.userId, g.course.catalogId));
         _logOp_('', 'NOTIFY_N1', 'catalogId=' + g.course.catalogId + '，daysLeft=' + g.daysLeft +
           '，' + chunk.length + ' 人：' + chunk.map(t => t.userId).join(','));
@@ -234,7 +258,7 @@ function checkAndNotifyOverdue() {
   n2Groups.forEach(g => {
     _chunkArray(g.teachers, 50).forEach(chunk => {
       try {
-        _sendGroupedReminder('N2', g.course, null, chunk);
+        _sendGroupedReminder('N2', g.course, null, chunk, g.replyTo);
         chunk.forEach(t => _markNotified('N2', t.userId, g.course.catalogId));
         _logOp_('', 'NOTIFY_N2', 'catalogId=' + g.course.catalogId +
           '，' + chunk.length + ' 人：' + chunk.map(t => t.userId).join(','));
@@ -251,9 +275,10 @@ function checkAndNotifyOverdue() {
   Object.keys(n2AdminDigest).forEach(email => {
     if (_hasNotifiedToday('N2_DIGEST', email, 'ALL')) return;
     try {
-      _sendAdminDigest('N2', email, n2AdminDigest[email]);
+      const items = n2AdminDigest[email];
+      _sendAdminDigest('N2', email, items, _digestReplyTo_(items));
       _markNotified('N2_DIGEST', email, 'ALL');
-      _logOp_('', 'NOTIFY_N2_DIGEST', email + '，' + n2AdminDigest[email].length + ' 筆');
+      _logOp_('', 'NOTIFY_N2_DIGEST', email + '，' + items.length + ' 筆');
       mails++;
       recipients++;
     } catch (e) {
@@ -265,9 +290,10 @@ function checkAndNotifyOverdue() {
   Object.keys(n3AdminDigest).forEach(email => {
     if (_hasNotifiedToday('N3_DIGEST', email, 'ALL')) return;
     try {
-      _sendAdminDigest('N3', email, n3AdminDigest[email]);
+      const items = n3AdminDigest[email];
+      _sendAdminDigest('N3', email, items, _digestReplyTo_(items));
       _markNotified('N3_DIGEST', email, 'ALL');
-      _logOp_('', 'NOTIFY_N3_DIGEST', email + '，' + n3AdminDigest[email].length + ' 筆');
+      _logOp_('', 'NOTIFY_N3_DIGEST', email + '，' + items.length + ' 筆');
       mails++;
       recipients++;
     } catch (e) {
@@ -291,12 +317,15 @@ function _chunkArray(arr, size) {
 /**
  * 教師分組提醒信：to 固定為系統回信地址，教師名單一律走 bcc
  * ⚠️ 個資紅線：嚴禁把任一教師信箱放進 to，否則會被同組其他 bcc 收件者看到
+ * replyTo：課程解析出的處室承辦人信箱（task_6e2d40af Stage D）；查不到處室承辦人
+ * （null）則沿用系統信箱。Q-C 裁示：to 永遠是系統信箱，不隨處室動態化。
  */
-function _sendGroupedReminder(type, course, daysLeft, teachers) {
+function _sendGroupedReminder(type, course, daysLeft, teachers, replyTo) {
   const bcc = teachers.map(t => t.email).filter(Boolean).join(',');
   if (!bcc) return;
-  const replyTo = getMailReplyTo_();
-  const mailOptions = { to: replyTo, bcc, name: SYSTEM_MAIL_NAME, replyTo };
+  const to = getMailReplyTo_();
+  const finalReplyTo = replyTo || to;
+  const mailOptions = { to, bcc, name: SYSTEM_MAIL_NAME, replyTo: finalReplyTo };
 
   if (type === 'N1') {
     mailOptions.subject  = `【研習提醒】${course.title} 距截止日僅剩 ${daysLeft} 天`;
@@ -323,9 +352,12 @@ function _sendGroupedReminder(type, course, daysLeft, teachers) {
   MailApp.sendEmail(mailOptions);
 }
 
-/** 管理者每日彙整信（N2 逾期未完成 / N3 待審逾時），一位管理者一天最多一封 */
-function _sendAdminDigest(type, email, items) {
-  const replyTo = getMailReplyTo_();
+/**
+ * 管理者每日彙整信（N2 逾期未完成 / N3 待審逾時），一位管理者一天最多一封
+ * replyTo：由呼叫端 _digestReplyTo_() 依信內 items 是否橫跨多處室算好傳入
+ * （task_6e2d40af Stage D，Q-H 裁示）。to 維持該管理者本人信箱，不受影響。
+ */
+function _sendAdminDigest(type, email, items, replyTo) {
   let subject, rows;
 
   if (type === 'N2') {
@@ -364,14 +396,21 @@ function _escapeHtml_(s) {
 
 // ── 輔助函式 ──
 
+/** 讀一次 Hub.UserStatusCache 原始列（含標題列），供本檔多支函式共用（D-5 單次讀表） */
+function _readHubUserStatusRows_() {
+  const hub = SpreadsheetApp.openById(getHubSpreadsheetId_());
+  return hub.getSheetByName('UserStatusCache').getDataRange().getValues();
+}
+
 /**
  * 取得應收催辦通知的人員清單（從 Hub.UserStatusCache）
  * task_c5f2e08d Q-6：套用 _isTrainingTracked_()，兼課教師與實習老師不再收催辦信，
  * 行政人員維持照收（與 Sync.gs／calcRequirementStats 口徑一致）
+ * @param {Array[]} [preReadRows] 已讀入的 Hub 原始列（D-5，帶了就不重讀；
+ *   不帶時行為與改動前完全相同，供 debugNotify() 等既有無參數呼叫零影響）
  */
-function _getActiveTeachers() {
-  const hub   = SpreadsheetApp.openById(getHubSpreadsheetId_());
-  const data  = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
+function _getActiveTeachers(preReadRows) {
+  const data  = preReadRows || _readHubUserStatusRows_();
   const hdr   = data[0];
   const uidCol    = hdr.indexOf('userId');
   const nameCol   = hdr.indexOf('name');
@@ -396,29 +435,100 @@ function _getActiveTeachers() {
 }
 
 /**
- * 取得全校 training_admin 管理者 email 清單
- * 不依部別（department）篩選——department 欄位語意是「部別（高中部/國中部）」，
- * 本校為完全中學，研習管理者本就橫跨國中部/高中部，依部別分流對本校不適用，
- * 且全校 training_admin 名單本就可能集中在單一部別，依部別篩會讓另一部別的
- * 通知被靜默丟棄（task_4d81ba62）。未來處室分權（task_6e2d40af）會以
- * training_scope 取代此處的全寄邏輯。
+ * 建立「處室 → 管理者 email」對照表（task_6e2d40af Stage D，取代 _getTrainingAdminEmails_()）
+ * scoped[dept]：training_scope 明列該處室者；all[]：ALL-scope（含未設定 training_scope）者。
+ * 判定一律走 _normalizeScope_() ＋ _isAllScope_()，不得另寫第二套 scope 判準（S-B-2 教訓）。
+ * @param {Array[]} [preReadRows] 已讀入的 Hub 原始列（D-5，帶了就不重讀）
  */
-function _getTrainingAdminEmails_() {
-  const hub   = SpreadsheetApp.openById(getHubSpreadsheetId_());
-  const data  = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
+function _buildAdminBuckets_(preReadRows) {
+  const data  = preReadRows || _readHubUserStatusRows_();
   const hdr   = data[0];
   const accessCol = hdr.indexOf('systemAccess');
   const emailCol  = hdr.indexOf('schoolEmail');
   const statusCol = hdr.indexOf('status');
   const ACTIVE    = ['在職', '轉調'];
-  return data.slice(1)
-    .filter(row => {
-      if (!ACTIVE.includes(row[statusCol])) return false;
-      try { return JSON.parse(row[accessCol] || '{}').training_admin === true; }
-      catch { return false; }
-    })
-    .map(row => row[emailCol])
-    .filter(Boolean);
+
+  const scoped = {};
+  OWNER_DEPTS.forEach(dept => { scoped[dept] = []; });
+  const all = [];
+
+  data.slice(1).forEach(row => {
+    if (!ACTIVE.includes(row[statusCol])) return;
+    let access = {};
+    try { access = JSON.parse(row[accessCol] || '{}'); } catch (_) {}
+    if (access.training_admin !== true) return;
+    const email = row[emailCol];
+    if (!email) return;
+
+    const scopeVal = _normalizeScope_(access.training_scope);
+    if (_isAllScope_(scopeVal)) {
+      all.push(email);
+    } else {
+      // Y-F6：scopeVal 含受控清單外的值（如舊「研習組」）時 scoped[dept] 不存在，
+      // 該筆靜默跳過，此人不進 all[] 也不進任何 scoped[]——這是刻意結果，與
+      // Stage B _inScope_() 的語意一致（後台同樣看不到清單外處室的資料），非缺陷
+      scopeVal.forEach(dept => { if (scoped[dept]) scoped[dept].push(email); });
+    }
+  });
+
+  return { scoped, all };
+}
+
+/**
+ * 查表取得某處室的收件人（D-1／D-4）：scoped[owner] ∪ all[]。
+ * owner 為空字串（查不到處室）一律視為全體管理者可見。
+ * 退路觸發條件是 union 本身為空（S-D-1 訂正，不是 scoped[owner] 為空）——
+ * owner 為受控清單外的舊值時，因 scoped[owner] 不存在，直接落到 union 判斷，
+ * 邏輯與「該處室無 scoped 管理者」共用同一條退路，唯有 union 真的為空
+ * （全校無任何 ALL-scope 管理者、該處室也無 scoped 管理者）才退回全體 ＋ 留痕（Q-I）。
+ * @param {Set} [loggedFallbackOwners] 呼叫端傳入、跨迴圈共用的 owner 去重集合
+ *   （S-D-2）：同一 owner 在本次執行只寫一筆 _logOp_ 留痕，避免雙層迴圈（N2 每位
+ *   教師、N3 每筆紀錄）在退化狀態下對 Hub AuditLog 造成數百次寫入而拖死執行時間。
+ */
+function _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners) {
+  if (!owner) return _allAdminEmails_(buckets);
+  const scoped = (OWNER_DEPTS.includes(owner) && buckets.scoped[owner]) || [];
+  const union = Array.from(new Set(scoped.concat(buckets.all)));
+  if (union.length) return union;
+  if (!loggedFallbackOwners || !loggedFallbackOwners.has(owner)) {
+    if (loggedFallbackOwners) loggedFallbackOwners.add(owner);
+    _logOp_('', 'NOTIFY_FALLBACK_ALL_ADMINS', 'owner=' + owner + ' 查無對應管理者，改發全體管理者');
+  }
+  return _allAdminEmails_(buckets);
+}
+
+/** 全體 training_admin email（四處室 scoped 併 all，去重）——Q-I 的最終退路 */
+function _allAdminEmails_(buckets) {
+  let emails = buckets.all.slice();
+  OWNER_DEPTS.forEach(dept => { emails = emails.concat(buckets.scoped[dept] || []); });
+  return Array.from(new Set(emails));
+}
+
+/**
+ * 某處室的 Reply-To 承辦人（D-2）：只從 scoped[owner] 取第一位（依 Hub 表列順序），
+ * 絕不可用 scoped ∪ all 的收件人清單——否則排在前面的全權管理者會讓每個處室的
+ * Reply-To 全部指向同一人。查無 scoped 管理者（含 owner='' 或清單外值）回 null，
+ * 由呼叫端統一決定是否退回 getMailReplyTo_()（Y-E1）。
+ */
+function _replyToForOwner_(owner, buckets) {
+  const scoped = (owner && OWNER_DEPTS.includes(owner) && buckets.scoped[owner]) || [];
+  return scoped.length ? scoped[0] : null;
+}
+
+/**
+ * 管理者彙整信的 Reply-To（D-3／Q-H：維持一人一封，單處室才動態化）：
+ * 判定基準是信內所有 items 各自帶的 **owner**（不是 replyTo，S-D-3 訂正）——
+ * 非空 owner 的相異值恰好 1 個時，才用該筆的 replyTo（若為 null 則退回系統信箱）；
+ * 0 個（全部無法歸屬處室）或 2 個以上（橫跨多個處室）一律退回系統信箱。
+ * 用 replyTo 直接去重會誤判：A 處室有承辦人、B 處室無承辦人混在同一封信時，
+ * 非 null 的 replyTo 只剩 A 一個，會誤指向 A（讓 A 收到含 B 處室內容的回信），
+ * 但 owner 相異值其實是 2 個，裁示要求此情況退回系統信箱。
+ */
+function _digestReplyTo_(items) {
+  const distinctOwners = Array.from(new Set(items.map(it => it.owner).filter(Boolean)));
+  if (distinctOwners.length !== 1) return getMailReplyTo_();
+  const matched = items.find(it => it.owner === distinctOwners[0]);
+  return (matched && matched.replyTo) || getMailReplyTo_();
 }
 
 /** 除錯用：逐步印出通知邏輯各關卡的狀態，不發送任何信件 */
@@ -437,24 +547,24 @@ function debugNotify() {
   console.log('在職教師數：' + teachers.length);
   teachers.slice(0, 5).forEach(t => console.log('  教師: ' + t.userId + ' / ' + t.name + ' / email=' + t.email + ' / dept=' + t.department));
 
-  // 3. 各課程日期解析與 daysLeft
+  // 3. 每位教師的 statusMap（Y-D6：迴圈外讀一次，取代原本 catalog.forEach 內每輪重讀）
+  const records = parseSheetData(_getRecordSheet());
+  const statusPriority = { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 };
+  const statusMap = {};
+  records.forEach(r => {
+    const key = r.userId + '_' + r.catalogId;
+    if (!statusMap[key] || (statusPriority[r.status] || 0) > (statusPriority[statusMap[key]] || 0)) {
+      statusMap[key] = r.status;
+    }
+  });
+
+  // 4. 各課程日期解析與 daysLeft
   catalog.forEach(course => {
     const [y, m, d] = String(course.endDate).replace(/-/g, '/').split('/').map(Number);
     if (!y || !m || !d) { console.log('  ⚠️ 日期解析失敗: ' + course.endDate); return; }
     const endDate  = new Date(y, m - 1, d);
     const daysLeft = Math.ceil((endDate - today) / 86400000);
     console.log('  ' + course.title + ' → daysLeft=' + daysLeft + '（endDate=' + endDate.toDateString() + '）');
-
-    // 4. 每位教師的 statusMap
-    const records = parseSheetData(_getRecordSheet());
-    const statusPriority = { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 };
-    const statusMap = {};
-    records.forEach(r => {
-      const key = r.userId + '_' + r.catalogId;
-      if (!statusMap[key] || (statusPriority[r.status] || 0) > (statusPriority[statusMap[key]] || 0)) {
-        statusMap[key] = r.status;
-      }
-    });
 
     teachers.forEach(teacher => {
       const key       = teacher.userId + '_' + course.catalogId;

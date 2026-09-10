@@ -293,14 +293,19 @@ function _inScope_(owner, scope) {
 /**
  * 建立處室解析索引：TRAINING_REQUIREMENT／TRAINING_CATALOG 各讀一次（B-5）
  * 呼叫端於單次執行內只建一次，供 _resolveRecordOwner_() 重複查詢，避免逐筆查表
+ * @param {Object[]} [preReadCatalog] 已解析的完整 TRAINING_CATALOG 陣列
+ *   （task_6e2d40af Stage D，D-5）。帶了就不重讀 TRAINING_CATALOG；不帶時行為與
+ *   改動前完全相同，`Review.gs`／`Catalog.gs`／`Requirement.gs`／
+ *   `previewNotification()` 既有無參數呼叫零影響。
  */
-function _buildOwnerIndex_() {
+function _buildOwnerIndex_(preReadCatalog) {
   const reqOwner = {};
   parseSheetData(_getRequirementSheet()).forEach(r => {
     reqOwner[r.requirementId] = String(r.owner || '').trim();
   });
   const catReq = {};
-  parseSheetData(_getCatalogSheet()).forEach(c => {
+  const catalogRows = preReadCatalog || parseSheetData(_getCatalogSheet());
+  catalogRows.forEach(c => {
     catReq[c.catalogId] = String(c.requirementId || '').trim();
   });
   return { reqOwner, catReq };
