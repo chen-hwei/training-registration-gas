@@ -168,8 +168,8 @@ function doCheckUserId() {
   if (!userId) {
     errEl.textContent = '請輸入帳號。'; errEl.style.display = 'block'; return;
   }
-  if (!/^t\d+$/i.test(userId)) {
-    errEl.textContent = '帳號格式錯誤，應為英文字母 t 加數字（如 t1234）。';
+  if (!/^[A-Za-z0-9_]{1,30}$/.test(userId)) {
+    errEl.textContent = '帳號格式錯誤';
     errEl.style.display = 'block'; return;
   }
 

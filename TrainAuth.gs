@@ -120,8 +120,10 @@ function _getHubUser_(userId) {
  */
 function trainGetUserName_(params) {
   const userId = String((params && params.userId) || '').trim();
-  if (!userId)                 return { success: false, message: '請輸入帳號' };
-  if (!/^t\d+$/i.test(userId)) return { success: false, message: '帳號格式錯誤（應為 txxxx）' };
+  if (!userId) return { success: false, message: '請輸入帳號' };
+  // 帳號不限 txxxx：Hub.UserStatusCache 內既有非 t 開頭的合法帳號，僅做基本格式防呆，
+  // 實際存在與否交由下面 _getHubUser_() 查表判斷
+  if (!/^[A-Za-z0-9_]{1,30}$/.test(userId)) return { success: false, message: '帳號格式錯誤' };
 
   const user = _getHubUser_(userId);
   if (!user) return { success: false, message: '查無此帳號，請確認後再試' };
