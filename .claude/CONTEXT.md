@@ -42,6 +42,16 @@
 `owner` 是資料的歸屬標記，`training_scope` 是使用者的存取範圍，兩者靠三段瀑布
 （`_resolveRecordOwner_()`）串起來判定。
 
+**通知收件者路由（處室桶）** —— v3.24（`task_6e2d40af` Stage D）起，`Notify.gs`
+`_buildAdminBuckets_()` 把管理者依 `training_scope` 分成 `scoped[dept]`（明列
+該處室者）與 `all[]`（ALL-scope／全權）兩桶；`_adminEmailsForOwner_(owner)`
+收件人＝`scoped[owner]∪all[]`，union 為空才退回全體管理者（並寫 AuditLog 留痕，
+同一 owner 每次執行僅留一筆）。**彙整信 Reply-To 判定基準是信內 items 的
+`owner`，不是 `replyTo`**（`_digestReplyTo_()`）：非空 owner 相異值恰好 1 個
+才動態指向該處室承辦人，0 個或 2 個以上一律退回系統信箱 `getMailReplyTo_()`
+——用 `replyTo` 直接去重會在「A 處室有承辦人、B 處室無承辦人混一封信」時
+誤判成只剩 1 個相異值，錯把信件指向 A（S-D-3 教訓，改動這支函式前務必重讀）。
+
 ## 平台陷阱
 
 **消費者 URL 白屏** —— 使用 `script.google.com/macros/s/...`（消費者 URL）時，
