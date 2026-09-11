@@ -240,6 +240,7 @@
 | **v3.23** | 處室權限三級化 Stage B：`training_scope` 權限模型＋34 支管理路由依處室過濾，處室管理者僅能操作/檢視自己處室資料（[PR #33](https://github.com/chen-hwei/training-registration-gas/pull/33)） | ✅ 完成（2026-09-09） |
 | **v3.24** | 處室權限三級化 Stage D：通知收件者改綁任務所屬處室，彙整信 Reply-To 依處室動態化，跨處室或查無管理者退回系統信箱（[PR #35](https://github.com/chen-hwei/training-registration-gas/pull/35)） | ✅ 完成（2026-09-10） |
 | **v3.25** | 登入步驟1帳號格式檢查前後端同步放寬為非 txxxx 格式（原後端已放寬、前端仍卡舊 regex 導致形同虛設），已用真實非 txxxx 帳號驗證修復（[PR #36](https://github.com/chen-hwei/training-registration-gas/pull/36)） | ✅ 完成（2026-09-11） |
+| **v3.26** | 登入步驟1帳號格式檢查補上 `.` 與 `-` 字元，對齊教職員名冊 Y1 信箱前綴帳號字元集（`mary.chen`／`wu-ming` 類帳號可登入）（[PR #39](https://github.com/chen-hwei/training-registration-gas/pull/39)） | ✅ 完成（2026-09-12） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
