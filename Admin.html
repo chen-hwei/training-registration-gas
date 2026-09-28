@@ -794,6 +794,9 @@
      Tab 切換
   ──────────────────────────────── */
   function switchAdminTab(tab) {
+    // task_c95dbe21 Stage 1：研習統計限全權；分頁按鈕已於 _applyScopeUI() 隱藏，此處防 Console 直呼
+    // 觸發 _rptInit() 連發 8 支 FORBIDDEN 請求（後端本已攔截，這裡只避免畫面噴一串錯誤提示）
+    if (tab === 'report' && typeof isAllScope === 'function' && !isAllScope()) return;
     ['review','catalog','notify','req','report'].forEach(function(t) {
       document.getElementById('atab-' + t).classList.toggle('active', t === tab);
       document.getElementById('panel-' + t).style.display = (t === tab) ? '' : 'none';
@@ -3231,6 +3234,9 @@
       notifyBtn.disabled = true;
       notifyBtn.title = '僅全權管理者可執行，此操作會寄出全校通知信';
     }
+    // task_c95dbe21 Stage 1：研習統計分頁（匯入名冊、指標、全校儀表板）整頁限全權，非全權直接隱藏
+    var reportTab = document.getElementById('atab-report');
+    if (reportTab) reportTab.style.display = 'none';
   }
 
   /* ── 初始化（管理者限定）── */
