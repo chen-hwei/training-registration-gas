@@ -135,6 +135,61 @@ function reviewRecord(reviewerId, body, scope) {
 }
 
 /**
+ * 改歸屬任務（task_c95dbe21 Stage 2b，2d；路由列 ALL-only）
+ * body: { recordId, requirementId }
+ * - 任何 PENDING 紀錄皆可改（Q-b），目標任務須存在、ACTIVE，且學年與研習日期相符
+ * - 研習日期以 _parseTrainingDateStrict_() 判定，無法解析即拒絕（R-3，禁用 toAcademicYear_）
+ * - 取 ScriptLock（與 reviewRecord 同一把）後於鎖內重讀該列再驗，鎖外狀態不作判斷依據（R-3）
+ * - 只寫 requirementId 單一儲存格（Y-7）；catalogId 不動，處室改依新任務（三段瀑布第 1 段優先）
+ * - ⚠️ 核准後時數計入新任務達成率；calcRequirementStats 的 approvedMap 不套計算區間，
+ *   本函式的學年檢查是防止跨學年誤計的唯一防線，不可移除
+ */
+function reassignRecordRequirement(adminId, body) {
+  const recordId = String((body || {}).recordId || '').trim();
+  const newReqId = String((body || {}).requirementId || '').trim();
+  if (!recordId) return _err('MISSING_RECORD_ID');
+  if (!newReqId) return _err('MISSING_REQUIREMENT_ID');
+
+  const schema    = SHEET_SCHEMA.TRAINING_RECORD;
+  const idIdx     = schema.keys.indexOf('recordId');
+  const statusIdx = schema.keys.indexOf('status');
+  const dateIdx   = schema.keys.indexOf('trainingDate');
+  const reqIdx    = schema.keys.indexOf('requirementId');
+
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
+  try {
+    const sheet = _getRecordSheet();
+    const data  = sheet.getDataRange().getValues();
+    let rowIdx = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]).trim() === recordId) { rowIdx = i; break; }
+    }
+    if (rowIdx === -1) return _err('RECORD_NOT_FOUND');
+    if (data[rowIdx][statusIdx] !== 'PENDING') return _err('NOT_PENDING');
+
+    const oldReqId = String(data[rowIdx][reqIdx] || '').trim();
+    if (oldReqId === newReqId) return _err('SAME_REQUIREMENT');
+
+    const p = _parseTrainingDateStrict_(data[rowIdx][dateIdx]);
+    if (!p) return _err('INVALID_TRAINING_DATE');
+
+    const target = parseSheetData(_getRequirementSheet()).find(r => r.requirementId === newReqId);
+    if (!target) return _err('REQUIREMENT_NOT_FOUND');
+    if (target.status !== 'ACTIVE') return _err('REQUIREMENT_NOT_ACTIVE');
+    if (Number(target.academicYear) !== _academicYearOfDate_(p)) return _err('ACADEMIC_YEAR_MISMATCH');
+
+    sheet.getRange(rowIdx + 1, reqIdx + 1).setValue(newReqId);
+    SpreadsheetApp.flush();
+
+    _logOp_(adminId, 'REASSIGN_RECORD', recordId + ' ' + (oldReqId || '自由研習') + '→' + newReqId);
+    return { success: true, recordId, requirementId: newReqId };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
  * 取得研習證明檔案的 Drive 連結（供管理者在瀏覽器開啟審核）
  * body.recordId：以紀錄反查處室後套用 scope（B-2，取代原本只收 fileId 與紀錄表零關聯的設計）
  * body.fileId（僅此無 recordId）：舊版前端格式，回 STALE_CLIENT 促使重新整理（C-5）

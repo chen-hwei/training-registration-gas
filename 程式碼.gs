@@ -57,7 +57,9 @@ const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
   'report_get_roster_sources', 'report_get_settings', 'get_indicators',
   'get_identity_rules', 'get_stats_settings',
   // task_c95dbe21 Stage 2a（R-4）：健檢結果含全校各處室空值清單，限全權
-  'v1/admin/runHealthCheck'
+  'v1/admin/runHealthCheck',
+  // task_c95dbe21 Stage 2b（2d）：改歸屬為跨處室寫入，與 renewRequirements 同類限全權
+  'v1/admin/reassignRecordRequirement'
 ]);
 
 /** 中央 AuditLog 寫入 wrapper：logAction 失敗不可阻斷主流程（比照圖書館 _logOp_） */
@@ -138,6 +140,7 @@ function handleRequest(payload) {
       case 'v1/admin/archiveCatalog':       return archiveCatalog(body || {}, scope);
       case 'v1/admin/getPendingReviews':    return { success: true, data: getPendingReviews(scope) };
       case 'v1/admin/reviewRecord':         return reviewRecord(userId, body || {}, scope);
+      case 'v1/admin/reassignRecordRequirement': return reassignRecordRequirement(userId, body || {});
       case 'v1/admin/getFileUrl':           return getFileUrl(body || {}, scope);
       case 'v1/admin/exportRecords':        return { success: true, data: exportRecords(body || {}, scope) };
       case 'v1/admin/previewNotification':  return previewNotification(userId, scope);
