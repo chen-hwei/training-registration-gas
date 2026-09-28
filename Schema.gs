@@ -327,6 +327,32 @@ function _resolveRecordOwner_(item, index) {
   return index.reqOwner[rid] || '';
 }
 
+// ==================== 研習日期嚴格解析（task_c95dbe21 Stage 2b，N-2） ====================
+
+/**
+ * 研習日期嚴格解析：只接受 yyyy/M/d 與 yyyy-MM-dd，年 2000～2100、月 1～12、日 1～31，其餘一律 null。
+ * trainingDate 寫入時為斜線（Record.gs 正規化），Sheets 判讀為日期後 parseSheetData 讀出為破折號；
+ * 在鎖內直接讀 getValues() 時可能拿到 Date 物件，先以 Asia/Taipei 轉字串再解析。
+ * ⚠️ 2c 建議與 2d 改歸屬的學年判定一律用本函式，禁止用 toAcademicYear_()——
+ * 後者解析失敗時回傳當前學年，壞日期會靜默通過（task_f4b8c2d1 R-5 同型）。
+ * @return {{y:number,m:number,d:number}|null}
+ */
+function _parseTrainingDateStrict_(raw) {
+  const str = (raw instanceof Date)
+    ? Utilities.formatDate(raw, 'Asia/Taipei', 'yyyy-MM-dd')
+    : String(raw || '').trim();
+  const m = str.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (!m) return null;
+  const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+  if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return { y, m: mo, d };
+}
+
+/** 學年度（民國）：8 月（含）起屬當年學年，與 toAcademicYear_() 切點一致；參數為 _parseTrainingDateStrict_() 回傳值 */
+function _academicYearOfDate_(p) {
+  return p.m >= 8 ? p.y - 1911 : p.y - 1912;
+}
+
 // ==================== ID 產生器（需在 LockService 內呼叫） ====================
 
 /**
