@@ -769,11 +769,12 @@
   var _rejectTargetId = null; // 目前正在退件的 recordId
   var _editCatalogId  = null; // null = 新增；string = 編輯
 
-  /* ── 處室權限（task_6e2d40af Stage B）：owner 為空一律視為全體可操作 ── */
+  /* ── 處室權限（task_6e2d40af Stage B）：owner 為空僅全權可操作（task_c95dbe21 Stage 2a，
+        與後端 Schema.gs _inScope_() 同步）── */
   function _inMyScope(owner) {
-    if (!owner) return true;
-    return (typeof isAllScope === 'function' ? isAllScope() : true) ||
-      (getTrainingScope() || []).indexOf(owner) !== -1;
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    if (!owner) return isAll;
+    return isAll || (getTrainingScope() || []).indexOf(owner) !== -1;
   }
 
   /* ── 登入成功後初始化（必須重新驗證管理者身分）── */

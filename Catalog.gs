@@ -70,7 +70,8 @@ function addCatalog(userId, body, scope) {
 
 /**
  * 編輯研習課程（不可修改 catalogId、createdBy、createdAt、status）
- * scope 限制下，改前 requirementId 與改後 requirementId 對應的 owner 皆須 ∈ scope（或空）
+ * scope 限制下，改前 requirementId 與改後 requirementId 對應的 owner 皆須 ∈ scope
+ * （空值僅全權可過，task_c95dbe21 Stage 2a：非全權改成不掛任務即 FORBIDDEN）
  * （B-4：requirementId 改綁與 editRequirement 的 owner 改前／改後同型，防止把課程從
  * A 處室任務改掛到 B 處室繞過權限）
  */
@@ -129,7 +130,7 @@ function editCatalog(userId, body, scope) {
 
 /**
  * 封存研習課程（狀態設為 ARCHIVED，不實體刪除）
- * scope 限制下，課程現有 requirementId 對應的 owner 須 ∈ scope（或空）（B-4 同型）
+ * scope 限制下，課程現有 requirementId 對應的 owner 須 ∈ scope（B-4 同型；空值僅全權，task_c95dbe21 Stage 2a）
  */
 function archiveCatalog(body, scope) {
   if (!body.catalogId) return _err('MISSING_CATALOG_ID');

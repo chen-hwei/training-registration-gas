@@ -476,7 +476,7 @@ function _buildAdminBuckets_(preReadRows) {
 
 /**
  * 查表取得某處室的收件人（D-1／D-4）：scoped[owner] ∪ all[]。
- * owner 為空字串（查不到處室）一律視為全體管理者可見。
+ * owner 為空字串（查不到處室）僅寄全權管理者（task_c95dbe21 Stage 2a）。
  * 退路觸發條件是 union 本身為空（S-D-1 訂正，不是 scoped[owner] 為空）——
  * owner 為受控清單外的舊值時，因 scoped[owner] 不存在，直接落到 union 判斷，
  * 邏輯與「該處室無 scoped 管理者」共用同一條退路，唯有 union 真的為空
@@ -486,13 +486,14 @@ function _buildAdminBuckets_(preReadRows) {
  *   教師、N3 每筆紀錄）在退化狀態下對 Hub AuditLog 造成數百次寫入而拖死執行時間。
  */
 function _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners) {
-  if (!owner) return _allAdminEmails_(buckets);
+  // task_c95dbe21 Stage 2a：owner 空值不再直接寄全體，改走 union（scoped[''] 不存在 → 僅 all[] 全權桶），
+  // 全權桶為空時才落入下方保底（全體＋留痕），與 _inScope_('') 僅全權可見的語意一致
   const scoped = (OWNER_DEPTS.includes(owner) && buckets.scoped[owner]) || [];
   const union = Array.from(new Set(scoped.concat(buckets.all)));
   if (union.length) return union;
   if (!loggedFallbackOwners || !loggedFallbackOwners.has(owner)) {
     if (loggedFallbackOwners) loggedFallbackOwners.add(owner);
-    _logOp_('', 'NOTIFY_FALLBACK_ALL_ADMINS', 'owner=' + owner + ' 查無對應管理者，改發全體管理者');
+    _logOp_('', 'NOTIFY_FALLBACK_ALL_ADMINS', 'owner=' + (owner || '（空值）') + ' 查無對應管理者，改發全體管理者');
   }
   return _allAdminEmails_(buckets);
 }

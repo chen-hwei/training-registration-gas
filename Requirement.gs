@@ -247,7 +247,7 @@ function editRequirement(adminId, body, scope) {
 /**
  * 封存年度研習任務（status → ARCHIVED）
  * body 必填：requirementId
- * scope 限制下，改前 owner 須 ∈ scope（或空）（B-4／C-3：改動既有任務的入口驗改前 owner）
+ * scope 限制下，改前 owner 須 ∈ scope（B-4／C-3：改動既有任務的入口驗改前 owner；空值僅全權，task_c95dbe21 Stage 2a）
  */
 function archiveRequirement(adminId, body, scope) {
   if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');

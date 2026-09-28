@@ -3,7 +3,7 @@
 /**
  * 取得所有 PENDING 待審清單
  * scope 未設定或含 "ALL" 回全部；否則只回三段瀑布解析落在自己 scope 內、
- * 或落在「查不到處室」退路（自訂研習全體可見）的紀錄（task_6e2d40af Stage B）
+ * 的紀錄（task_6e2d40af Stage B）；查不到處室者（自由研習等）僅全權可見（task_c95dbe21 Stage 2a）
  */
 function getPendingReviews(scope) {
   const list = parseSheetData(_getRecordSheet())
