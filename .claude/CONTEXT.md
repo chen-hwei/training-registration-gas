@@ -35,7 +35,8 @@
 **`training_scope`** —— 存於 `Hub.UserStatusCache.systemAccess.training_scope`
 （既有 JSON 字串欄內的 key，非新增欄位），v3.23（`task_6e2d40af` Stage B）起生效。
 未設定或含 `"ALL"` ＝全權管理者；設處室清單（如 `["教務處"]`）則僅能操作/檢視
-落在該處室、或三段瀑布查不到處室（自訂研習等）的資料。判準函式 `Schema.gs`
+落在該處室的資料；三段瀑布查不到處室者（自由研習等）v3.28 起**僅全權管理者可見**
+（`task_c95dbe21` Stage 2a，Q3 裁示，原「空值＝全體可見」已廢止）。判準函式 `Schema.gs`
 `_isAllScope_()`／`_inScope_()`，前端 `config.html getTrainingScope()`／
 `isAllScope()` 須同步套用相同正規化規則（`_normalizeScope_()`），
 避免人工填寫漏寫中括號時 fail-open 成全權。**與 `owner` 是同一組概念的一體兩面**：
@@ -51,6 +52,22 @@
 才動態指向該處室承辦人，0 個或 2 個以上一律退回系統信箱 `getMailReplyTo_()`
 ——用 `replyTo` 直接去重會在「A 處室有承辦人、B 處室無承辦人混一封信」時
 誤判成只剩 1 個相異值，錯把信件指向 A（S-D-3 教訓，改動這支函式前務必重讀）。
+
+**自訂 vs 自由研習** —— 兩個獨立維度，**不可混用**。「自訂」（`isCustom`，待審列上的標籤）
+是教師手動輸入課程名稱、未從研習目錄選課；「自由研習」是教師送出時選了「不歸屬年度任務」
+（`requirementId` 空）。自訂課程可以掛任務（有處室），目錄課程也可以留在自由研習。
+判斷一筆紀錄是否「查不到處室」要看三段瀑布結果，不能看「自訂」標籤
+（`task_c95dbe21` Stage 2a 驗收時曾混淆，見任務單 S2-1 訂正）。
+
+**改歸屬（reassign）** —— v3.29 起全權管理者可把任一 PENDING 紀錄的 `requirementId`
+改為同學年 ACTIVE 任務（`v1/admin/reassignRecordRequirement`），處室隨新任務走，
+`catalogId` 不動。核准後時數計入新任務；`approvedMap` 不套計算區間，**學年檢查是防止
+跨學年誤計的唯一防線**。目標不可為空（不能改回自由研習）。AuditLog `REASSIGN_RECORD`。
+
+**研習日期嚴格解析** —— `Schema.gs` `_parseTrainingDateStrict_()`：只接受 `yyyy/M/d`
+（寫入格式）與 `yyyy-MM-dd`（Sheets 判讀為日期後 `parseSheetData` 的輸出），Date 物件先轉字串，
+其餘回 null。凡「依研習日期判學年且判錯會改資料」的場合一律用它，**禁用 `toAcademicYear_()`**
+——後者解析失敗時回傳當前學年，壞日期會靜默通過（`task_f4b8c2d1` R-5 同型）。
 
 ## 平台陷阱
 

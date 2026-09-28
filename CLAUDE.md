@@ -60,6 +60,12 @@ clasp push
 # 出現 "Manifest file has been updated. Do you want to push and overwrite?" 要回答 y
 ```
 
+> ⚠️ **`.claspignore` 必須含 `**/.claude/**`**（v3.27 起，本機檔、不進版控，換機須手動重加）：
+> 原有的 `.claude/` 只排除第一層，擋不住 `.claude/worktrees/<name>/` 內整套 `.gs`／`appsscript.json`，
+> `clasp push` 會被 Google 以 `A file with this name already exists: appsscript` 整批拒收。
+> 推送前可用 `clasp show-file-status` 確認 Tracked 清單沒有 `.claude\` 開頭的路徑。
+> 非互動環境改用 `clasp push -f`（未加 `-f` 會因收不到 manifest 覆寫確認而 `Skipping push.`）。
+
 ```
 步驟 2：更新 GAS 部署版本（每次 clasp push 後必做，否則線上跑舊版）
 GAS 編輯器 → 右上「部署」→「管理部署」→ ✎ 編輯 → 版本選「新增版本」→ 儲存
