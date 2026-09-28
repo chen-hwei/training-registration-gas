@@ -1696,7 +1696,8 @@
     var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
     var allowed = isAll ? all : (getTrainingScope() || []).filter(function(d) { return d !== 'ALL'; });
 
-    var html = '<option value="">（未指定）</option>' +
+    // task_c95dbe21 R-5：主責單位必填，原「（未指定）」改為不可選提示（編輯既有空值任務時顯示此項，強制改選）
+    var html = '<option value="" disabled>（請選擇主責單位）</option>' +
       allowed.map(function(d) { return '<option value="' + _e(d) + '">' + _e(d) + '</option>'; }).join('');
     if (currentOwner && allowed.indexOf(currentOwner) === -1) {
       html += '<option value="' + _e(currentOwner) + '">' + _e(currentOwner) + '</option>';
@@ -1763,6 +1764,9 @@
     if (!name) { errEl.textContent = '請填寫任務名稱。'; errEl.style.display='block'; return; }
     var year = parseInt(yearStr);
     if (!year || year < 100) { errEl.textContent = '請填寫正確的學年度（例：114）。'; errEl.style.display='block'; return; }
+    if (!document.getElementById('rqm-fowner').value) {
+      errEl.textContent = '請選擇主責單位。'; errEl.style.display='block'; return;
+    }
     errEl.style.display = 'none';
 
     function toGasDate(val) {
