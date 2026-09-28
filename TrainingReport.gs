@@ -1576,7 +1576,8 @@ function _importDateTs_(rawDate) {
 
 /**
  * scope 限制下（Q-F 使用者裁示，2026-09-09）：passed／total／rate 三個統計數字對所有呼叫者
- * 逐字一致，僅 pendingList 依 req.owner 收斂為自己 scope 內（或無法歸屬）的未達成教師名單
+ * 逐字一致，僅 pendingList 依 req.owner 收斂為自己 scope 內的未達成教師名單
+ * （owner 空值者僅全權可見，task_c95dbe21 Stage 2a；Stage 3 將改為任務層過濾）
  */
 function calcRequirementStats(body, scope) {
   try {

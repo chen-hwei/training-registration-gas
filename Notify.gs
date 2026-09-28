@@ -158,9 +158,10 @@ function _groupNotificationList(list) {
 
 /**
  * 預覽通知名單（不發送，供管理者確認後再手動觸發）
- * scope 限制下（Y-4）：n1／n2 教師名單只含解析到自己 scope（或無法歸屬）的課程；
+ * scope 限制下（Y-4）：n1／n2 教師名單只含解析到自己 scope 的課程；
  * n2Admin／n3Admin 只含呼叫者自己的 email，且該 email 底下的 items 本身也只含解析到
- * 自己 scope（或無法歸屬）的課程／紀錄——見「Y-4 揭露面收斂的實際邊界」節。
+ * 自己 scope 的課程／紀錄——見「Y-4 揭露面收斂的實際邊界」節。
+ * 無法歸屬（owner 空值）者僅全權可見（task_c95dbe21 Stage 2a）。
  * Y-E3：items 已在 _buildNotificationList() 階段掛好 owner，這裡直接讀用，
  * 不重建 _buildOwnerIndex_()，省一次 TRAINING_CATALOG／TRAINING_REQUIREMENT 重讀。
  */
