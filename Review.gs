@@ -9,9 +9,46 @@ function getPendingReviews(scope) {
   const list = parseSheetData(_getRecordSheet())
     .filter(r => r.status === 'PENDING')
     .map(r => ({ ...r, hours: Number(r.hours) || 0 }));
-  if (_isAllScope_(scope)) return list;
+  if (_isAllScope_(scope)) return _attachReqSuggestions_(list);
   const index = _buildOwnerIndex_();
   return list.filter(r => _inScope_(_resolveRecordOwner_(r, index), scope));
+}
+
+/**
+ * 2c 關鍵字建議（task_c95dbe21 Stage 2b）：僅全權路徑呼叫（空值紀錄只有全權看得到）。
+ * 任務表、課程表各讀一次（Y-6，禁止逐筆重讀）：建處室索引＋「學年 → ACTIVE 任務關鍵字」索引；
+ * 對三段瀑布解析為空的紀錄，以研習名稱子字串比對（indexOf，同 _importedHoursFor_），
+ * 命中者附 suggestedReqs: [{ requirementId, name, owner }]。研習日期解析失敗不給建議（N-2）。
+ * 只建議，不改資料。
+ */
+function _attachReqSuggestions_(list) {
+  const reqRows = parseSheetData(_getRequirementSheet());
+  const index   = _buildOwnerIndex_(parseSheetData(_getCatalogSheet()), reqRows);
+
+  const byYear = {};  // 學年 → [{ requirementId, name, owner, keywords }]
+  reqRows.forEach(r => {
+    if (r.status !== 'ACTIVE') return;
+    let kws = [];
+    try { kws = r.matchKeywords ? JSON.parse(r.matchKeywords) : []; } catch (_) { kws = []; }
+    if (!Array.isArray(kws)) return;
+    kws = kws.map(k => String(k || '').trim()).filter(Boolean);
+    if (!kws.length) return;
+    const y = Number(r.academicYear);
+    (byYear[y] = byYear[y] || []).push({
+      requirementId: r.requirementId, name: r.name, owner: String(r.owner || '').trim(), keywords: kws
+    });
+  });
+
+  return list.map(r => {
+    if (_resolveRecordOwner_(r, index)) return r;
+    const p = _parseTrainingDateStrict_(r.trainingDate);
+    if (!p) return r;
+    const title = String(r.title || '');
+    const suggestedReqs = (byYear[_academicYearOfDate_(p)] || [])
+      .filter(q => q.keywords.some(k => title.indexOf(k) >= 0))
+      .map(q => ({ requirementId: q.requirementId, name: q.name, owner: q.owner }));
+    return suggestedReqs.length ? { ...r, suggestedReqs } : r;
+  });
 }
 
 /**
@@ -92,6 +129,61 @@ function reviewRecord(reviewerId, body, scope) {
       SchoolPortalLib.logAction(reviewerId, 'REVIEW_' + r.status, r.recordId);
     });
     return { success: true, reviewed: updatedCount };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/**
+ * 改歸屬任務（task_c95dbe21 Stage 2b，2d；路由列 ALL-only）
+ * body: { recordId, requirementId }
+ * - 任何 PENDING 紀錄皆可改（Q-b），目標任務須存在、ACTIVE，且學年與研習日期相符
+ * - 研習日期以 _parseTrainingDateStrict_() 判定，無法解析即拒絕（R-3，禁用 toAcademicYear_）
+ * - 取 ScriptLock（與 reviewRecord 同一把）後於鎖內重讀該列再驗，鎖外狀態不作判斷依據（R-3）
+ * - 只寫 requirementId 單一儲存格（Y-7）；catalogId 不動，處室改依新任務（三段瀑布第 1 段優先）
+ * - ⚠️ 核准後時數計入新任務達成率；calcRequirementStats 的 approvedMap 不套計算區間，
+ *   本函式的學年檢查是防止跨學年誤計的唯一防線，不可移除
+ */
+function reassignRecordRequirement(adminId, body) {
+  const recordId = String((body || {}).recordId || '').trim();
+  const newReqId = String((body || {}).requirementId || '').trim();
+  if (!recordId) return _err('MISSING_RECORD_ID');
+  if (!newReqId) return _err('MISSING_REQUIREMENT_ID');
+
+  const schema    = SHEET_SCHEMA.TRAINING_RECORD;
+  const idIdx     = schema.keys.indexOf('recordId');
+  const statusIdx = schema.keys.indexOf('status');
+  const dateIdx   = schema.keys.indexOf('trainingDate');
+  const reqIdx    = schema.keys.indexOf('requirementId');
+
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
+  try {
+    const sheet = _getRecordSheet();
+    const data  = sheet.getDataRange().getValues();
+    let rowIdx = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][idIdx]).trim() === recordId) { rowIdx = i; break; }
+    }
+    if (rowIdx === -1) return _err('RECORD_NOT_FOUND');
+    if (data[rowIdx][statusIdx] !== 'PENDING') return _err('NOT_PENDING');
+
+    const oldReqId = String(data[rowIdx][reqIdx] || '').trim();
+    if (oldReqId === newReqId) return _err('SAME_REQUIREMENT');
+
+    const p = _parseTrainingDateStrict_(data[rowIdx][dateIdx]);
+    if (!p) return _err('INVALID_TRAINING_DATE');
+
+    const target = parseSheetData(_getRequirementSheet()).find(r => r.requirementId === newReqId);
+    if (!target) return _err('REQUIREMENT_NOT_FOUND');
+    if (target.status !== 'ACTIVE') return _err('REQUIREMENT_NOT_ACTIVE');
+    if (Number(target.academicYear) !== _academicYearOfDate_(p)) return _err('ACADEMIC_YEAR_MISMATCH');
+
+    sheet.getRange(rowIdx + 1, reqIdx + 1).setValue(newReqId);
+    SpreadsheetApp.flush();
+
+    _logOp_(adminId, 'REASSIGN_RECORD', recordId + ' ' + (oldReqId || '自由研習') + '→' + newReqId);
+    return { success: true, recordId, requirementId: newReqId };
   } finally {
     lock.releaseLock();
   }

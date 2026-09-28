@@ -814,8 +814,13 @@
   ──────────────────────────────── */
   function _loadReviews() {
     showSpinner();
-    api('v1/admin/getPendingReviews', {})
-      .then(function(res) {
+    Promise.all([
+      api('v1/admin/getPendingReviews', {}),
+      // task_c95dbe21 Stage 2b：待審列顯示「歸屬任務」與改歸屬選單需要任務清單；載入失敗不擋待審清單
+      _ensureRequirementsLoaded().catch(function() {})
+    ])
+      .then(function(results) {
+        var res = results[0];
         hideSpinner();
         _reviewRecords = (res && res.data) ? res.data : [];
         // 依送出時間由舊到新（先送先審）
@@ -860,6 +865,122 @@
     renderPagination('review-pagination', _reviewPage, totalPages, 'goReviewPage');
   }
 
+  /* ── 歸屬顯示與改歸屬（task_c95dbe21 Stage 2b，2c／2d）── */
+  function _reqById(id) {
+    for (var i = 0; i < _reqRecords.length; i++) {
+      if (_reqRecords[i].requirementId === id) return _reqRecords[i];
+    }
+    return null;
+  }
+
+  /* 前端學年判定：規則同後端 Schema.gs _parseTrainingDateStrict_()／_academicYearOfDate_()，
+     只用來篩選改歸屬選單，真正把關在後端 */
+  function _academicYearOfTrainingDate(raw) {
+    var m = String(raw || '').trim().match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+    if (!m) return null;
+    var y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]);
+    if (y < 2000 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    return mo >= 8 ? y - 1911 : y - 1912;
+  }
+
+  function _reviewAttributionHtml(r) {
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    var html = '';
+    if (r.requirementId) {
+      var q = _reqById(r.requirementId);
+      html += '<div class="review-row-meta">📌 歸屬：' +
+        (q ? _e(q.name) + (q.owner ? '（' + _e(q.owner) + '）' : '') : _e(r.requirementId)) + '</div>';
+    } else {
+      html += '<div class="review-row-meta">📌 自由研習（教師未選任務）</div>';
+    }
+    if (isAll && r.suggestedReqs && r.suggestedReqs.length) {
+      html += '<div class="review-row-meta" style="color:var(--warning)">💡 疑似屬於：' +
+        r.suggestedReqs.map(function(s) {
+          return _e(s.name) + (s.owner ? '（' + _e(s.owner) + '）' : '') +
+            ' <button class="btn btn-xs btn-outline" onclick="openReassignModal(\'' + r.recordId + '\',\'' +
+            _e(s.requirementId) + '\')">套用</button>';
+        }).join('　') + '</div>';
+    }
+    return html;
+  }
+
+  var _REASSIGN_ERR = {
+    NOT_PENDING: '此筆已非待審狀態，請重新整理',
+    SAME_REQUIREMENT: '已是該任務，無需變更',
+    INVALID_TRAINING_DATE: '研習日期無法解析，無法判定學年，請先請教師更正',
+    REQUIREMENT_NOT_FOUND: '找不到目標任務',
+    REQUIREMENT_NOT_ACTIVE: '目標任務已封存',
+    ACADEMIC_YEAR_MISMATCH: '目標任務學年與研習日期不符',
+    RECORD_NOT_FOUND: '找不到此筆紀錄，請重新整理'
+  };
+
+  function openReassignModal(recordId, preselectReqId) {
+    var rec = null;
+    for (var i = 0; i < _reviewRecords.length; i++) {
+      if (_reviewRecords[i].recordId === recordId) { rec = _reviewRecords[i]; break; }
+    }
+    if (!rec) { showToast('找不到此筆紀錄，請重新整理', 'error'); return; }
+    if (_reqLoadFailed) { showToast('任務清單載入失敗，請重新整理後再試', 'error'); return; }
+    var year = _academicYearOfTrainingDate(rec.trainingDate);
+    if (year === null) { showToast(_REASSIGN_ERR.INVALID_TRAINING_DATE, 'error'); return; }
+
+    var byOwner = {};
+    _reqRecords.forEach(function(q) {
+      if (q.status !== 'ACTIVE' || Number(q.academicYear) !== year || q.requirementId === rec.requirementId) return;
+      var o = q.owner || '（未指定處室）';
+      (byOwner[o] = byOwner[o] || []).push(q);
+    });
+    var owners = Object.keys(byOwner);
+    if (!owners.length) { showToast(year + ' 學年度沒有其他可歸屬的 ACTIVE 任務', 'error'); return; }
+
+    // 預選任務不在清單內（已封存、跨學年、已是目前歸屬）時停在佔位選項，避免瀏覽器靜默選中第一個任務
+    var matched = false, groups = '';
+    owners.forEach(function(o) {
+      groups += '<optgroup label="' + _e(o) + '">';
+      byOwner[o].forEach(function(q) {
+        var sel = (q.requirementId === preselectReqId);
+        if (sel) matched = true;
+        groups += '<option value="' + _e(q.requirementId) + '"' + (sel ? ' selected' : '') + '>' + _e(q.name) + '</option>';
+      });
+      groups += '</optgroup>';
+    });
+    var opts = '<option value="" disabled' + (matched ? '' : ' selected') + '>（請選擇任務）</option>' + groups;
+    var cur = rec.requirementId ? (_reqById(rec.requirementId) || { name: rec.requirementId }).name : '自由研習';
+
+    showConfirmModal(
+      '🔀 改歸屬任務',
+      '<p style="margin-bottom:8px"><strong>' + _e(rec.title) + '</strong>（' + _e(rec.userId) + '，' +
+        _e(rec.trainingDate) + '，' + year + ' 學年度）</p>' +
+      '<p style="font-size:0.85rem;margin-bottom:8px">目前歸屬：' + _e(cur) + '</p>' +
+      '<select id="reassign-select" class="form-control">' + opts + '</select>' +
+      '<p style="font-size:0.80rem;color:var(--gray-700);margin-top:8px">改歸屬後此筆會出現在該任務所屬處室的待審清單，' +
+        '核准後時數計入該任務達成率。只列出與研習日期同學年的任務。</p>',
+      '確認改歸屬',
+      function() {
+        var newReqId = document.getElementById('reassign-select').value;
+        if (!newReqId) { showToast('請選擇任務', 'error'); return; }
+        showSpinner();
+        api('v1/admin/reassignRecordRequirement', { recordId: recordId, requirementId: newReqId })
+          .then(function(res) {
+            hideSpinner();
+            if (res && res.success) {
+              var q = _reqById(newReqId);
+              showToast('✅ 已改歸屬至「' + (q ? q.name : newReqId) + '」', 'success');
+              _loadReviews();
+            } else {
+              var code = (res && res.error) || '';
+              showToast(_REASSIGN_ERR[code] || code || '改歸屬失敗', 'error');
+            }
+          })
+          .catch(function(err) {
+            hideSpinner();
+            if (err && err.message !== 'TOKEN_EXPIRED') showToast(err.message || '系統錯誤', 'error');
+          });
+      },
+      'btn-primary'
+    );
+  }
+
   function _renderReviewRow(r) {
     var checked  = !!_selectedIds[r.recordId];
     var checkCls = 'check-box' + (checked ? ' checked' : '');
@@ -885,6 +1006,7 @@
           (r.organizer ? ' &nbsp; 🏛 ' + _e(r.organizer) : '') +
         '</div>' +
         '<div class="review-row-meta">🕐 送出：' + fmtTs(r.submittedAt) + '</div>' +
+        _reviewAttributionHtml(r) +
       '</div>' +
       /* 操作按鈕 */
       '<div style="display:flex;flex-direction:column;gap:6px;align-items:stretch;min-width:100px">' +
@@ -896,6 +1018,9 @@
         ' onclick="approveOne(\'' + r.recordId + '\')">✅ 核准</button>' +
         '<button class="btn btn-xs btn-danger"' +
         ' onclick="openRejectModal(\'' + r.recordId + '\')">❌ 退件</button>' +
+        (((typeof isAllScope === 'function') ? isAllScope() : true)
+          ? '<button class="btn btn-xs btn-outline" onclick="openReassignModal(\'' + r.recordId + '\')">🔀 改歸屬</button>'
+          : '') +
       '</div>' +
       '</div>';
   }
@@ -3283,6 +3408,7 @@
   window.batchApprove        = batchApprove;
   window.viewFile            = viewFile;
   window.openRejectModal       = openRejectModal;
+  window.openReassignModal     = openReassignModal;
   window.onRejectReasonChange  = onRejectReasonChange;
   window.closeRejectModal      = closeRejectModal;
   window.confirmReject         = confirmReject;
