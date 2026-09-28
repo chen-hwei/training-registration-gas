@@ -1214,6 +1214,27 @@
     return { ok: true, value: dpYear + '/' + dpMonth + '/' + dpDay };
   }
 
+  /* ── 自由研習歸屬提示（task_c95dbe21 Stage 2a，2b 方案四）──
+     選「自由研習」但研習名稱命中某任務 matchKeywords 時提示改選，只提示、不強制。
+     matchKeywords 為 JSON 陣列字串（v1/getRequirements 以 ...req 原樣帶回），解析失敗視為無關鍵字。
+     比對語意同後端 _importedHoursFor_：子字串包含（indexOf），不用 Regex。
+     多選送出只在已選任務時出現（_buildMultiToggle），故僅單筆送出需要此提示。 */
+  var _freeHintShownFor = '';  // 同一名稱＋任務只提示一次，取消後重送不再打擾
+  function _suggestReqForFreeTraining(title) {
+    if (_selectedReqId) return null;
+    for (var i = 0; i < _allRequirements.length; i++) {
+      var r = _allRequirements[i];
+      var kws = [];
+      try { kws = r.matchKeywords ? JSON.parse(r.matchKeywords) : []; } catch (e) { kws = []; }
+      if (!Array.isArray(kws)) continue;
+      for (var k = 0; k < kws.length; k++) {
+        var kw = String(kws[k] || '').trim();
+        if (kw && title.indexOf(kw) >= 0) return r;
+      }
+    }
+    return null;
+  }
+
   /* ── 表單送出 ── */
   function submitRecord() {
     _clearUploadError();
@@ -1233,6 +1254,18 @@
       showToast('日期格式異常，請重新選擇研習日期', 'error'); return;
     }
     var trainingDate = parsedDate.value;
+
+    var sugg = _suggestReqForFreeTraining(title);
+    if (sugg && _freeHintShownFor !== title + '|' + sugg.requirementId) {
+      _freeHintShownFor = title + '|' + sugg.requirementId;
+      if (confirm('這門研習可能屬於「' + sugg.name + '」任務，要改選該任務嗎？\n\n' +
+                  '按「確定」：改選該任務，請確認畫面內容後再按一次送出。\n' +
+                  '按「取消」：維持自由研習，照常送出。')) {
+        _selectReq(sugg.requirementId);
+        showToast('已改選「' + sugg.name + '」，請確認內容後再按送出', 'info');
+        return;
+      }
+    }
 
     var reuseChecked = false;
     var reuseEl = document.getElementById('opt-reuse');
