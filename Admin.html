@@ -404,7 +404,7 @@
         </div>
         <div style="display:flex;gap:8px">
           <button id="btn-renew-req" class="btn btn-sm btn-outline" onclick="renewRequirements()">📋 複製到下學年</button>
-          <button class="btn btn-sm btn-outline" onclick="runYearSwitchHealthCheck()">🩺 學年切換健檢</button>
+          <button id="btn-yearswitch-hc" class="btn btn-sm btn-outline" onclick="runYearSwitchHealthCheck()">🩺 學年切換健檢</button>
           <button class="btn btn-sm btn-primary" onclick="openReqModal(null)">＋ 新增任務</button>
         </div>
       </div>
@@ -3259,6 +3259,12 @@
     // task_c95dbe21 Stage 1：研習統計分頁（匯入名冊、指標、全校儀表板）整頁限全權，非全權直接隱藏
     var reportTab = document.getElementById('atab-report');
     if (reportTab) reportTab.style.display = 'none';
+    // task_c95dbe21 Stage 2a（R-4）：runHealthCheck 已列 ALL-only（結果含全校空值清單）
+    var hcBtn = document.getElementById('btn-yearswitch-hc');
+    if (hcBtn) {
+      hcBtn.disabled = true;
+      hcBtn.title = '僅全權管理者可執行（含全校空值資料）';
+    }
   }
 
   /* ── 初始化（管理者限定）── */
