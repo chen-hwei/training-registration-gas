@@ -16,6 +16,19 @@ function getCatalog() {
 // ── Level 2（管理者端） ──
 
 /**
+ * 管理端研習目錄清單（task_c95dbe21 Stage 2a，2e／Q-a）
+ * N-1：直接重用 getCatalog()（ACTIVE 篩選＋hours／isRequired 正規化），全權管理者回傳與其完全相同；
+ * 非全權只回「所掛任務 owner ∈ scope」的課程，未掛任務者僅全權可見。
+ * 教師端共用路由 v1/getCatalog 不動（教師端不可受處室過濾影響）。
+ */
+function getCatalogAdmin(scope) {
+  const list = getCatalog();
+  if (_isAllScope_(scope)) return list;
+  const index = _buildOwnerIndex_(list);
+  return list.filter(c => _inScope_(_resolveRecordOwner_({ requirementId: c.requirementId }, index), scope));
+}
+
+/**
  * 新增研習課程
  * scope 限制下，必須掛任務（requirementId），且該任務的 owner 須 ∈ scope
  * （B-4：課程若掛任務，視同該任務的處室資產；task_c95dbe21 R-1：非全權不掛任務即 FORBIDDEN，

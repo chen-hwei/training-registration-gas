@@ -88,12 +88,16 @@ function getRequirements(userId, body) {
 /**
  * 取得所有任務（不限學年度，供管理者全覽）
  * 可傳入 body.academicYear 篩選特定學年度
+ * scope 限制下只回 owner ∈ scope 的任務；owner 空值僅全權可見（task_c95dbe21 Stage 2a，2e／Q-a）
  */
-function getAllRequirements(body) {
-  const all = parseSheetData(_getRequirementSheet()).map(r => ({
+function getAllRequirements(body, scope) {
+  let all = parseSheetData(_getRequirementSheet()).map(r => ({
     ...r,
     requiredHours: Number(r.requiredHours) || 0
   }));
+  if (!_isAllScope_(scope)) {
+    all = all.filter(r => _inScope_(String(r.owner || '').trim(), scope));
+  }
   if (body && body.academicYear) {
     return all.filter(r => Number(r.academicYear) === Number(body.academicYear));
   }

@@ -1113,7 +1113,8 @@
   function _loadCatalog() {
     showSpinner();
     Promise.all([
-      api('v1/getCatalog', {}),
+      // task_c95dbe21 Stage 2a（2e）：改走管理端路由，依處室過濾（教師端 v1/getCatalog 不受影響）
+      api('v1/admin/getCatalogAdmin', {}),
       // 任務清單載入失敗不擋課程清單渲染；失敗時 _reqRecords 維持空陣列，
       // saveCatalog 會因此略過 requirementId 這個 key（見 R-3-2）
       _ensureRequirementsLoaded().catch(function() {})
