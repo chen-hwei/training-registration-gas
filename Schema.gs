@@ -284,9 +284,12 @@ function _isAllScope_(scope) {
   return !Array.isArray(scope) || scope.length === 0 || scope.indexOf('ALL') !== -1;
 }
 
-/** owner 為空字串（三段瀑布查不到處室）一律視為全體管理者可見／可操作 */
+/**
+ * owner 為空字串（三段瀑布查不到處室）僅全權管理者可見／可操作
+ * （task_c95dbe21 Stage 2a：原「空值＝全體可見」改制，Q3 裁示）
+ */
 function _inScope_(owner, scope) {
-  if (!owner) return true;
+  if (!owner) return _isAllScope_(scope);
   return _isAllScope_(scope) || scope.indexOf(owner) !== -1;
 }
 
@@ -315,7 +318,7 @@ function _buildOwnerIndex_(preReadCatalog) {
  * 三段瀑布解析單筆紀錄／課程所屬處室（純函式，零 I/O）
  * 1. requirementId → requirement.owner
  * 2. 上一步為空 → catalogId → catalog.requirementId → requirement.owner
- * 3. 仍為空 → ''（歸全體處室管理者可見，即 _inScope_ 的 owner='' 分支）
+ * 3. 仍為空 → ''（僅全權管理者可見，即 _inScope_ 的 owner='' 分支，task_c95dbe21 Stage 2a）
  */
 function _resolveRecordOwner_(item, index) {
   let rid = String(item.requirementId || '').trim();

@@ -8,7 +8,7 @@ var HEALTHCHECK_SAMPLE_LIMIT = 30;
 /**
  * 健檢入口
  * @param {string} userId - 執行的管理者 userId（供 AuditLog 留痕用）
- * @param {string} scope - 'yearSwitch' 或 'preExport'
+ * @param {string} scope - 'yearSwitch' 或 'preExport'（健檢群組；⚠️ 與處室權限 training_scope 同名異義，不可混用）
  * @param {number} academicYear - 目標學年度
  */
 function runDataHealthCheck(userId, scope, academicYear) {
@@ -106,6 +106,32 @@ function _healthCheckYearSwitch_(year) {
     year + ' 學年度名冊快照是否存在',
     hasSnapshot ? [] : [year + ' 學年度尚無 TeacherSnapshot 名冊快照，請先執行名冊快照']
   ));
+
+  // ⑤～⑦ 處室歸屬空值（task_c95dbe21 Stage 2a）：空值自 Stage 2a 起僅全權管理者可見，
+  //   列出來源供全權管理者補正。本健檢路由已列 ALL-only（清單含全校各處室資料）。
+  //   TRAINING_CATALOG／TRAINING_RECORD 各讀一次，處室索引由已讀的 reqRows 與課程列就地組出，不重讀
+  var catalogRows = parseSheetData(_getCatalogSheet());
+  var ownerIndex = { reqOwner: {}, catReq: {} };
+  reqRows.forEach(function(r) { ownerIndex.reqOwner[r.requirementId] = String(r.owner || '').trim(); });
+  catalogRows.forEach(function(c) { ownerIndex.catReq[c.catalogId] = String(c.requirementId || '').trim(); });
+
+  // ⑤ ACTIVE 任務主責單位空白（不限學年；Y-2：renewRequirements 會原樣複製空 owner，複製前即應補正）
+  var ownerEmpty = reqRows
+    .filter(function(r) { return r.status === 'ACTIVE' && !String(r.owner || '').trim(); })
+    .map(function(r) { return '[' + r.requirementId + '] ' + r.name + '（' + r.academicYear + ' 學年度）：主責單位空白'; });
+  groups.push(_hcGroup_('yearSwitch_requirementOwnerEmpty', '年度任務主責單位空白', ownerEmpty));
+
+  // ⑥ ACTIVE 課程未掛年度任務（處室管理者看不到、也無法編輯這類課程）
+  var catalogUnlinked = catalogRows
+    .filter(function(c) { return c.status === 'ACTIVE' && !String(c.requirementId || '').trim(); })
+    .map(function(c) { return '[' + c.catalogId + '] ' + c.title + '：未掛年度任務'; });
+  groups.push(_hcGroup_('yearSwitch_catalogUnlinked', '研習課程未掛年度任務', catalogUnlinked));
+
+  // ⑦ 待審紀錄查不到負責處室（三段瀑布解析為空，僅全權管理者審得到）
+  var pendingOwnerEmpty = parseSheetData(_getRecordSheet())
+    .filter(function(r) { return r.status === 'PENDING' && !_resolveRecordOwner_(r, ownerIndex); })
+    .map(function(r) { return '[' + r.recordId + '] ' + r.userId + '：' + r.title + '（' + r.trainingDate + '）'; });
+  groups.push(_hcGroup_('yearSwitch_pendingOwnerEmpty', '待審紀錄查不到負責處室', pendingOwnerEmpty));
 
   return groups;
 }

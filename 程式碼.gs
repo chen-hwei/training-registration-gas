@@ -55,7 +55,9 @@ const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
   'report_export_csv', 'report_export_doc',
   'report_calc', 'report_batch_calc', 'report_get_stats_cache',
   'report_get_roster_sources', 'report_get_settings', 'get_indicators',
-  'get_identity_rules', 'get_stats_settings'
+  'get_identity_rules', 'get_stats_settings',
+  // task_c95dbe21 Stage 2a（R-4）：健檢結果含全校各處室空值清單，限全權
+  'v1/admin/runHealthCheck'
 ]);
 
 /** 中央 AuditLog 寫入 wrapper：logAction 失敗不可阻斷主流程（比照圖書館 _logOp_） */
@@ -140,7 +142,8 @@ function handleRequest(payload) {
       case 'v1/admin/exportRecords':        return { success: true, data: exportRecords(body || {}, scope) };
       case 'v1/admin/previewNotification':  return previewNotification(userId, scope);
       case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, checkAndNotifyOverdue());
-      case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements(body || {}) };
+      case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements(body || {}, scope) };
+      case 'v1/admin/getCatalogAdmin':      return { success: true, data: getCatalogAdmin(scope) };
       case 'v1/admin/addRequirement':       return addRequirement(userId, body || {}, scope);
       case 'v1/admin/editRequirement':      return editRequirement(userId, body || {}, scope);
       case 'v1/admin/archiveRequirement':   return archiveRequirement(userId, body || {}, scope);
