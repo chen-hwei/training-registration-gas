@@ -17,15 +17,17 @@ function getCatalog() {
 
 /**
  * 新增研習課程
- * scope 限制下，若掛了任務（requirementId），該任務的 owner 須 ∈ scope（或留空不限制）
- * （B-4：課程若掛任務，視同該任務的處室資產）
+ * scope 限制下，必須掛任務（requirementId），且該任務的 owner 須 ∈ scope
+ * （B-4：課程若掛任務，視同該任務的處室資產；task_c95dbe21 R-1：非全權不掛任務即 FORBIDDEN，
+ * 原條件在 requirementId 為空時整段跳過，光改 _inScope_ 擋不住）
  */
 function addCatalog(userId, body, scope) {
   if (!body.title)  return _err('MISSING_TITLE');
   if (!body.hours)  return _err('MISSING_HOURS');
 
   const requirementId = String(body.requirementId || '').trim();
-  if (!_isAllScope_(scope) && requirementId) {
+  if (!_isAllScope_(scope)) {
+    if (!requirementId) return _err('FORBIDDEN');
     const owner = _buildOwnerIndex_().reqOwner[requirementId] || '';
     if (!_inScope_(owner, scope)) return _err('FORBIDDEN');
   }

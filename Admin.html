@@ -1208,7 +1208,11 @@
      若目前選定值不在清單中（已封存、跨學年，或任務清單尚未成功載入），
      額外補一個選項，避免 select.value 被 DOM 靜默重置為空字串（見 R-3） */
   function _buildTaskOptions(selectedId) {
-    var opts = '<option value="">— 不掛任務 —</option>';
+    // task_c95dbe21 R-1：非全權管理者課程必須掛本處室任務，不提供「不掛任務」（後端 addCatalog 同步擋）
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    var opts = isAll
+      ? '<option value="">— 不掛任務 —</option>'
+      : '<option value="" disabled>（請選擇所屬任務）</option>';
     // Y-9／Y-10：只在「真的載入失敗」時才顯示警示，跟「系統還沒建立任何任務」
     // （成功但清單為空）分開——後者不該被誤導成故障
     if (_reqLoadFailed) {
@@ -1341,6 +1345,19 @@
       startDate:      toGasDate(document.getElementById('cm-fstart').value),
       endDate:        toGasDate(document.getElementById('cm-fend').value)
     };
+
+    // task_c95dbe21 R-1：非全權管理者必須掛本處室任務。任務清單載入失敗時下方 R-3-2 會略過
+    // requirementId，送出必回 FORBIDDEN，改在前端先擋並給明確提示
+    var isAllScopeUser = (typeof isAllScope === 'function') ? isAllScope() : true;
+    if (!isAllScopeUser) {
+      if (_reqLoadFailed) {
+        errEl.textContent = '任務清單載入失敗，請重新整理後再存檔。'; errEl.style.display = 'block'; return;
+      }
+      if (!document.getElementById('cm-ftask').value) {
+        errEl.textContent = '請選擇所屬任務（處室管理者的課程須掛本處室任務；若尚無任務，請先至「年度任務」分頁建立）。';
+        errEl.style.display = 'block'; return;
+      }
+    }
 
     // R-3-2：任務清單根本沒能成功載入時（_reqRecords 空），下拉只剩「不掛任務」與
     // 補救選項，不代表管理者真的要清空既有關聯——整個不送這個 key，
