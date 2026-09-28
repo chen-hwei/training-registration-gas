@@ -300,10 +300,12 @@ function _inScope_(owner, scope) {
  *   （task_6e2d40af Stage D，D-5）。帶了就不重讀 TRAINING_CATALOG；不帶時行為與
  *   改動前完全相同，`Review.gs`／`Catalog.gs`／`Requirement.gs`／
  *   `previewNotification()` 既有無參數呼叫零影響。
+ * @param {Object[]} [preReadReq] 已解析的完整 TRAINING_REQUIREMENT 陣列（task_c95dbe21 Stage 2b，
+ *   供 getPendingReviews 同時建關鍵字索引時免重讀）。不帶時行為與改動前完全相同。
  */
-function _buildOwnerIndex_(preReadCatalog) {
+function _buildOwnerIndex_(preReadCatalog, preReadReq) {
   const reqOwner = {};
-  parseSheetData(_getRequirementSheet()).forEach(r => {
+  (preReadReq || parseSheetData(_getRequirementSheet())).forEach(r => {
     reqOwner[r.requirementId] = String(r.owner || '').trim();
   });
   const catReq = {};

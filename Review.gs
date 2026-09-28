@@ -9,9 +9,46 @@ function getPendingReviews(scope) {
   const list = parseSheetData(_getRecordSheet())
     .filter(r => r.status === 'PENDING')
     .map(r => ({ ...r, hours: Number(r.hours) || 0 }));
-  if (_isAllScope_(scope)) return list;
+  if (_isAllScope_(scope)) return _attachReqSuggestions_(list);
   const index = _buildOwnerIndex_();
   return list.filter(r => _inScope_(_resolveRecordOwner_(r, index), scope));
+}
+
+/**
+ * 2c 關鍵字建議（task_c95dbe21 Stage 2b）：僅全權路徑呼叫（空值紀錄只有全權看得到）。
+ * 任務表、課程表各讀一次（Y-6，禁止逐筆重讀）：建處室索引＋「學年 → ACTIVE 任務關鍵字」索引；
+ * 對三段瀑布解析為空的紀錄，以研習名稱子字串比對（indexOf，同 _importedHoursFor_），
+ * 命中者附 suggestedReqs: [{ requirementId, name, owner }]。研習日期解析失敗不給建議（N-2）。
+ * 只建議，不改資料。
+ */
+function _attachReqSuggestions_(list) {
+  const reqRows = parseSheetData(_getRequirementSheet());
+  const index   = _buildOwnerIndex_(parseSheetData(_getCatalogSheet()), reqRows);
+
+  const byYear = {};  // 學年 → [{ requirementId, name, owner, keywords }]
+  reqRows.forEach(r => {
+    if (r.status !== 'ACTIVE') return;
+    let kws = [];
+    try { kws = r.matchKeywords ? JSON.parse(r.matchKeywords) : []; } catch (_) { kws = []; }
+    if (!Array.isArray(kws)) return;
+    kws = kws.map(k => String(k || '').trim()).filter(Boolean);
+    if (!kws.length) return;
+    const y = Number(r.academicYear);
+    (byYear[y] = byYear[y] || []).push({
+      requirementId: r.requirementId, name: r.name, owner: String(r.owner || '').trim(), keywords: kws
+    });
+  });
+
+  return list.map(r => {
+    if (_resolveRecordOwner_(r, index)) return r;
+    const p = _parseTrainingDateStrict_(r.trainingDate);
+    if (!p) return r;
+    const title = String(r.title || '');
+    const suggestedReqs = (byYear[_academicYearOfDate_(p)] || [])
+      .filter(q => q.keywords.some(k => title.indexOf(k) >= 0))
+      .map(q => ({ requirementId: q.requirementId, name: q.name, owner: q.owner }));
+    return suggestedReqs.length ? { ...r, suggestedReqs } : r;
+  });
 }
 
 /**
