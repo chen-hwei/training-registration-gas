@@ -44,13 +44,18 @@ function doPost(e) {
 // 僅全權管理者（scope 含 "ALL" 或未設 training_scope）可執行的路由（task_6e2d40af Stage B）
 // 對應任務單 Stage B 路由表：renewRequirements（跨處室批次寫入）、triggerNotification（全校寄信）、
 // TRAIN-REPORT 設定／資料寫入 8 支（Q-B：全校統計口徑限全權）、匯出 2 支（Q-G：明文排除揭露面收斂）
+// task_c95dbe21 Stage 1：研習統計分頁整頁限全權（推翻 Q-E／Q-F／Q-G），讀取與重算 8 支一併收斂；
+// report_req_stats 刻意不列入（Stage 3 年度任務分頁要用，改由 Stage 3 依 scope 過濾任務）
 const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
   'v1/admin/renewRequirements',
   'v1/admin/triggerNotification',
   'report_import', 'report_snapshot', 'report_snapshot_batch',
   'report_save_settings', 'save_indicator', 'delete_indicator',
   'save_identity_rules', 'save_stats_settings',
-  'report_export_csv', 'report_export_doc'
+  'report_export_csv', 'report_export_doc',
+  'report_calc', 'report_batch_calc', 'report_get_stats_cache',
+  'report_get_roster_sources', 'report_get_settings', 'get_indicators',
+  'get_identity_rules', 'get_stats_settings'
 ]);
 
 /** 中央 AuditLog 寫入 wrapper：logAction 失敗不可阻斷主流程（比照圖書館 _logOp_） */
