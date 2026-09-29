@@ -69,6 +69,25 @@
 其餘回 null。凡「依研習日期判學年且判錯會改資料」的場合一律用它，**禁用 `toAcademicYear_()`**
 ——後者解析失敗時回傳當前學年，壞日期會靜默通過（`task_f4b8c2d1` R-5 同型）。
 
+**部別桶（hs／jh／other）** —— 統計回傳依教師部別分三桶：`高中部`→`hs`、`國中部`→`jh`、
+其餘（含部別空白）→`other`，三桶加總恆等於全校數。`calcRequirementStats` 與 `getCatalogStats`
+的後端、以及 `Admin.html` 的 `_rsDeptKey()` 使用同一規則。**不同於 `calcStats` 的
+「非高中部一律國中部」**——後者母體經 `VALID_DEPT` 篩選，前者未篩，沿用會把部別空白者灌進國中部。
+「其他」桶多為行政人員（`t9xxx` 帳號），使用者裁示視為正常分類（P-3b-1，2026-09-29）。
+
+**課程統計 vs 任務統計（口徑差異）** —— 兩者依不同欄位歸屬。**課程統計**（`getCatalogStats`）依紀錄的
+`catalogId` 歸課程、以課程所掛任務的 `owner` 決定處室；**任務統計**（`calcRequirementStats`）依
+紀錄自己的 `requirementId` 歸任務。紀錄被「改歸屬」後兩邊可能歸到不同處室，屬合理結果，
+畫面說明文字已註明。`catalogId` 為空的自訂課程紀錄不計入課程統計。
+
+**一人一狀態（`_statusRank_`）** —— 同一教師同一課程（或催辦名單的同 key）有多筆紀錄時，
+取最高狀態計一人：`APPROVED`(3) > `PENDING`(2) > `REJECTED`(1)，其餘 0。
+`Schema.gs` `_statusRank_()` 為唯一定義，`Notify.gs` 催辦名單與 `CatalogStats.gs` 共用。
+
+**名冊查無（`inRoster=false`）** —— 課程統計的已登錄名單中，教師帳號在 `Hub.UserStatusCache`
+**完全無此帳號**才算查無（在名冊但已離職者仍顯示部別與 email）。查無者姓名／部別／email 留空，
+部別歸 `other`，CSV 姓名欄標「（名冊查無）」。
+
 ## 平台陷阱
 
 **消費者 URL 白屏** —— 使用 `script.google.com/macros/s/...`（消費者 URL）時，
