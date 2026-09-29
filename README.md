@@ -28,6 +28,8 @@
 - 預覽並手動觸發通知（即時掌握待通知教師名單）
 - **研習統計分析**（**v3.27 起限全權管理者**，處室管理者看不到此分頁）：多來源研習資料匯入（全國進修網 + 臺北市研習網）、人事名冊多學年管理（含一鍵從 Hub 全量覆蓋目前學年度名冊）、政策指標達成率儀表板（累積/當年度，跨裝置快取）、未達成教師矩陣總覽（指標 checkbox 篩選 + CSV 匯出）、批次預計算、**兼課教師計入統計母數可切換**（後台開關，同時影響 Hub 同步與催辦通知範圍，實習老師永久排除不受開關影響）
 - **年度任務達成率**：依身分分眾統計各任務達標率；計算區間採硬性學年/學期邊界（整學年 8/1–7/31、上學期 8/1–1/31、下學期 2/1–7/31），截止日期僅作催辦提醒
+- **任務達成狀況**（v3.30，處室管理者可用）：年度任務分頁的可收合區塊，顯示本處室任務的達成率儀表板（全校／高中部／國中部／其他）與未達成教師矩陣（可依部別與任務篩選），可匯出含教師帳號、姓名、學校 email 的 CSV 供另行寄信提醒；處室管理者只看得到本處室任務
+- **課程完成狀況**（v3.31，處室管理者可用）：研習目錄分頁的可收合區塊，顯示掛有年度任務的課程之已完成／審核中／退件人數（分部別）與已登錄名單，可依部別／課程／狀態篩選並匯出含學校 email 的 CSV；依課程所屬處室計算，與年度任務統計可能不同
 - **報告匯出**：雙欄審查 CSV 與 Google 簽呈文件（公文範本存於 Drive，可直接以 Google Docs 維護內文；校長姓名於後台「報告設定」填寫）
 - **資料健檢**（v3.28 起限全權管理者）：學年切換前檢查任務資料/欄位/Hub 同步時效/名冊快照，以及任務主責單位空白、課程未掛任務、待審紀錄查不到處室；簽呈匯出前檢查教師名單一致性/ImportedData 品質/審核狀態列舉值，警示式不阻擋流程
 
@@ -133,6 +135,7 @@
 | `v1/admin/getFileUrl` | 取得研習證明暫時存取 URL |
 | `v1/admin/exportRecords` | 匯出研習紀錄 CSV |
 | `v1/admin/getCatalogAdmin` | 管理端研習目錄（非全權只回掛本處室任務的課程，v3.28） |
+| `v1/admin/getCatalogStats` | 研習目錄課程統計（每課三種狀態人數＋已登錄名單，非全權只回任務主責單位屬本處室的課程，v3.31） |
 | `v1/admin/reassignRecordRequirement` | 待審紀錄改歸屬任務（限全權，v3.29） |
 | `v1/admin/runHealthCheck` | 資料健檢（`scope=yearSwitch`／`preExport`），回傳問題清單（v3.28 起限全權） |
 
@@ -193,6 +196,7 @@
 ├── Sync.gs          # 每晚同步 TrainingStats → Portal Hub
 ├── Notify.gs        # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
 ├── TrainingReport.gs # 研習統計分析模組（匯入/名冊快照/指標計算/StatsCache/匯出）
+├── CatalogStats.gs  # 研習目錄課程統計（getCatalogStats：課程 × 審核狀態 × 部別）
 ├── Index.html       # 教師端首頁（年度任務進度儀表板 + 公告課程列表）
 ├── Submit.html      # 選課與上傳頁面（Step ① 任務選擇 → Step ② 研習資訊）
 ├── Records.html     # 教師端個人研習紀錄查詢（PENDING / APPROVED / REJECTED 分頁）
@@ -248,6 +252,8 @@
 | **v3.27** | 處室統計視圖 Stage 1：研習統計分頁與 8 支讀取／重算路由收斂為全權管理者專用（[PR #42](https://github.com/chen-hwei/training-registration-gas/pull/42)） | ✅ 完成（2026-09-28） |
 | **v3.28** | 處室統計視圖 Stage 2a：查不到處室的資料改僅全權可見、課程須掛本處室任務、主責單位必填、健檢限全權並新增空值檢查、管理端清單依處室過濾、教師端自由研習歸屬提示（[PR #43](https://github.com/chen-hwei/training-registration-gas/pull/43)） | ✅ 完成（2026-09-28） |
 | **v3.29** | 處室統計視圖 Stage 2b：待審清單關鍵字建議＋全權管理者改歸屬任務（學年／狀態檢查、AuditLog 留痕）（[PR #44](https://github.com/chen-hwei/training-registration-gas/pull/44)） | ✅ 完成（2026-09-28） |
+| **v3.30** | 處室統計視圖 Stage 3：年度任務統計改任務層過濾（處室管理者只看本處室任務）、補部別拆分與學校 email，年度任務分頁新增任務達成狀況儀表板＋未達成矩陣＋CSV（[PR #46](https://github.com/chen-hwei/training-registration-gas/pull/46)、[PR #47](https://github.com/chen-hwei/training-registration-gas/pull/47)） | ✅ 完成（2026-09-29） |
+| **v3.31** | 處室統計視圖 Stage 4：新增研習目錄課程統計路由 `getCatalogStats`（審核狀態優先序抽成共用 helper）與研習目錄分頁課程完成狀況（課程卡片＋已登錄名單＋CSV）（[PR #48](https://github.com/chen-hwei/training-registration-gas/pull/48)、[PR #49](https://github.com/chen-hwei/training-registration-gas/pull/49)） | ✅ 完成（2026-09-29） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
