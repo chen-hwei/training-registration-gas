@@ -329,6 +329,17 @@ function _resolveRecordOwner_(item, index) {
   return index.reqOwner[rid] || '';
 }
 
+// ==================== 審核狀態優先序（task_c95dbe21 Stage 4，R-2） ====================
+
+/**
+ * 審核狀態優先序：APPROVED(3) > PENDING(2) > REJECTED(1)，其餘 0。
+ * 同一教師同一課程有多筆紀錄（退件後重送等）時取最高狀態計一人；
+ * Notify.gs 催辦名單與 CatalogStats.gs 課程統計共用同一規則，避免兩處口徑分岔。
+ */
+function _statusRank_(status) {
+  return { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 }[status] || 0;
+}
+
 // ==================== 研習日期嚴格解析（task_c95dbe21 Stage 2b，N-2） ====================
 
 /**
