@@ -370,6 +370,24 @@
           <button class="btn btn-sm btn-primary" onclick="openCatalogModal(null)">＋ 新增課程</button>
         </div>
       </div>
+      <!-- task_c95dbe21 Stage 4b：課程完成狀況（依處室過濾由後端 getCatalogStats 負責） -->
+      <details id="cs-box" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px;background:#fff">
+        <summary style="cursor:pointer;padding:12px 14px;min-height:44px;box-sizing:border-box;font-weight:700;color:var(--primary)">
+          📊 課程完成狀況
+        </summary>
+        <div style="padding:0 14px 14px">
+          <div style="font-size:0.8rem;color:#666;margin-bottom:10px">
+            只列有掛年度任務的課程。依課程歸屬處室（課程所掛任務的主責單位），與年度任務統計可能不同；本區塊不計達成率、不列未完成名單。
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <select id="cs-year" class="form-control" style="width:auto;min-height:44px"></select>
+            <button class="btn btn-sm btn-primary" style="min-height:44px" onclick="csCalc()">計算課程統計</button>
+            <button id="cs-btn-csv" class="btn btn-sm btn-outline" style="min-height:44px" onclick="csDownloadCsv()" disabled
+                    title="匯出目前篩選條件下的已登錄名單（含學校 email）">⬇ 匯出登錄名單 CSV</button>
+          </div>
+          <div id="cs-result" style="font-size:0.85rem;color:#888">按「計算課程統計」載入。</div>
+        </div>
+      </details>
       <div id="catalog-admin-list">
         <div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>
       </div>
@@ -3609,6 +3627,175 @@
 
   _rsInitYears();
 
+  /* ────────────────────────────────
+     研習目錄：課程完成狀況（task_c95dbe21 Stage 4b）
+     資料來自 getCatalogStats（後端已依處室過濾課程）；重用上方 _escHtml／_csvSafe／_rsDeptKey／_rsCellHtml
+  ──────────────────────────────── */
+  var _csData = null;  // 最近一次 getCatalogStats 的 data（{ academicYear, courses }）
+  var _CS_STATUS_LABEL = { APPROVED: '已完成', PENDING: '審核中', REJECTED: '退件' };
+  var _CS_DEPT_LABEL   = { hs: '高中部', jh: '國中部', other: '其他' };
+
+  /** 課程卡片：每課一表，列＝三種狀態，欄＝全校／高中部／國中部（其他人數 > 0 才顯示） */
+  function _csCardsHtml(courses) {
+    var keys = ['approved', 'pending', 'rejected'];
+    var showOther = courses.some(function(c) {
+      return keys.some(function(k) { return c.counts[k].other > 0; });
+    });
+    var rows = [['approved', '已完成', '#16a34a'], ['pending', '審核中', '#d97706'], ['rejected', '退件', '#dc2626']];
+    var html = '';
+    courses.forEach(function(c) {
+      html += '<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">'
+            + '<div style="background:var(--primary-light);padding:8px 12px;font-weight:700;color:var(--primary);font-size:0.88rem">'
+            + _escHtml(c.title)
+            + (c.archived ? ' <span style="font-weight:400;font-size:0.75rem;color:#92400e;background:#FEF3C7;border-radius:4px;padding:1px 6px">已封存</span>' : '')
+            + ' <span style="font-weight:400;font-size:0.78rem;color:#666">' + _escHtml(c.requirementName)
+            + (c.owner ? '（' + _escHtml(c.owner) + '）' : '') + '</span></div>'
+            + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">'
+            + '<thead><tr style="background:#f3f4f6"><th style="padding:6px 12px;text-align:left">審核狀態</th>'
+            + '<th style="padding:6px 8px;text-align:center">全校</th>'
+            + '<th style="padding:6px 8px;text-align:center">高中部</th>'
+            + '<th style="padding:6px 8px;text-align:center">國中部</th>'
+            + (showOther ? '<th style="padding:6px 8px;text-align:center">其他</th>' : '')
+            + '</tr></thead><tbody>';
+      rows.forEach(function(r) {
+        var n = c.counts[r[0]];
+        var cell = function(v) {
+          return '<td style="padding:6px 8px;text-align:center;' + (v ? 'font-weight:700;color:' + r[2] : 'color:#9ca3af') + '">' + v + '</td>';
+        };
+        html += '<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:6px 12px;font-weight:600">' + r[1] + '</td>'
+              + cell(n.all) + cell(n.hs) + cell(n.jh) + (showOther ? cell(n.other) : '') + '</tr>';
+      });
+      html += '</tbody></table></div></div>';
+    });
+    return html;
+  }
+
+  /** 已登錄名單（攤平）：依部別／課程／狀態篩選；名冊查無者部別歸「其他」 */
+  function _csFilterRows(courses, deptKey, catalogId, status) {
+    var out = [];
+    courses.forEach(function(c) {
+      if (catalogId !== 'all' && c.catalogId !== catalogId) return;
+      c.registrants.forEach(function(g) {
+        if (deptKey !== 'all' && _rsDeptKey(g.department) !== deptKey) return;
+        if (status !== 'all' && g.status !== status) return;
+        out.push({ course: c, reg: g });
+      });
+    });
+    return out;
+  }
+
+  function _csListHtml(rows) {
+    if (!rows.length) return '<div style="color:#888;padding:8px 0">目前篩選條件下無登錄紀錄。</div>';
+    var th = 'style="padding:6px 8px;text-align:left;white-space:nowrap"';
+    var td = 'style="padding:5px 8px;white-space:nowrap"';
+    var html = '<div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">'
+             + '<thead><tr style="background:#f3f4f6"><th ' + th + '>部別</th><th ' + th + '>教師</th><th ' + th + '>課程</th>'
+             + '<th ' + th + '>審核狀態</th><th ' + th + '>學校 email</th></tr></thead><tbody>';
+    rows.forEach(function(r) {
+      var g = r.reg;
+      html += '<tr style="border-bottom:1px solid #f0f0f0"><td ' + td + '>' + _escHtml(g.department || '（未填）') + '</td>'
+            + '<td ' + td + '>' + (g.inRoster
+                ? _escHtml(g.name) + ' <span style="color:#9ca3af">' + _escHtml(g.userId) + '</span>'
+                : '<span style="color:#dc2626">名冊查無</span> <span style="color:#9ca3af">' + _escHtml(g.userId) + '</span>') + '</td>'
+            + '<td ' + td + '>' + _escHtml(r.course.title) + '</td>'
+            + '<td ' + td + '>' + _escHtml(_CS_STATUS_LABEL[g.status] || g.status) + '</td>'
+            + '<td ' + td + '>' + _escHtml(g.schoolEmail) + '</td></tr>';
+    });
+    return html + '</tbody></table></div>';
+  }
+
+  /** CSV：部別,教師帳號,教師姓名,課程名稱,審核狀態,學校email（每個文字欄皆過 _csvSafe；名冊查無者姓名欄標示） */
+  function _csCsvText(rows) {
+    var lines = [['部別', '教師帳號', '教師姓名', '課程名稱', '審核狀態', '學校email'].map(_csvSafe).join(',')];
+    rows.forEach(function(r) {
+      var g = r.reg;
+      lines.push([g.department, g.userId, g.inRoster ? g.name : '（名冊查無）', r.course.title,
+                  _CS_STATUS_LABEL[g.status] || g.status, g.schoolEmail].map(_csvSafe).join(','));
+    });
+    return '﻿' + lines.join('\r\n');
+  }
+
+  /** 檔名：研習課程登錄名單_<學年>學年_<處室或全校>[_篩選條件].csv；篩選非「全部」才加後綴，課名最多 12 字 */
+  function _csFileName(year, scopeLabel, deptKey, course, status) {
+    var parts = ['研習課程登錄名單', year + '學年', scopeLabel];
+    if (deptKey !== 'all') parts.push(_CS_DEPT_LABEL[deptKey]);
+    if (course) parts.push(course.title.length > 12 ? course.title.slice(0, 12) : course.title);
+    if (status !== 'all') parts.push(_CS_STATUS_LABEL[status]);
+    return parts.join('_').replace(/[\\\/:*?"<>|]/g, '_') + '.csv';
+  }
+
+  function _csFilters() {
+    return {
+      dept:   document.getElementById('cs-f-dept').value,
+      course: document.getElementById('cs-f-course').value,
+      status: document.getElementById('cs-f-status').value
+    };
+  }
+
+  function csRenderList() {
+    if (!_csData) return;
+    var f = _csFilters();
+    document.getElementById('cs-list').innerHTML = _csListHtml(_csFilterRows(_csData.courses, f.dept, f.course, f.status));
+  }
+
+  function csCalc() {
+    var year = Number(document.getElementById('cs-year').value);
+    var el = document.getElementById('cs-result');
+    showSpinner();
+    api('v1/admin/getCatalogStats', { academicYear: year }).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '計算失敗', 'error'); return; }
+      _csData = res.data;
+      var courses = _csData.courses || [];
+      document.getElementById('cs-btn-csv').disabled = !courses.length;
+      if (!courses.length) { el.innerHTML = '此學年度無您可查看且有掛年度任務的課程。'; return; }
+      var courseOpts = '<option value="all">全部課程</option>' + courses.map(function(c) {
+        return '<option value="' + _escHtml(c.catalogId) + '">' + _escHtml(c.title) + '</option>';
+      }).join('');
+      var sel = 'class="form-control" style="width:auto;max-width:100%;min-height:44px" onchange="csRenderList()"';
+      el.innerHTML = '<div style="font-weight:700;margin:4px 0 8px;color:var(--gray-700)">課程統計</div>'
+        + _csCardsHtml(courses)
+        + '<div style="font-weight:700;margin:16px 0 8px;color:var(--gray-700)">已登錄名單</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+        + '<select id="cs-f-dept" ' + sel + '><option value="all">全部部別</option><option value="hs">高中部</option>'
+        + '<option value="jh">國中部</option><option value="other">其他</option></select>'
+        + '<select id="cs-f-course" ' + sel + '>' + courseOpts + '</select>'
+        + '<select id="cs-f-status" ' + sel + '><option value="all">全部狀態</option><option value="APPROVED">已完成</option>'
+        + '<option value="PENDING">審核中</option><option value="REJECTED">退件</option></select>'
+        + '</div><div id="cs-list"></div>';
+      csRenderList();
+    }).catch(function(err) {
+      hideSpinner();
+      if (err && err.message !== 'TOKEN_EXPIRED') showToast('計算失敗：' + (err.message || '請稍後再試'), 'error');
+    });
+  }
+
+  function csDownloadCsv() {
+    if (!_csData) return;
+    var f = _csFilters();
+    var course = null;
+    if (f.course !== 'all') {
+      course = _csData.courses.filter(function(c) { return c.catalogId === f.course; })[0] || null;
+    }
+    var rows = _csFilterRows(_csData.courses, f.dept, f.course, f.status);
+    var blob = new Blob([_csCsvText(rows)], { type: 'text/csv;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href     = url;
+    a.download = _csFileName(_csData.academicYear, _rsScopeLabel(), f.dept, course, f.status);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('CSV 已下載', 'success');
+  }
+
+  // 學年度選單沿用年度任務區塊已建好的選項
+  (function() {
+    var src = document.getElementById('rs-year'), dst = document.getElementById('cs-year');
+    if (src && dst) dst.innerHTML = src.innerHTML;
+  })();
+
   /* ── 初始化（管理者限定）── */
   document.addEventListener('DOMContentLoaded', function() {
     _bootPage({ adminOnly: true }, function(ok) { if (ok) { _loadReviews(); _applyScopeUI(); } });
@@ -3639,6 +3826,9 @@
   window.rsCalc              = rsCalc;
   window.rsRenderMatrix      = rsRenderMatrix;
   window.rsDownloadCsv       = rsDownloadCsv;
+  window.csCalc              = csCalc;
+  window.csRenderList        = csRenderList;
+  window.csDownloadCsv       = csDownloadCsv;
   /* ── 比對關鍵字 Tag 管理 ── */
   var _rqmKeywords = [];
 
