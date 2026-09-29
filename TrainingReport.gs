@@ -1575,9 +1575,9 @@ function _importDateTs_(rawDate) {
 }
 
 /**
- * scope 限制下（Q-F 使用者裁示，2026-09-09）：passed／total／rate 三個統計數字對所有呼叫者
- * 逐字一致，僅 pendingList 依 req.owner 收斂為自己 scope 內的未達成教師名單
- * （owner 空值者僅全權可見，task_c95dbe21 Stage 2a；Stage 3 將改為任務層過濾）
+ * scope 限制（task_c95dbe21 Stage 3，推翻 Q-F）：任務層過濾——非全權管理者只回 owner ∈ scope 的任務，
+ * owner 空值的任務僅全權可見；留下的任務一律附完整 pendingList（含 schoolEmail）。
+ * 部別拆分 hs（高中部）／jh（國中部）／other（其餘），三組加總＝全校數。
  */
 function calcRequirementStats(body, scope) {
   try {
@@ -1597,6 +1597,7 @@ function calcRequirementStats(body, scope) {
     var uJpCol  = uHdr.indexOf('jobPrimary');
     var uTtCol  = uHdr.indexOf('title');
     var uJtCol  = uHdr.indexOf('jobTask');
+    var uEmCol  = uHdr.indexOf('schoolEmail');
 
     var ACTIVE_STATUS = ['在職', '轉調'];
     var identityRules = _loadIdentityRules_();
@@ -1618,7 +1619,8 @@ function calcRequirementStats(body, scope) {
         department:  String(r[uDpCol] || '').trim(),
         jobPrimary:  jobPrimary,
         title:       uTtCol >= 0 ? String(r[uTtCol] || '').trim() : '',
-        jobTask:     uJtCol >= 0 ? String(r[uJtCol] || '').trim() : ''
+        jobTask:     uJtCol >= 0 ? String(r[uJtCol] || '').trim() : '',
+        schoolEmail: uEmCol >= 0 ? String(r[uEmCol] || '').trim() : ''
       };
       user.identityGroup = _classifyIdentity_(user, identityRules);
       userMap[uid] = user;
@@ -1632,8 +1634,11 @@ function calcRequirementStats(body, scope) {
 
     // ── Step 2：讀取 TRAINING_REQUIREMENT ──
     var reqSheet     = _getRequirementSheet();
+    var isAll = _isAllScope_(scope);
     var requirements = parseSheetData(reqSheet)
-      .filter(function(r) { return r.status === 'ACTIVE' && Number(r.academicYear) === academicYear; });
+      .filter(function(r) { return r.status === 'ACTIVE' && Number(r.academicYear) === academicYear; })
+      // Stage 3 任務層過濾：非全權只留 owner ∈ scope（空值 owner 僅全權，由 _inScope_('') 判定）
+      .filter(function(r) { return isAll || _inScope_(String(r.owner || '').trim(), scope); });
 
     if (requirements.length === 0) return _ok({ academicYear: academicYear, requirements: [] });
 
@@ -1713,7 +1718,11 @@ function calcRequirementStats(body, scope) {
 
         var passed  = 0;
         var pending = [];
+        // 部別拆分：非高中部／國中部者歸 other，不沿用 calcStats 的「非高中部一律國中部」
+        var dept = { hs: { passed: 0, total: 0 }, jh: { passed: 0, total: 0 }, other: { passed: 0, total: 0 } };
         members.forEach(function(u) {
+          var dk = u.department === '高中部' ? 'hs' : (u.department === '國中部' ? 'jh' : 'other');
+          dept[dk].total++;
           var recordHours   = approvedMap[u.userId + '_' + req.requirementId] || 0;
           var importedHours = keywords.length > 0 ? _importedHoursFor_(u.name, keywords, win) : 0;
           // 同名衝突：若該姓名有多個 userId，匯入時數不確定歸屬，標記但仍計入（保守計算）
@@ -1722,11 +1731,13 @@ function calcRequirementStats(body, scope) {
 
           if (effectiveHours >= g.requiredHours) {
             passed++;
+            dept[dk].passed++;
           } else {
             pending.push({
               userId:        u.userId,
               name:          u.name,
               department:    u.department,
+              schoolEmail:   u.schoolEmail,
               approvedHours: recordHours,
               importedHours: importedHours,
               hasSameName:   hasSameName
@@ -1734,20 +1745,26 @@ function calcRequirementStats(body, scope) {
           }
         });
 
-        var ownerInScope = _isAllScope_(scope) || _inScope_(String(req.owner || '').trim(), scope);
+        var deptOut = function(d) {
+          return { passed: d.passed, total: d.total, rate: d.total ? Math.round(d.passed / d.total * 100) : null };
+        };
         return {
           group:         g.group,
           requiredHours: g.requiredHours,
           total:         members.length,
           passed:        passed,
           rate:          members.length ? Math.round(passed / members.length * 100) : null,  // null = 無此類人員
-          pendingList:   ownerInScope ? pending : []  // B-6／Q-F：統計數字不因 scope 縮水，僅名單收斂
+          hs:            deptOut(dept.hs),
+          jh:            deptOut(dept.jh),
+          other:         deptOut(dept.other),
+          pendingList:   pending
         };
       });
 
       return {
         requirementId: req.requirementId,
         name:          req.name,
+        owner:         String(req.owner || '').trim(),
         endDate:       req.endDate,
         hoursNote:     req.hoursNote,
         audienceRules: audienceRules,
