@@ -408,6 +408,21 @@
           <button class="btn btn-sm btn-primary" onclick="openReqModal(null)">＋ 新增任務</button>
         </div>
       </div>
+      <!-- task_c95dbe21 Stage 3b：任務達成狀況（依處室過濾由後端 report_req_stats 負責） -->
+      <details id="rs-box" style="border:1px solid #e5e7eb;border-radius:8px;margin-bottom:16px;background:#fff">
+        <summary style="cursor:pointer;padding:12px 14px;min-height:44px;box-sizing:border-box;font-weight:700;color:var(--primary)">
+          📊 任務達成狀況
+        </summary>
+        <div style="padding:0 14px 14px">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+            <select id="rs-year" class="form-control" style="width:auto;min-height:44px"></select>
+            <button class="btn btn-sm btn-primary" style="min-height:44px" onclick="rsCalc()">計算達成率</button>
+            <button id="rs-btn-csv" class="btn btn-sm btn-outline" style="min-height:44px" onclick="rsDownloadCsv()" disabled
+                    title="匯出目前篩選條件下的未達成名單（含學校 email）">⬇ 匯出未達成名單 CSV</button>
+          </div>
+          <div id="rs-result" style="font-size:0.85rem;color:#888">按「計算達成率」載入。</div>
+        </div>
+      </details>
       <div id="req-admin-list">
         <div class="empty-state"><div class="ei">⏳</div><p>載入中…</p></div>
       </div>
@@ -3393,6 +3408,207 @@
     }
   }
 
+  /* ────────────────────────────────
+     年度任務：任務達成狀況（task_c95dbe21 Stage 3b）
+     資料來自 report_req_stats（後端已依處室過濾任務）；渲染／CSV 函式為純函式，Stage 4 課程統計可重用
+  ──────────────────────────────── */
+  var _rsData = null;  // 最近一次 report_req_stats 的 data（{ academicYear, requirements }）
+
+  /** HTML 跳脫（姓名、任務名等來自試算表的文字一律經此輸出） */
+  function _escHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function(c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  /** CSV 文字欄：以 = + - @ Tab CR 開頭者前綴 '（防公式注入），並以雙引號包覆 */
+  function _csvSafe(v) {
+    var s = String(v == null ? '' : v);
+    if (/^[=+\-@\t\r]/.test(s)) s = "'" + s;
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+
+  /** 部別歸桶：與後端 hs／jh／other 規則一致 */
+  function _rsDeptKey(dept) {
+    return dept === '高中部' ? 'hs' : (dept === '國中部' ? 'jh' : 'other');
+  }
+
+  function _rsScopeLabel() {
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    if (isAll) return '全校';
+    return ((getTrainingScope() || []).join('、')) || '處室';
+  }
+
+  /** 學年度選單：當學年起往前 3 個學年（8 月起算新學年） */
+  function _rsInitYears() {
+    var sel = document.getElementById('rs-year');
+    if (!sel) return;
+    var now = new Date();
+    var cur = now.getFullYear() - 1911 - (now.getMonth() + 1 >= 8 ? 0 : 1);
+    var opts = [];
+    for (var y = cur; y > cur - 3; y--) opts.push('<option value="' + y + '">' + y + ' 學年度</option>');
+    sel.innerHTML = opts.join('');
+  }
+
+  /** 單格「通過/總數 達成率」 */
+  function _rsCellHtml(passed, total, rate) {
+    var td = '<td style="padding:6px 8px;text-align:center;white-space:nowrap">';
+    if (!total) return td + '<span style="color:#9ca3af">—</span></td>';
+    var color = rate >= 80 ? '#16a34a' : rate >= 50 ? '#d97706' : '#dc2626';
+    return td + passed + '/' + total + ' <b style="color:' + color + '">' + rate + '%</b></td>';
+  }
+
+  /** 達成率儀表板：每任務一張表，列＝身分組，欄＝全校／高中部／國中部（其他人數 > 0 才顯示） */
+  function _rsDashboardHtml(reqs) {
+    var showOther = reqs.some(function(r) {
+      return r.groups.some(function(g) { return g.other && g.other.total > 0; });
+    });
+    var html = '';
+    reqs.forEach(function(req) {
+      html += '<div style="margin-bottom:14px;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">'
+            + '<div style="background:var(--primary-light);padding:8px 12px;font-weight:700;color:var(--primary);font-size:0.88rem">'
+            + _escHtml(req.name)
+            + (req.owner ? ' <span style="font-weight:400;font-size:0.78rem;color:#666">（' + _escHtml(req.owner) + '）</span>' : '')
+            + (req.endDate ? ' <span style="font-weight:400;font-size:0.78rem;color:#666">截止 ' + _escHtml(req.endDate) + '</span>' : '')
+            + '</div><div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.82rem">'
+            + '<thead><tr style="background:#f3f4f6"><th style="padding:6px 12px;text-align:left">身分類別</th>'
+            + '<th style="padding:6px 8px;text-align:center">應達時數</th>'
+            + '<th style="padding:6px 8px;text-align:center">全校</th>'
+            + '<th style="padding:6px 8px;text-align:center">高中部</th>'
+            + '<th style="padding:6px 8px;text-align:center">國中部</th>'
+            + (showOther ? '<th style="padding:6px 8px;text-align:center">其他</th>' : '')
+            + '</tr></thead><tbody>';
+      req.groups.forEach(function(g) {
+        html += '<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:6px 12px;font-weight:600">' + _escHtml(g.group) + '</td>'
+              + '<td style="padding:6px 8px;text-align:center">' + _escHtml(g.requiredHours) + 'h</td>'
+              + _rsCellHtml(g.passed, g.total, g.rate)
+              + _rsCellHtml(g.hs.passed, g.hs.total, g.hs.rate)
+              + _rsCellHtml(g.jh.passed, g.jh.total, g.jh.rate)
+              + (showOther ? _rsCellHtml(g.other.passed, g.other.total, g.other.rate) : '')
+              + '</tr>';
+      });
+      html += '</tbody></table></div></div>';
+    });
+    return html;
+  }
+
+  /**
+   * 未達成矩陣資料：列＝教師（依未達成數降冪），欄＝任務。
+   * pendingList 只列未達成者，無法區分「通過」與「不適用」，故格子只標 ✗
+   * deptKey：'all'／'hs'／'jh'／'other'；reqId：'all' 或任務編號（只算可見欄）
+   */
+  function _rsBuildMatrix(reqs, deptKey, reqId) {
+    var cols = reqs.filter(function(r) { return reqId === 'all' || r.requirementId === reqId; });
+    var map = {};
+    cols.forEach(function(req) {
+      req.groups.forEach(function(g) {
+        (g.pendingList || []).forEach(function(p) {
+          if (deptKey !== 'all' && _rsDeptKey(p.department) !== deptKey) return;
+          var row = map[p.userId] || (map[p.userId] = {
+            userId: p.userId, name: p.name, department: p.department || '', schoolEmail: p.schoolEmail || '', fails: {}
+          });
+          row.fails[req.requirementId] = true;
+        });
+      });
+    });
+    var rows = Object.keys(map).map(function(k) {
+      map[k].count = Object.keys(map[k].fails).length;
+      return map[k];
+    }).sort(function(a, b) {
+      return (b.count - a.count) || String(a.userId).localeCompare(String(b.userId));
+    });
+    return { cols: cols, rows: rows };
+  }
+
+  function _rsMatrixHtml(m) {
+    if (!m.rows.length) return '<div style="color:#16a34a;padding:8px 0">✓ 目前篩選條件下無未達成人員。</div>';
+    var html = '<div style="overflow-x:auto;border:1px solid #e5e7eb;border-radius:8px"><table style="width:100%;border-collapse:collapse;font-size:0.8rem">'
+             + '<thead><tr style="background:#f3f4f6"><th style="padding:6px 8px;text-align:left">部別</th>'
+             + '<th style="padding:6px 8px;text-align:left">教師</th>';
+    m.cols.forEach(function(c) {
+      html += '<th style="padding:6px 6px;text-align:center;min-width:64px;font-weight:600" title="' + _escHtml(c.name) + '">'
+            + _escHtml(c.name.length > 8 ? c.name.slice(0, 8) + '…' : c.name) + '</th>';
+    });
+    html += '<th style="padding:6px 8px;text-align:center">未達成數</th></tr></thead><tbody>';
+    m.rows.forEach(function(r) {
+      html += '<tr style="border-bottom:1px solid #f0f0f0"><td style="padding:5px 8px;white-space:nowrap">' + _escHtml(r.department || '（未填）') + '</td>'
+            + '<td style="padding:5px 8px;white-space:nowrap">' + _escHtml(r.name) + ' <span style="color:#9ca3af">' + _escHtml(r.userId) + '</span></td>';
+      m.cols.forEach(function(c) {
+        html += '<td style="padding:5px 6px;text-align:center;color:#dc2626">' + (r.fails[c.requirementId] ? '✗' : '') + '</td>';
+      });
+      html += '<td style="padding:5px 8px;text-align:center;font-weight:700">' + r.count + '</td></tr>';
+    });
+    return html + '</tbody></table></div>';
+  }
+
+  /** CSV：部別,教師帳號,教師姓名,<各任務>,未達成數,學校email（每個文字欄皆過 _csvSafe） */
+  function _rsCsvText(m) {
+    var head = ['部別', '教師帳號', '教師姓名'].map(_csvSafe)
+      .concat(m.cols.map(function(c) { return _csvSafe(c.name); }), ['"未達成數"', '"學校email"']);
+    var lines = [head.join(',')];
+    m.rows.forEach(function(r) {
+      lines.push([_csvSafe(r.department), _csvSafe(r.userId), _csvSafe(r.name)]
+        .concat(m.cols.map(function(c) { return _csvSafe(r.fails[c.requirementId] ? '✗' : ''); }),
+                [r.count, _csvSafe(r.schoolEmail)]).join(','));
+    });
+    return '﻿' + lines.join('\r\n');
+  }
+
+  function _rsCurrentMatrix() {
+    return _rsBuildMatrix(_rsData.requirements,
+      document.getElementById('rs-f-dept').value, document.getElementById('rs-f-req').value);
+  }
+
+  function rsRenderMatrix() {
+    if (!_rsData) return;
+    document.getElementById('rs-matrix').innerHTML = _rsMatrixHtml(_rsCurrentMatrix());
+  }
+
+  function rsCalc() {
+    var year = Number(document.getElementById('rs-year').value);
+    var el = document.getElementById('rs-result');
+    showSpinner();
+    api('report_req_stats', { academicYear: year }).then(function(res) {
+      hideSpinner();
+      if (!res.success) { showToast(res.error || '計算失敗', 'error'); return; }
+      _rsData = res.data;
+      var reqs = _rsData.requirements || [];
+      document.getElementById('rs-btn-csv').disabled = !reqs.length;
+      if (!reqs.length) { el.innerHTML = '此學年度無您可查看的 ACTIVE 年度任務。'; return; }
+      var reqOpts = '<option value="all">全部任務</option>' + reqs.map(function(r) {
+        return '<option value="' + _escHtml(r.requirementId) + '">' + _escHtml(r.name) + '</option>';
+      }).join('');
+      el.innerHTML = '<div style="font-weight:700;margin:4px 0 8px;color:var(--gray-700)">達成率儀表板</div>'
+        + _rsDashboardHtml(reqs)
+        + '<div style="font-weight:700;margin:16px 0 8px;color:var(--gray-700)">未達成總覽</div>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
+        + '<select id="rs-f-dept" class="form-control" style="width:auto;min-height:44px" onchange="rsRenderMatrix()">'
+        + '<option value="all">全部部別</option><option value="hs">高中部</option><option value="jh">國中部</option><option value="other">其他</option></select>'
+        + '<select id="rs-f-req" class="form-control" style="width:auto;max-width:100%;min-height:44px" onchange="rsRenderMatrix()">' + reqOpts + '</select>'
+        + '</div><div id="rs-matrix"></div>';
+      rsRenderMatrix();
+    }).catch(function(err) {
+      hideSpinner();
+      if (err && err.message !== 'TOKEN_EXPIRED') showToast('計算失敗：' + (err.message || '請稍後再試'), 'error');
+    });
+  }
+
+  function rsDownloadCsv() {
+    if (!_rsData) return;
+    var blob = new Blob([_rsCsvText(_rsCurrentMatrix())], { type: 'text/csv;charset=utf-8;' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href     = url;
+    a.download = ('年度任務未達成_' + _rsData.academicYear + '學年_' + _rsScopeLabel() + '.csv').replace(/[\\\/:*?"<>|]/g, '_');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast('CSV 已下載', 'success');
+  }
+
+  _rsInitYears();
+
   /* ── 初始化（管理者限定）── */
   document.addEventListener('DOMContentLoaded', function() {
     _bootPage({ adminOnly: true }, function(ok) { if (ok) { _loadReviews(); _applyScopeUI(); } });
@@ -3420,6 +3636,9 @@
   window.previewNotification = previewNotification;
   window.triggerNotification = triggerNotification;
   window.filterReqByYear     = filterReqByYear;
+  window.rsCalc              = rsCalc;
+  window.rsRenderMatrix      = rsRenderMatrix;
+  window.rsDownloadCsv       = rsDownloadCsv;
   /* ── 比對關鍵字 Tag 管理 ── */
   var _rqmKeywords = [];
 
