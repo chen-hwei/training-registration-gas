@@ -45,7 +45,7 @@ function doPost(e) {
 // 對應任務單 Stage B 路由表：renewRequirements（跨處室批次寫入）、triggerNotification（全校寄信）、
 // TRAIN-REPORT 設定／資料寫入 8 支（Q-B：全校統計口徑限全權）、匯出 2 支（Q-G：明文排除揭露面收斂）
 // task_c95dbe21 Stage 1：研習統計分頁整頁限全權（推翻 Q-E／Q-F／Q-G），讀取與重算 8 支一併收斂；
-// report_req_stats 刻意不列入（Stage 3 年度任務分頁要用，改由 Stage 3 依 scope 過濾任務）
+// report_req_stats 刻意不列入（年度任務分頁要用；Stage 3 起 calcRequirementStats 依 scope 做任務層過濾）
 const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
   'v1/admin/renewRequirements',
   'v1/admin/triggerNotification',
