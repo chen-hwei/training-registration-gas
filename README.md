@@ -53,13 +53,13 @@
 | 後端 | Google Apps Script（clasp 管理） |
 | 資料庫 | Google Sheets（2 個工作表） |
 | 檔案儲存 | Google Drive（依年份 / 教師 ID 分層管理） |
-| 身分驗證 | TRAIN 原生 Token（`txxxx` + 身分證後六碼，SHA-256 雜湊，CacheService `train_` Token）；向後相容 SchoolPortalLib |
+| 身分驗證 | TRAIN 原生 Token（教師帳號 + 身分證後六碼，帳號字元集 `[A-Za-z0-9._-]`、1～30 字元，多數為 `txxxx` 格式但不限，SHA-256 雜湊，CacheService `train_` Token）；向後相容 SchoolPortalLib |
 | 前端 | HTML / CSS / Vanilla JS（GAS HtmlService） |
 | 檔案上傳 | FileReader → Base64 → `google.script.run`（單次上傳，上限 8MB） |
 | 圖片壓縮 | Canvas API 前端壓縮（JPG/PNG 自動壓縮至 2MB 以下再上傳，防手機大圖逾時） |
 | 併發保護 | `LockService.getScriptLock()` 保護所有試算表寫入（submitRecord / reviewRecord） |
 | 通知寄送 | GAS `MailApp`，分組 BCC + 管理者每日彙整（v3.10），統一寄件識別（`name`/`replyTo` 讀 Script Properties `MAIL_REPLY_TO`），1,500 人次/日配額 |
-| Email 來源 | `SchoolPortalLib.getUser(txxxx).email`，不重複儲存（教職員名冊為唯一來源） |
+| Email 來源 | `SchoolPortalLib.getUser(userId).email`，不重複儲存（教職員名冊為唯一來源） |
 
 ---
 
@@ -86,7 +86,7 @@
 |---|---|
 | `catalogId` | 課程編號，格式 `C{年份}{4位序號}` |
 | `title` · `hours` · `organizer` | 課程名稱、時數、主辦單位 |
-| `department` · `createdBy` | 推薦處室、建立者（txxxx） |
+| `department` · `createdBy` | 推薦處室、建立者（教師帳號） |
 | `startDate` · `endDate` | 研習日期區間（格式 `YYYY/M/D`） |
 | `targetAudience` | 研習對象（如「全體教師」、「導師」）；留空表示不限 |
 | `link` | 研習公文 URL 或報名頁面；前端顯示為可點擊超連結 |
@@ -99,7 +99,7 @@
 | 欄位 | 說明 |
 |---|---|
 | `recordId` | 紀錄編號，格式 `R{年份}{6位序號}` |
-| `userId` | 教師 ID（txxxx） |
+| `userId` | 教師帳號（多數為 `txxxx`，亦有非 txxxx 帳號，字元集 `[A-Za-z0-9._-]`） |
 | `catalogId` · `isCustom` | 關聯課程（自訂課程時 catalogId 為空） |
 | `title` · `hours` · `trainingDate` | 研習名稱、時數、日期 |
 | `fileId` · `fileName` | Google Drive 檔案 ID 與原始檔名 |
@@ -152,7 +152,7 @@
     └── …
 ```
 
-**檔案命名規則**：`{年份}_{txxxx}_{課程名稱}_{研習日期YYYYMMDD}.{副檔名}`
+**檔案命名規則**：`{年份}_{教師帳號}_{課程名稱}_{研習日期YYYYMMDD}.{副檔名}`
 > 例：`2026_t0023_Google試算表進階應用_20260515.pdf`
 
 ---
@@ -165,7 +165,7 @@
 研習登錄系統
   │
   ├─ 身分驗證 ──────→ TRAIN 原生 Token（train/getUserName + train/loginWithIdSuffix）
-  │                    （txxxx + 身分證後六碼／自訂密碼；向後相容 SchoolPortalLib.verifyToken()）
+  │                    （教師帳號 + 身分證後六碼／自訂密碼；向後相容 SchoolPortalLib.verifyToken()）
   │                    SSO 交換碼兌換（train/redeemHandoff，v3.15）：門戶已登入教師點卡片免重複登入
   │
   ├─ 使用者資訊 ────→ Hub.UserStatusCache（唯讀，取得部門資料）
