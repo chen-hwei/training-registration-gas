@@ -987,7 +987,7 @@
       '<p style="font-size:0.85rem;margin-bottom:8px">目前歸屬：' + _e(cur) + '</p>' +
       '<select id="reassign-select" class="form-control">' + opts + '</select>' +
       '<p style="font-size:0.80rem;color:var(--gray-700);margin-top:8px">改歸屬後此筆會出現在該任務所屬處室的待審清單，' +
-        '核准後時數計入該任務達成率。只列出與研習日期同學年的任務。</p>',
+        '核准後時數計入該任務達成率。只列出與研習日期同學年的任務。請確認教師屬於該任務適用對象。</p>',
       '確認改歸屬',
       function() {
         var newReqId = document.getElementById('reassign-select').value;
@@ -1653,6 +1653,16 @@
             '</div></div>';
         }
 
+        // N2 名單預設收合：只顯示人數，點開才展開全名單（逾期名單常達上百人；N1 維持原樣攤開）
+        function renderTeacherGroupCollapsed(g) {
+          return '<details style="font-size:0.82rem;padding:6px 0;border-top:1px solid var(--gray-200)">' +
+            '<summary style="cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center">' +
+            '📦 ' + _e(g.label) + '（' + g.count + ' 人，1 封 BCC）— 點擊展開名單</summary>' +
+            '<div style="color:var(--gray-600);padding-left:12px">' +
+            g.teachers.map(function(t) { return _e(t.teacherName) + '（' + _e(t.department) + '）'; }).join('、') +
+            '</div></details>';
+        }
+
         function renderAdminDigest(g) {
           return '<div style="font-size:0.82rem;padding:6px 0;border-top:1px solid var(--gray-200)">' +
             '📧 ' + _e(g.adminEmail) + '（' + g.count + ' 筆，1 封彙整信）' +
@@ -1662,7 +1672,7 @@
         }
 
         html += renderCard('🔔 N1 到期前 7 天提醒（教師分組 BCC）', 'var(--warning)', groups.n1, renderTeacherGroup);
-        html += renderCard('⚠️ N2 逾期未完成（教師分組 BCC）',       'var(--danger)',  groups.n2, renderTeacherGroup);
+        html += renderCard('⚠️ N2 逾期未完成（教師分組 BCC）',       'var(--danger)',  groups.n2, renderTeacherGroupCollapsed);
         html += renderCard('⚠️ N2 管理者每日彙整',                  'var(--danger)',  groups.n2Admin, renderAdminDigest);
         html += renderCard('📋 N3 待審逾時管理者每日彙整',           'var(--primary)', groups.n3Admin, renderAdminDigest);
 
@@ -3629,7 +3639,7 @@
 
   /* ────────────────────────────────
      研習目錄：課程完成狀況（task_c95dbe21 Stage 4b）
-     資料來自 getCatalogStats（後端已依處室過濾課程）；重用上方 _escHtml／_csvSafe／_rsDeptKey／_rsCellHtml
+     資料來自 getCatalogStats（後端已依處室過濾課程）；重用上方 _escHtml／_csvSafe／_rsDeptKey／_rsScopeLabel
   ──────────────────────────────── */
   var _csData = null;  // 最近一次 getCatalogStats 的 data（{ academicYear, courses }）
   var _CS_STATUS_LABEL = { APPROVED: '已完成', PENDING: '審核中', REJECTED: '退件' };
