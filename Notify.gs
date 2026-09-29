@@ -47,11 +47,10 @@ function _buildNotificationList() {
   const records = parseSheetData(_getRecordSheet());
 
   // Hash Map：「userId_catalogId」→ 最高狀態（APPROVED > PENDING > REJECTED）
-  const statusPriority = { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 };
   const statusMap = {};
   records.forEach(r => {
     const key = r.userId + '_' + r.catalogId;
-    if (!statusMap[key] || (statusPriority[r.status] || 0) > (statusPriority[statusMap[key]] || 0)) {
+    if (!statusMap[key] || _statusRank_(r.status) > _statusRank_(statusMap[key])) {
       statusMap[key] = r.status;
     }
   });
@@ -551,11 +550,10 @@ function debugNotify() {
 
   // 3. 每位教師的 statusMap（Y-D6：迴圈外讀一次，取代原本 catalog.forEach 內每輪重讀）
   const records = parseSheetData(_getRecordSheet());
-  const statusPriority = { 'APPROVED': 3, 'PENDING': 2, 'REJECTED': 1 };
   const statusMap = {};
   records.forEach(r => {
     const key = r.userId + '_' + r.catalogId;
-    if (!statusMap[key] || (statusPriority[r.status] || 0) > (statusPriority[statusMap[key]] || 0)) {
+    if (!statusMap[key] || _statusRank_(r.status) > _statusRank_(statusMap[key])) {
       statusMap[key] = r.status;
     }
   });
