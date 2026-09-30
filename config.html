@@ -81,15 +81,16 @@ function isAdmin() {
 function getTrainingScope() {
   try {
     var s = JSON.parse(localStorage.getItem(_SK.access) || '{}').training_scope;
+    if (s === undefined || s === null) return null;
     if (Array.isArray(s)) return s;
     if (typeof s === 'string' && s.trim() !== '') return [s.trim()];
-    return null;
+    return [];  // 格式錯誤＝無權限（task_40e96378 fail-closed，與後端 _normalizeScope_() 同步）
   } catch { return null; }
 }
-/** scope 未設定或含 "ALL" 視為全權管理者，判準與後端 Schema.gs 的 _isAllScope_() 一致 */
+/** 僅 scope 未設定或含 "ALL" 視為全權管理者；空陣列不算（判準與後端 Schema.gs 的 _isAllScope_() 一致） */
 function isAllScope() {
   var s = getTrainingScope();
-  return !s || s.length === 0 || s.indexOf('ALL') !== -1;
+  return !s || s.indexOf('ALL') !== -1;
 }
 
 function saveSession(d) {
