@@ -98,14 +98,17 @@ const SHEET_SCHEMA = {
       '開始日期', '截止日期', '所需時數', '時數說明',
       '研習形式', '分學期計算', '備註說明', '推薦連結',
       '是否循環', '狀態', '建立時間', '分眾時數規則', '比對關鍵字',
-      '教師公告', '適用對象'
+      '教師公告', '適用對象', '任務系列代號'
     ],
     keys: [
       'requirementId', 'name', 'owner', 'academicYear',
       'startDate', 'endDate', 'requiredHours', 'hoursNote',
       'deliveryType', 'semesterSplit', 'notes', 'links',
       'isRecurring', 'status', 'createdAt', 'audienceRules', 'matchKeywords',
-      'teacherNote', 'targetAudience'
+      'teacherNote', 'targetAudience',
+      // task_40e96378：跨學年穩定的任務系列代號（RS001…），renewRequirements 沿用、不可編輯；
+      // 任務管理者授權（training_scope 的 "TASK:RSxxx"）綁此代號，學年切換後不必重新指派
+      'seriesId'
     ]
   }
 };
@@ -260,17 +263,17 @@ function _loadStatsIncludePartTime_() {
 // ==================== 處室權限（training_scope，task_6e2d40af Stage B） ====================
 // scope 存放於 Hub.UserStatusCache.systemAccess.training_scope（既有 JSON 字串內新增 key）
 // 未設定或含 "ALL" 視為全權管理者；4 個受控處室見 OWNER_DEPTS。
+// task_40e96378：陣列元素另可為 "TASK:<seriesId>"（任務管理者，Stage 1b 起參與判定）。
 
 /**
  * 正規化 training_scope 原始值（S-B-2）：Hub 的 systemAccess 是人工填寫的 JSON 字串，
- * `"training_scope":"學務處"`（漏寫中括號）是高機率手誤，若不正規化會被 `_isAllScope_()`
- * 的 `!Array.isArray()` fail-open 成全權管理者。前端 `config.html getTrainingScope()`
- * 須同步採用相同規則，避免前後端判準分岔。
+ * `"training_scope":"學務處"`（漏寫中括號）是高機率手誤，正規化為單元素陣列。
+ * 前端 `config.html getTrainingScope()` 須同步採用相同規則，避免前後端判準分岔。
  * - undefined／null → 原樣傳回（維持「未設定＝ALL」，t1106／t1370 迴歸不受影響）
  * - 陣列 → 原樣傳回
  * - 非空字串 → 包成單一元素陣列
- * - 其餘（數字、物件等格式錯誤）→ 空陣列（`_isAllScope_()` 現行語意仍視為 ALL，
- *   語意是否收斂為「無任何處室」須使用者另外裁示，本次不動）
+ * - 其餘（空字串、數字、物件等格式錯誤）→ 空陣列＝無任何權限
+ *   （task_40e96378 併入 Y-3a-4：原視為 ALL 的 fail-open 改為 fail-closed）
  */
 function _normalizeScope_(raw) {
   if (raw === undefined || raw === null) return raw;
@@ -279,9 +282,14 @@ function _normalizeScope_(raw) {
   return [];
 }
 
-/** scope 未設定（含 undefined／null）或含 "ALL" 視為全權管理者 */
+/**
+ * 全權判定：僅「未設定」（undefined／null）或陣列含 "ALL" 視為全權管理者。
+ * 空陣列不再視為全權（task_40e96378 / Y-3a-4 fail-closed）；非陣列一律拒絕。
+ */
 function _isAllScope_(scope) {
-  return !Array.isArray(scope) || scope.length === 0 || scope.indexOf('ALL') !== -1;
+  if (scope === undefined || scope === null) return true;
+  if (!Array.isArray(scope)) return false;
+  return scope.indexOf('ALL') !== -1;
 }
 
 /**
@@ -291,6 +299,82 @@ function _isAllScope_(scope) {
 function _inScope_(owner, scope) {
   if (!owner) return _isAllScope_(scope);
   return _isAllScope_(scope) || scope.indexOf(owner) !== -1;
+}
+
+/**
+ * 判斷本次執行是否為「部署者本人手動觸發」（task_40e96378 R-1，比照門戶 Auth.gs isManualRunByDeployer_()）
+ * appsscript.json 為 executeAs:USER_DEPLOYING ＋ access:ANYONE_ANONYMOUS，名稱不以底線結尾的全域函式
+ * 都能被前端 google.script.run 直接呼叫並以部署者權限執行；維運函式開頭一律呼叫本守衛。
+ * - 編輯器手動執行：effectiveUser === activeUser（都是部署者）→ 放行
+ * - 他人經 google.script.run：effective＝部署者、active＝呼叫者（匿名／跨網域為空字串）→ 擋下
+ * - Session 取值失敗 → 保守擋下
+ * 不改成底線結尾的理由：函式會從編輯器「執行」下拉選單消失，維運函式就沒法用。
+ * 需 oauthScopes 含 userinfo.email，否則 getActiveUser() 取不到 email，連部署者也會被擋。
+ */
+function _isManualRunByDeployer_() {
+  try {
+    const effective = Session.getEffectiveUser().getEmail();
+    const active    = Session.getActiveUser().getEmail();
+    return !!effective && effective === active;
+  } catch (e) {
+    Logger.log('[_isManualRunByDeployer_] Session 取值失敗，保守擋下：' + e.message);
+    return false;
+  }
+}
+
+/** 維運函式守衛：非部署者手動執行即拋錯中止（task_40e96378 R-1） */
+function _assertManualRunByDeployer_(fnName) {
+  if (!_isManualRunByDeployer_()) {
+    throw new Error(fnName + '：僅限部署者於 GAS 編輯器手動執行。');
+  }
+}
+
+/**
+ * 唯讀盤點 Hub 全部 training_scope 現值（task_40e96378 Stage 1a，GAS 編輯器手動執行）
+ * fail-closed 上線前後各跑一次，確認沒有管理者因「空陣列／格式錯誤不再視為全權」而意外失權。
+ * 只列 training_admin=true 或有 training_scope key 的帳號；不寫入任何資料。
+ * 判定分類：
+ *   全權(未設定)／全權(ALL)／處室或任務範圍／⚠️無權限(格式錯誤或空陣列)
+ * 附加警示：清單外值（非 OWNER_DEPTS 且非 TASK:RSxxx）、ALL 與其他值並存、有 scope 無 training_admin
+ */
+function auditTrainingScopes() {
+  _assertManualRunByDeployer_('auditTrainingScopes');  // R-1：回傳管理者名單，禁止前端直呼
+  const data = _readHubUserStatusRows_();
+  const hdr  = data[0];
+  const uidCol    = hdr.indexOf('userId');
+  const nameCol   = hdr.indexOf('name');
+  const statusCol = hdr.indexOf('status');
+  const accessCol = hdr.indexOf('systemAccess');
+  const lines = [];
+
+  data.slice(1).forEach(row => {
+    let access = {};
+    try { access = JSON.parse(row[accessCol] || '{}'); } catch (_) { access = {}; }
+    const hasScopeKey = Object.prototype.hasOwnProperty.call(access, 'training_scope');
+    if (access.training_admin !== true && !hasScopeKey) return;
+
+    const raw   = access.training_scope;
+    const scope = _normalizeScope_(raw);
+    let verdict;
+    if (scope === undefined || scope === null) verdict = '全權(未設定)';
+    else if (_isAllScope_(scope))              verdict = '全權(ALL)';
+    else if (scope.length === 0)               verdict = '⚠️無權限(格式錯誤或空陣列)';
+    else                                       verdict = '範圍：' + scope.join('、');
+
+    const warns = [];
+    if (Array.isArray(scope)) {
+      const bad = scope.filter(v => v !== 'ALL' && OWNER_DEPTS.indexOf(v) === -1 &&
+                                    !/^TASK:RS\d{3,}$/.test(String(v)));
+      if (bad.length) warns.push('清單外值 ' + JSON.stringify(bad));
+      if (scope.indexOf('ALL') !== -1 && scope.length > 1) warns.push('ALL 與其他值並存');
+    }
+    if (access.training_admin !== true) warns.push('有 training_scope 但無 training_admin（進不了後台）');
+
+    lines.push([row[uidCol], row[nameCol], row[statusCol], JSON.stringify(raw), verdict, warns.join('；')].join(' | '));
+  });
+
+  Logger.log('auditTrainingScopes：共 ' + lines.length + ' 筆\n帳號 | 姓名 | 狀態 | 原始值 | 判定 | 警示\n' + lines.join('\n'));
+  return lines;
 }
 
 /**
@@ -408,6 +492,28 @@ function _generateRequirementId(allRows, academicYear) {
   const prefix  = 'RQ' + String(academicYear);
   const idColIdx = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('requirementId');
   return _generateSequentialId(allRows, prefix, 3, idColIdx);
+}
+
+/**
+ * 任務系列代號目前最大序號（task_40e96378）：掃 seriesId 欄 RS 前綴取最大值，查無回 0。
+ * 批次產號（renewRequirements／backfillSeriesIds）呼叫端自行遞增，避免逐筆重掃。
+ */
+function _maxSeriesSeq_(allRows) {
+  const col = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('seriesId');
+  let maxSeq = 0;
+  for (let i = 1; i < allRows.length; i++) {
+    const id = String(allRows[i][col] || '');
+    if (id.startsWith('RS')) {
+      const seq = parseInt(id.slice(2), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return maxSeq;
+}
+
+/** 序號 → 任務系列代號（RS + 3 位數，超過 999 自然延伸位數） */
+function _formatSeriesId_(seq) {
+  return 'RS' + String(seq).padStart(3, '0');
 }
 
 /**

@@ -145,6 +145,7 @@ function addRequirement(adminId, body, scope) {
     const schema      = SHEET_SCHEMA.TRAINING_REQUIREMENT;
     const academicYear = body.academicYear ? Number(body.academicYear) : _currentAcademicYear();
     const requirementId = _generateRequirementId(allRows, academicYear);
+    const seriesId      = _formatSeriesId_(_maxSeriesSeq_(allRows) + 1);  // 新任務＝新系列（task_40e96378）
 
     const newReq = {
       requirementId,
@@ -165,7 +166,8 @@ function addRequirement(adminId, body, scope) {
       audienceRules: String(body.audienceRules || ''),
       matchKeywords: String(body.matchKeywords || ''),
       teacherNote:   String(body.teacherNote   || ''),
-      targetAudience: String(body.targetAudience || '')
+      targetAudience: String(body.targetAudience || ''),
+      seriesId
     };
 
     allRows.push(schema.keys.map(k => newReq[k] !== undefined ? newReq[k] : ''));
@@ -177,7 +179,7 @@ function addRequirement(adminId, body, scope) {
     sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
     SchoolPortalLib.logAction(adminId, 'ADD_REQUIREMENT', requirementId);
-    return { success: true, requirementId };
+    return { success: true, requirementId, seriesId };
   } finally {
     lock.releaseLock();
   }
@@ -218,6 +220,7 @@ function editRequirement(adminId, body, scope) {
     if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');
     if (body.owner !== undefined && !_inScope_(mergedOwner, scope)) return _err('FORBIDDEN');
 
+    // seriesId 刻意不列入：系列代號是任務管理者授權的綁定鍵，改動會讓授權靜默失效（task_40e96378）
     const EDITABLE = ['name', 'startDate', 'endDate', 'requiredHours', 'hoursNote',
                       'deliveryType', 'semesterSplit', 'notes', 'links', 'isRecurring',
                       'audienceRules', 'matchKeywords', 'owner', 'teacherNote', 'targetAudience'];
@@ -336,6 +339,11 @@ function renewRequirements(adminId, body) {
 
     const yearDiff = targetYear - sourceYear;
     const newIds   = [];
+    // task_40e96378：沿用來源任務的 seriesId；來源尚未回填者（未跑 backfillSeriesIds）發新代號並記錄
+    // 已知限制（審查 Y-1）：同一批若有兩筆「同名」來源都缺代號，會各拿不同代號（不符 D1 同名同系列）；
+    // 僅在試算表手動加列或執行 seed 函式後才可能發生，事後以 backfillSeriesIds 預覽檢查、手改併號
+    let seriesSeq = _maxSeriesSeq_(allRows);
+    const newSeries = [];
 
     sourceReqs.forEach(req => {
       maxSeq++;
@@ -369,8 +377,13 @@ function renewRequirements(adminId, body) {
         audienceRules: req.audienceRules || '',
         matchKeywords: req.matchKeywords || '',
         teacherNote:   req.teacherNote || '',
-        targetAudience: req.targetAudience || ''
+        targetAudience: req.targetAudience || '',
+        seriesId:      String(req.seriesId || '').trim()
       };
+      if (!newReq.seriesId) {
+        newReq.seriesId = _formatSeriesId_(++seriesSeq);
+        newSeries.push(requirementId + '←' + req.requirementId);
+      }
 
       allRows.push(schema.keys.map(k => newReq[k] !== undefined ? newReq[k] : ''));
       newIds.push(requirementId);
@@ -384,7 +397,13 @@ function renewRequirements(adminId, body) {
     sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
     SchoolPortalLib.logAction(adminId, 'RENEW_REQUIREMENTS', 'to_year_' + targetYear);
-    return { success: true, created: newIds.length, targetYear, ids: newIds };
+    if (newSeries.length) {
+      // 來源任務缺系列代號：新任務與舊學年斷鏈，任務管理者授權不會延續，需人工補正。
+      // 回傳 newSeries 供前端提醒（Stage 1c），並寫 AuditLog；網頁觸發時 Logger 只在 GAS 執行作業頁看得到（Y-1）
+      Logger.log('renewRequirements：以下新任務的來源缺 seriesId，已發新系列代號：' + newSeries.join(', '));
+      _logOp_(adminId, 'RENEW_NEW_SERIES', 'to_year_' + targetYear + '：' + newSeries.join(', '));
+    }
+    return { success: true, created: newIds.length, targetYear, ids: newIds, newSeries };
   } finally {
     lock.releaseLock();
   }
@@ -890,4 +909,109 @@ function backfillSemesterSplit() {
   }
   sheet.getRange(2, splitCol + 1, colValues.length, 1).setValues(colValues);
   Logger.log('✅ backfillSemesterSplit 完成：共 ' + colValues.length + ' 筆，更新 ' + changed + ' 筆。');
+}
+
+/**
+ * 一次性維運函式：預覽既有年度任務的 seriesId 回填結果（task_40e96378 Stage 1a，GAS 編輯器手動執行）
+ * 固定只預覽（只寫 Log，不動資料），不收參數；確認分組無誤後改執行 backfillSeriesIdsApply()。
+ * R-1：公開函式可被前端 google.script.run 直呼，故開頭加部署者守衛，且不再接受 apply 參數。
+ */
+function backfillSeriesIds() {
+  _assertManualRunByDeployer_('backfillSeriesIds');
+  return _backfillSeriesIds_(false);
+}
+
+/**
+ * seriesId 回填核心（私有，僅由 backfillSeriesIds／backfillSeriesIdsApply 呼叫）
+ * 分組規則（D1 裁示）：不同學年但任務名稱完全相同（trim 後）者歸同一系列，名稱不同各自獨立。
+ * - 同名群組已有 1 個既有代號 → 空白者沿用；已有 2 個以上相異代號 → 衝突，整組跳過不寫
+ * - 同名群組全無代號 → 依（最早學年, 任務編號）順序發新代號
+ * - 警示：同一系列在同一學年出現 2 筆以上、同一系列主責單位不一致（僅提示，照常分組）
+ * 只寫 seriesId 一欄（含標題格），不碰其他資料
+ * @param {boolean} [apply=false] true 才實際寫入
+ */
+function _backfillSeriesIds_(apply) {
+  const sheet  = _getRequirementSheet();
+  const data   = sheet.getDataRange().getValues();
+  const schema = SHEET_SCHEMA.TRAINING_REQUIREMENT;
+  const k      = key => schema.keys.indexOf(key);
+  const col    = k('seriesId');
+  if (data.length <= 1) throw new Error('TRAINING_REQUIREMENT 工作表無資料列。');
+  if (sheet.getMaxColumns() < col + 1) {
+    throw new Error('工作表欄數不足（需 ' + (col + 1) + ' 欄），請先在試算表最右側手動新增欄位再執行。');
+  }
+
+  // 依名稱分組（單次掃描，O(n)）
+  const groups = {};
+  for (let i = 1; i < data.length; i++) {
+    const row  = data[i];
+    const name = String(row[k('name')] || '').trim();
+    if (!name) continue;
+    (groups[name] = groups[name] || []).push({
+      i,
+      rid:   String(row[k('requirementId')] || ''),
+      year:  Number(row[k('academicYear')]) || 0,
+      owner: String(row[k('owner')] || '').trim(),
+      sid:   String(row[col] || '').trim()
+    });
+  }
+
+  // 無代號群組依最早（學年, 任務編號）排序後發號，讓代號大致依時間先後
+  const firstKey = g => g.reduce((m, r) => Math.min(m, r.year * 10000 + (parseInt(r.rid.slice(-3), 10) || 0)), Infinity);
+  const names = Object.keys(groups).sort((a, b) => firstKey(groups[a]) - firstKey(groups[b]));
+
+  let seq = _maxSeriesSeq_(data);
+  const assign = {};   // rowIndex → seriesId
+  const preview = [], warns = [], conflicts = [];
+  let changed = 0;
+
+  names.forEach(name => {
+    const g = groups[name];
+    const existing = Array.from(new Set(g.map(r => r.sid).filter(Boolean)));
+    if (existing.length > 1) {
+      conflicts.push('「' + name + '」已有多個代號 ' + existing.join('/') + '，整組跳過');
+      return;
+    }
+    const sid = existing[0] || _formatSeriesId_(++seq);
+    g.forEach(r => { if (!r.sid) { assign[r.i] = sid; changed++; } });
+
+    const years = g.map(r => r.year);
+    if (new Set(years).size !== years.length) warns.push(sid + '「' + name + '」同一學年有多筆');
+    const owners = Array.from(new Set(g.map(r => r.owner)));
+    if (owners.length > 1) warns.push(sid + '「' + name + '」主責單位不一致：' + owners.join('/'));
+
+    preview.push(sid + '「' + name + '」← ' +
+      g.slice().sort((a, b) => a.year - b.year)
+       .map(r => r.year + ':' + r.rid + (r.sid ? '' : '*')).join(', '));
+  });
+
+  Logger.log('backfillSeriesIds ' + (apply ? '【寫入模式】' : '【預覽模式，未寫入】') +
+    '：' + names.length + ' 個系列，待回填 ' + changed + ' 筆（* 為本次新填）\n' + preview.join('\n') +
+    (warns.length ? '\n\n⚠️ 警示：\n' + warns.join('\n') : '') +
+    (conflicts.length ? '\n\n❌ 衝突（未處理）：\n' + conflicts.join('\n') : ''));
+
+  if (!apply || changed === 0) return { changed, series: names.length, warns, conflicts };
+
+  // 整欄批次寫入：保留既有值，只填空白者（寫入模式由 backfillSeriesIdsApply 持鎖，讀寫之間不會有新增任務插入）
+  const colValues = [];
+  for (let i = 1; i < data.length; i++) {
+    colValues.push([assign[i] || String(data[i][col] || '').trim()]);
+  }
+  sheet.getRange(1, col + 1).setValue(schema.headers[col]);
+  sheet.getRange(2, col + 1, colValues.length, 1).setValues(colValues);
+  SpreadsheetApp.flush();
+  Logger.log('✅ backfillSeriesIds 寫入完成：' + changed + ' 筆。');
+  return { changed, series: names.length, warns, conflicts };
+}
+
+/** 預覽確認後執行：實際寫入 seriesId（task_40e96378；R-1 守衛，寫入唯一入口） */
+function backfillSeriesIdsApply() {
+  _assertManualRunByDeployer_('backfillSeriesIdsApply');
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);  // 讀取到寫入整段持鎖，與 add/edit/renewRequirements 互斥
+  try {
+    return _backfillSeriesIds_(true);
+  } finally {
+    lock.releaseLock();
+  }
 }
