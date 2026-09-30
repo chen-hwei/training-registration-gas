@@ -340,6 +340,8 @@ function renewRequirements(adminId, body) {
     const yearDiff = targetYear - sourceYear;
     const newIds   = [];
     // task_40e96378：沿用來源任務的 seriesId；來源尚未回填者（未跑 backfillSeriesIds）發新代號並記錄
+    // 已知限制（審查 Y-1）：同一批若有兩筆「同名」來源都缺代號，會各拿不同代號（不符 D1 同名同系列）；
+    // 僅在試算表手動加列或執行 seed 函式後才可能發生，事後以 backfillSeriesIds 預覽檢查、手改併號
     let seriesSeq = _maxSeriesSeq_(allRows);
     const newSeries = [];
 
@@ -396,10 +398,12 @@ function renewRequirements(adminId, body) {
 
     SchoolPortalLib.logAction(adminId, 'RENEW_REQUIREMENTS', 'to_year_' + targetYear);
     if (newSeries.length) {
-      // 來源任務缺系列代號：新任務與舊學年斷鏈，任務管理者授權不會延續，需人工補正
+      // 來源任務缺系列代號：新任務與舊學年斷鏈，任務管理者授權不會延續，需人工補正。
+      // 回傳 newSeries 供前端提醒（Stage 1c），並寫 AuditLog；網頁觸發時 Logger 只在 GAS 執行作業頁看得到（Y-1）
       Logger.log('renewRequirements：以下新任務的來源缺 seriesId，已發新系列代號：' + newSeries.join(', '));
+      _logOp_(adminId, 'RENEW_NEW_SERIES', 'to_year_' + targetYear + '：' + newSeries.join(', '));
     }
-    return { success: true, created: newIds.length, targetYear, ids: newIds };
+    return { success: true, created: newIds.length, targetYear, ids: newIds, newSeries };
   } finally {
     lock.releaseLock();
   }
@@ -908,8 +912,17 @@ function backfillSemesterSplit() {
 }
 
 /**
- * 一次性維運函式：回填既有年度任務的 seriesId（task_40e96378 Stage 1a，GAS 編輯器手動執行，可重複執行）
- * 直接執行＝預覽模式（只寫 Log，不動資料）；確認分組無誤後改執行 backfillSeriesIdsApply()。
+ * 一次性維運函式：預覽既有年度任務的 seriesId 回填結果（task_40e96378 Stage 1a，GAS 編輯器手動執行）
+ * 固定只預覽（只寫 Log，不動資料），不收參數；確認分組無誤後改執行 backfillSeriesIdsApply()。
+ * R-1：公開函式可被前端 google.script.run 直呼，故開頭加部署者守衛，且不再接受 apply 參數。
+ */
+function backfillSeriesIds() {
+  _assertManualRunByDeployer_('backfillSeriesIds');
+  return _backfillSeriesIds_(false);
+}
+
+/**
+ * seriesId 回填核心（私有，僅由 backfillSeriesIds／backfillSeriesIdsApply 呼叫）
  * 分組規則（D1 裁示）：不同學年但任務名稱完全相同（trim 後）者歸同一系列，名稱不同各自獨立。
  * - 同名群組已有 1 個既有代號 → 空白者沿用；已有 2 個以上相異代號 → 衝突，整組跳過不寫
  * - 同名群組全無代號 → 依（最早學年, 任務編號）順序發新代號
@@ -917,7 +930,7 @@ function backfillSemesterSplit() {
  * 只寫 seriesId 一欄（含標題格），不碰其他資料
  * @param {boolean} [apply=false] true 才實際寫入
  */
-function backfillSeriesIds(apply) {
+function _backfillSeriesIds_(apply) {
   const sheet  = _getRequirementSheet();
   const data   = sheet.getDataRange().getValues();
   const schema = SHEET_SCHEMA.TRAINING_REQUIREMENT;
@@ -991,12 +1004,13 @@ function backfillSeriesIds(apply) {
   return { changed, series: names.length, warns, conflicts };
 }
 
-/** 預覽確認後執行：實際寫入 seriesId（task_40e96378） */
+/** 預覽確認後執行：實際寫入 seriesId（task_40e96378；R-1 守衛，寫入唯一入口） */
 function backfillSeriesIdsApply() {
+  _assertManualRunByDeployer_('backfillSeriesIdsApply');
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);  // 讀取到寫入整段持鎖，與 add/edit/renewRequirements 互斥
   try {
-    return backfillSeriesIds(true);
+    return _backfillSeriesIds_(true);
   } finally {
     lock.releaseLock();
   }

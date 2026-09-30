@@ -302,6 +302,34 @@ function _inScope_(owner, scope) {
 }
 
 /**
+ * 判斷本次執行是否為「部署者本人手動觸發」（task_40e96378 R-1，比照門戶 Auth.gs isManualRunByDeployer_()）
+ * appsscript.json 為 executeAs:USER_DEPLOYING ＋ access:ANYONE_ANONYMOUS，名稱不以底線結尾的全域函式
+ * 都能被前端 google.script.run 直接呼叫並以部署者權限執行；維運函式開頭一律呼叫本守衛。
+ * - 編輯器手動執行：effectiveUser === activeUser（都是部署者）→ 放行
+ * - 他人經 google.script.run：effective＝部署者、active＝呼叫者（匿名／跨網域為空字串）→ 擋下
+ * - Session 取值失敗 → 保守擋下
+ * 不改成底線結尾的理由：函式會從編輯器「執行」下拉選單消失，維運函式就沒法用。
+ * 需 oauthScopes 含 userinfo.email，否則 getActiveUser() 取不到 email，連部署者也會被擋。
+ */
+function _isManualRunByDeployer_() {
+  try {
+    const effective = Session.getEffectiveUser().getEmail();
+    const active    = Session.getActiveUser().getEmail();
+    return !!effective && effective === active;
+  } catch (e) {
+    Logger.log('[_isManualRunByDeployer_] Session 取值失敗，保守擋下：' + e.message);
+    return false;
+  }
+}
+
+/** 維運函式守衛：非部署者手動執行即拋錯中止（task_40e96378 R-1） */
+function _assertManualRunByDeployer_(fnName) {
+  if (!_isManualRunByDeployer_()) {
+    throw new Error(fnName + '：僅限部署者於 GAS 編輯器手動執行。');
+  }
+}
+
+/**
  * 唯讀盤點 Hub 全部 training_scope 現值（task_40e96378 Stage 1a，GAS 編輯器手動執行）
  * fail-closed 上線前後各跑一次，確認沒有管理者因「空陣列／格式錯誤不再視為全權」而意外失權。
  * 只列 training_admin=true 或有 training_scope key 的帳號；不寫入任何資料。
@@ -310,6 +338,7 @@ function _inScope_(owner, scope) {
  * 附加警示：清單外值（非 OWNER_DEPTS 且非 TASK:RSxxx）、ALL 與其他值並存、有 scope 無 training_admin
  */
 function auditTrainingScopes() {
+  _assertManualRunByDeployer_('auditTrainingScopes');  // R-1：回傳管理者名單，禁止前端直呼
   const data = _readHubUserStatusRows_();
   const hdr  = data[0];
   const uidCol    = hdr.indexOf('userId');
@@ -459,6 +488,12 @@ function _generateRecordId(allRows) {
  * @param {string[][]} allRows - getDataRange().getValues()
  * @param {number} academicYear - 台灣學年度（如 114）
  */
+function _generateRequirementId(allRows, academicYear) {
+  const prefix  = 'RQ' + String(academicYear);
+  const idColIdx = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('requirementId');
+  return _generateSequentialId(allRows, prefix, 3, idColIdx);
+}
+
 /**
  * 任務系列代號目前最大序號（task_40e96378）：掃 seriesId 欄 RS 前綴取最大值，查無回 0。
  * 批次產號（renewRequirements／backfillSeriesIds）呼叫端自行遞增，避免逐筆重掃。
@@ -479,12 +514,6 @@ function _maxSeriesSeq_(allRows) {
 /** 序號 → 任務系列代號（RS + 3 位數，超過 999 自然延伸位數） */
 function _formatSeriesId_(seq) {
   return 'RS' + String(seq).padStart(3, '0');
-}
-
-function _generateRequirementId(allRows, academicYear) {
-  const prefix  = 'RQ' + String(academicYear);
-  const idColIdx = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('requirementId');
-  return _generateSequentialId(allRows, prefix, 3, idColIdx);
 }
 
 /**
