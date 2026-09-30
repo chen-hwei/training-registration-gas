@@ -98,14 +98,17 @@ const SHEET_SCHEMA = {
       '開始日期', '截止日期', '所需時數', '時數說明',
       '研習形式', '分學期計算', '備註說明', '推薦連結',
       '是否循環', '狀態', '建立時間', '分眾時數規則', '比對關鍵字',
-      '教師公告', '適用對象'
+      '教師公告', '適用對象', '任務系列代號'
     ],
     keys: [
       'requirementId', 'name', 'owner', 'academicYear',
       'startDate', 'endDate', 'requiredHours', 'hoursNote',
       'deliveryType', 'semesterSplit', 'notes', 'links',
       'isRecurring', 'status', 'createdAt', 'audienceRules', 'matchKeywords',
-      'teacherNote', 'targetAudience'
+      'teacherNote', 'targetAudience',
+      // task_40e96378：跨學年穩定的任務系列代號（RS001…），renewRequirements 沿用、不可編輯；
+      // 任務管理者授權（training_scope 的 "TASK:RSxxx"）綁此代號，學年切換後不必重新指派
+      'seriesId'
     ]
   }
 };
@@ -456,6 +459,28 @@ function _generateRecordId(allRows) {
  * @param {string[][]} allRows - getDataRange().getValues()
  * @param {number} academicYear - 台灣學年度（如 114）
  */
+/**
+ * 任務系列代號目前最大序號（task_40e96378）：掃 seriesId 欄 RS 前綴取最大值，查無回 0。
+ * 批次產號（renewRequirements／backfillSeriesIds）呼叫端自行遞增，避免逐筆重掃。
+ */
+function _maxSeriesSeq_(allRows) {
+  const col = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('seriesId');
+  let maxSeq = 0;
+  for (let i = 1; i < allRows.length; i++) {
+    const id = String(allRows[i][col] || '');
+    if (id.startsWith('RS')) {
+      const seq = parseInt(id.slice(2), 10);
+      if (!isNaN(seq) && seq > maxSeq) maxSeq = seq;
+    }
+  }
+  return maxSeq;
+}
+
+/** 序號 → 任務系列代號（RS + 3 位數，超過 999 自然延伸位數） */
+function _formatSeriesId_(seq) {
+  return 'RS' + String(seq).padStart(3, '0');
+}
+
 function _generateRequirementId(allRows, academicYear) {
   const prefix  = 'RQ' + String(academicYear);
   const idColIdx = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('requirementId');
