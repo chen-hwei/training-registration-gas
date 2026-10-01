@@ -388,29 +388,64 @@ function auditTrainingScopes() {
  *   供 getPendingReviews 同時建關鍵字索引時免重讀）。不帶時行為與改動前完全相同。
  */
 function _buildOwnerIndex_(preReadCatalog, preReadReq) {
-  const reqOwner = {};
+  const reqOwner  = {};
+  const reqSeries = {};  // task_40e96378 Stage 1b：任務編號 → 任務系列代號，供 TASK: 授權判定
   (preReadReq || parseSheetData(_getRequirementSheet())).forEach(r => {
-    reqOwner[r.requirementId] = String(r.owner || '').trim();
+    reqOwner[r.requirementId]  = String(r.owner || '').trim();
+    reqSeries[r.requirementId] = String(r.seriesId || '').trim();
   });
   const catReq = {};
   const catalogRows = preReadCatalog || parseSheetData(_getCatalogSheet());
   catalogRows.forEach(c => {
     catReq[c.catalogId] = String(c.requirementId || '').trim();
   });
-  return { reqOwner, catReq };
+  return { reqOwner, reqSeries, catReq };
+}
+
+/**
+ * 三段瀑布解析單筆紀錄／課程最終歸屬的任務編號（純函式，零 I/O，task_40e96378 Stage 1b 抽出）
+ * 1. 紀錄自身 requirementId
+ * 2. 上一步為空 → catalogId → catalog.requirementId
+ * 3. 仍為空 → ''（自由研習等，僅全權管理者可見）
+ */
+function _resolveRecordRid_(item, index) {
+  let rid = String(item.requirementId || '').trim();
+  if (!rid && item.catalogId) rid = index.catReq[String(item.catalogId).trim()] || '';
+  return rid;
 }
 
 /**
  * 三段瀑布解析單筆紀錄／課程所屬處室（純函式，零 I/O）
- * 1. requirementId → requirement.owner
- * 2. 上一步為空 → catalogId → catalog.requirementId → requirement.owner
- * 3. 仍為空 → ''（僅全權管理者可見，即 _inScope_ 的 owner='' 分支，task_c95dbe21 Stage 2a）
+ * 任務編號由 _resolveRecordRid_() 解析，再查 requirement.owner；查不到處室回 ''
+ * （僅全權管理者可見，即 _inScope_ 的 owner='' 分支，task_c95dbe21 Stage 2a）
  */
 function _resolveRecordOwner_(item, index) {
-  let rid = String(item.requirementId || '').trim();
-  if (!rid && item.catalogId) rid = index.catReq[String(item.catalogId).trim()] || '';
+  const rid = _resolveRecordRid_(item, index);
   if (!rid) return '';
   return index.reqOwner[rid] || '';
+}
+
+/**
+ * 任務層級權限判定（task_40e96378 Stage 1b）：全權 ∪ 處室命中 ∪ "TASK:<seriesId>" 命中。
+ * - owner 與 seriesId 皆空（自由研習等查不到任務者）→ 僅全權
+ * - 一個系列在同一學年可有多個任務，判定只看代號，不假設一學年一筆
+ * - 「新增任務」「封存任務」「改主責處室」維持處室層級，呼叫端改用 _inScope_()，不走本函式
+ */
+function _inScopeItem_(owner, seriesId, scope) {
+  if (_isAllScope_(scope)) return true;
+  if (owner && scope.indexOf(owner) !== -1) return true;
+  return !!seriesId && scope.indexOf('TASK:' + seriesId) !== -1;
+}
+
+/** 以任務編號查索引後判定（rid 空＝查不到任務，僅全權；task_40e96378 Stage 1b） */
+function _inScopeRid_(rid, index, scope) {
+  if (!rid) return _isAllScope_(scope);
+  return _inScopeItem_(index.reqOwner[rid] || '', index.reqSeries[rid] || '', scope);
+}
+
+/** 以紀錄／課程（三段瀑布）判定，等同 _inScopeRid_(_resolveRecordRid_(item))（task_40e96378 Stage 1b） */
+function _inScopeRecord_(item, index, scope) {
+  return _inScopeRid_(_resolveRecordRid_(item, index), index, scope);
 }
 
 // ==================== 審核狀態優先序（task_c95dbe21 Stage 4，R-2） ====================
@@ -494,13 +529,20 @@ function _generateRequirementId(allRows, academicYear) {
   return _generateSequentialId(allRows, prefix, 3, idColIdx);
 }
 
+// 已發過的最高系列序號（Script Properties，task_40e96378 Stage 1b Y-3 裁示 A）：
+// 任務列被實體刪除後，表內最大號會倒退；若不記錄，下次會重發同一代號，
+// 曾授權該代號的 TASK: 會悄悄綁到不相干的新任務。初始值由部署者手動設定（裁示：17）。
+const SERIES_SEQ_HWM_KEY = 'SERIES_SEQ_HWM';
+
 /**
- * 任務系列代號目前最大序號（task_40e96378）：掃 seriesId 欄 RS 前綴取最大值，查無回 0。
- * 批次產號（renewRequirements／backfillSeriesIds）呼叫端自行遞增，避免逐筆重掃。
+ * 任務系列代號目前最大序號（task_40e96378）：取「seriesId 欄 RS 前綴最大值」與
+ * 「SERIES_SEQ_HWM 已發最高號」兩者較大者，皆無回 0。
+ * 批次產號（addRequirement／renewRequirements／backfillSeriesIdsApply）呼叫端自行遞增，
+ * 寫入後須呼叫 _saveSeriesSeqHwm_() 推進紀錄（皆在持鎖期間）。
  */
 function _maxSeriesSeq_(allRows) {
   const col = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('seriesId');
-  let maxSeq = 0;
+  let maxSeq = parseInt(PropertiesService.getScriptProperties().getProperty(SERIES_SEQ_HWM_KEY), 10) || 0;
   for (let i = 1; i < allRows.length; i++) {
     const id = String(allRows[i][col] || '');
     if (id.startsWith('RS')) {
@@ -509,6 +551,13 @@ function _maxSeriesSeq_(allRows) {
     }
   }
   return maxSeq;
+}
+
+/** 推進已發最高系列序號（只增不減；task_40e96378 Y-3） */
+function _saveSeriesSeqHwm_(seq) {
+  const props = PropertiesService.getScriptProperties();
+  const cur = parseInt(props.getProperty(SERIES_SEQ_HWM_KEY), 10) || 0;
+  if (seq > cur) props.setProperty(SERIES_SEQ_HWM_KEY, String(seq));
 }
 
 /** 序號 → 任務系列代號（RS + 3 位數，超過 999 自然延伸位數） */

@@ -266,3 +266,31 @@ function _healthCheckPreExport_(year) {
 
   return groups;
 }
+
+/**
+ * 權限範圍探針（task_40e96378 Stage 1b，GAS 編輯器手動執行，唯讀）
+ * 不必替任何帳號設定 TASK:，直接以下列 scope 呼叫各讀取類 handler，印出各自看得到幾筆，
+ * 供驗證任務層判定（TASK:）與處室／全權迴歸。要測其他代號就改 PROBES 後再執行。
+ * R-1：公開函式可被前端直呼且會回傳資料筆數，開頭加部署者守衛。
+ */
+function debugScopeProbe() {
+  _assertManualRunByDeployer_('debugScopeProbe');
+  const PROBES = [undefined, ['輔導室'], ['學務處'], ['TASK:RS002'], ['TASK:RS006'], ['學務處', 'TASK:RS002'], []];
+  const year = _currentAcademicYear();
+  const safe = fn => { try { return fn(); } catch (e) { return 'ERR:' + e.message; } };
+  const lines = PROBES.map(raw => {
+    const scope = _normalizeScope_(raw);
+    const label = raw === undefined ? '全權(未設定)' : JSON.stringify(raw);
+    const pending = safe(() => getPendingReviews(scope).length);
+    const catalog = safe(() => getCatalogAdmin(scope).length);
+    const reqs    = safe(() => getAllRequirements({ academicYear: year }, scope).map(r => r.requirementId).join('/') || '（無）');
+    const reqStat = safe(() => ((calcRequirementStats({ academicYear: year }, scope).data || {}).requirements || []).length);
+    const catStat = safe(() => ((getCatalogStats({ academicYear: year }, scope).data || {}).courses || []).length);
+    const exp     = safe(() => exportRecords({}, scope).count);
+    const preview = safe(() => { const g = previewNotification('', scope).groups; return 'N1=' + g.n1.length + ' N2=' + g.n2.length; });
+    return label + ' | 待審 ' + pending + ' | 課程 ' + catalog + ' | 匯出 ' + exp +
+      ' | 任務統計 ' + reqStat + ' | 課程統計 ' + catStat + ' | 通知 ' + preview + ' | ' + year + '學年任務 ' + reqs;
+  });
+  Logger.log('debugScopeProbe（' + year + ' 學年）\n' + lines.join('\n'));
+  return lines;
+}

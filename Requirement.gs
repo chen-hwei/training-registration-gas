@@ -96,7 +96,8 @@ function getAllRequirements(body, scope) {
     requiredHours: Number(r.requiredHours) || 0
   }));
   if (!_isAllScope_(scope)) {
-    all = all.filter(r => _inScope_(String(r.owner || '').trim(), scope));
+    // task_40e96378 Stage 1b：處室 ∪ TASK:（任務管理者看得到自己系列各學年的任務）
+    all = all.filter(r => _inScopeItem_(String(r.owner || '').trim(), String(r.seriesId || '').trim(), scope));
   }
   if (body && body.academicYear) {
     return all.filter(r => Number(r.academicYear) === Number(body.academicYear));
@@ -134,7 +135,7 @@ function addRequirement(adminId, body, scope) {
   const owner = String(body.owner || '').trim();
   if (!owner) return _err('MISSING_OWNER');
   if (!OWNER_DEPTS.includes(owner)) return _err('INVALID_OWNER');
-  if (!_inScope_(owner, scope)) return _err('FORBIDDEN');
+  if (!_inScope_(owner, scope)) return _err('FORBIDDEN');  // 處室層級：任務管理者（TASK:）不可新增任務（task_40e96378 Q2②）
 
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
@@ -178,6 +179,7 @@ function addRequirement(adminId, body, scope) {
     sheet.clearContents();
     sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
+    _saveSeriesSeqHwm_(parseInt(seriesId.slice(2), 10));  // Y-3：推進已發最高號，刪列後不重發
     SchoolPortalLib.logAction(adminId, 'ADD_REQUIREMENT', requirementId);
     return { success: true, requirementId, seriesId };
   } finally {
@@ -193,7 +195,7 @@ function addRequirement(adminId, body, scope) {
  *            teacherNote, audienceRules, matchKeywords
  * 主責單位必填（task_c95dbe21 R-5）：以「合併後 owner」判空——body.owner 有傳用之，未傳用試算表現值；
  * 合併後為空 → MISSING_OWNER（既有空值任務只改其他欄位也會被要求補 owner，刻意設計），排在 scope 檢查之前。
- * scope 限制下，改前 owner 與改後 owner 皆須 ∈ scope，任一不符即 FORBIDDEN（B-4）：
+ * task_40e96378 Stage 1b：編輯權＝處室 ∪ TASK:<seriesId>；owner 值有變更時，改前與改後 owner 皆須 ∈ 處室 scope（B-4）：
  * 防止管理者把任務單方面轉出自己 scope 後無法復原（空值僅全權，故處室管理者無法認領空值任務）
  */
 function editRequirement(adminId, body, scope) {
@@ -206,19 +208,24 @@ function editRequirement(adminId, body, scope) {
     const sheet    = _getRequirementSheet();
     const data     = sheet.getDataRange().getValues();
     const schema   = SHEET_SCHEMA.TRAINING_REQUIREMENT;
-    const idIdx    = schema.keys.indexOf('requirementId');
-    const ownerIdx = schema.keys.indexOf('owner');
+    const idIdx     = schema.keys.indexOf('requirementId');
+    const ownerIdx  = schema.keys.indexOf('owner');
+    const seriesIdx = schema.keys.indexOf('seriesId');
 
     const rowIdx = data.findIndex((row, i) => i > 0 && row[idIdx] === body.requirementId);
     if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
 
-    const currentOwner = String(data[rowIdx][ownerIdx] || '').trim();
-    const mergedOwner  = body.owner !== undefined ? String(body.owner || '').trim() : currentOwner;
+    const currentOwner  = String(data[rowIdx][ownerIdx] || '').trim();
+    const currentSeries = String(data[rowIdx][seriesIdx] || '').trim();
+    const mergedOwner   = body.owner !== undefined ? String(body.owner || '').trim() : currentOwner;
     if (!mergedOwner) return _err('MISSING_OWNER');
     if (body.owner !== undefined && !OWNER_DEPTS.includes(mergedOwner)) return _err('INVALID_OWNER');
 
-    if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');
-    if (body.owner !== undefined && !_inScope_(mergedOwner, scope)) return _err('FORBIDDEN');
+    // task_40e96378 Stage 1b：編輯權＝處室 ∪ TASK:；改主責處室（值有變）維持處室層級，
+    // 改前、改後皆須 ∈ 處室 scope——只管任務者改不了 owner（Q2② 主責處室鎖定），處室管理者行為不變
+    if (!_inScopeItem_(currentOwner, currentSeries, scope)) return _err('FORBIDDEN');
+    if (mergedOwner !== currentOwner &&
+        !(_inScope_(currentOwner, scope) && _inScope_(mergedOwner, scope))) return _err('FORBIDDEN');
 
     // seriesId 刻意不列入：系列代號是任務管理者授權的綁定鍵，改動會讓授權靜默失效（task_40e96378）
     const EDITABLE = ['name', 'startDate', 'endDate', 'requiredHours', 'hoursNote',
@@ -278,7 +285,7 @@ function archiveRequirement(adminId, body, scope) {
     if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
 
     const currentOwner = String(data[rowIdx][ownerIdx] || '').trim();
-    if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');
+    if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');  // 處室層級：任務管理者不可封存（task_40e96378 Q2②）
 
     data[rowIdx][statusIdx] = 'ARCHIVED';
     sheet.clearContents();
@@ -396,6 +403,7 @@ function renewRequirements(adminId, body) {
     sheet.clearContents();
     sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
+    _saveSeriesSeqHwm_(seriesSeq);  // Y-3：來源缺號而發新號時推進已發最高號
     SchoolPortalLib.logAction(adminId, 'RENEW_REQUIREMENTS', 'to_year_' + targetYear);
     if (newSeries.length) {
       // 來源任務缺系列代號：新任務與舊學年斷鏈，任務管理者授權不會延續，需人工補正。
@@ -1000,6 +1008,7 @@ function _backfillSeriesIds_(apply) {
   sheet.getRange(1, col + 1).setValue(schema.headers[col]);
   sheet.getRange(2, col + 1, colValues.length, 1).setValues(colValues);
   SpreadsheetApp.flush();
+  _saveSeriesSeqHwm_(seq);  // Y-3：推進已發最高號
   Logger.log('✅ backfillSeriesIds 寫入完成：' + changed + ' 筆。');
   return { changed, series: names.length, warns, conflicts };
 }

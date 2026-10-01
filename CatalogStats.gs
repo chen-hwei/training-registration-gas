@@ -35,7 +35,7 @@ function getCatalogStats(body, scope) {
     const courses = catalogRows.filter(c => {
       const rid = String(c.requirementId || '').trim();
       if (!rid || !reqMap[rid]) return false;
-      return isAll || _inScope_(_resolveRecordOwner_({ requirementId: rid }, ownerIndex), scope);
+      return isAll || _inScopeRid_(rid, ownerIndex, scope);  // task_40e96378 Stage 1b：處室 ∪ TASK:
     });
     if (courses.length === 0) return _ok({ academicYear: academicYear, courses: [] });
 
