@@ -529,13 +529,20 @@ function _generateRequirementId(allRows, academicYear) {
   return _generateSequentialId(allRows, prefix, 3, idColIdx);
 }
 
+// 已發過的最高系列序號（Script Properties，task_40e96378 Stage 1b Y-3 裁示 A）：
+// 任務列被實體刪除後，表內最大號會倒退；若不記錄，下次會重發同一代號，
+// 曾授權該代號的 TASK: 會悄悄綁到不相干的新任務。初始值由部署者手動設定（裁示：17）。
+const SERIES_SEQ_HWM_KEY = 'SERIES_SEQ_HWM';
+
 /**
- * 任務系列代號目前最大序號（task_40e96378）：掃 seriesId 欄 RS 前綴取最大值，查無回 0。
- * 批次產號（renewRequirements／backfillSeriesIds）呼叫端自行遞增，避免逐筆重掃。
+ * 任務系列代號目前最大序號（task_40e96378）：取「seriesId 欄 RS 前綴最大值」與
+ * 「SERIES_SEQ_HWM 已發最高號」兩者較大者，皆無回 0。
+ * 批次產號（addRequirement／renewRequirements／backfillSeriesIdsApply）呼叫端自行遞增，
+ * 寫入後須呼叫 _saveSeriesSeqHwm_() 推進紀錄（皆在持鎖期間）。
  */
 function _maxSeriesSeq_(allRows) {
   const col = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('seriesId');
-  let maxSeq = 0;
+  let maxSeq = parseInt(PropertiesService.getScriptProperties().getProperty(SERIES_SEQ_HWM_KEY), 10) || 0;
   for (let i = 1; i < allRows.length; i++) {
     const id = String(allRows[i][col] || '');
     if (id.startsWith('RS')) {
@@ -544,6 +551,13 @@ function _maxSeriesSeq_(allRows) {
     }
   }
   return maxSeq;
+}
+
+/** 推進已發最高系列序號（只增不減；task_40e96378 Y-3） */
+function _saveSeriesSeqHwm_(seq) {
+  const props = PropertiesService.getScriptProperties();
+  const cur = parseInt(props.getProperty(SERIES_SEQ_HWM_KEY), 10) || 0;
+  if (seq > cur) props.setProperty(SERIES_SEQ_HWM_KEY, String(seq));
 }
 
 /** 序號 → 任務系列代號（RS + 3 位數，超過 999 自然延伸位數） */

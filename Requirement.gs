@@ -179,6 +179,7 @@ function addRequirement(adminId, body, scope) {
     sheet.clearContents();
     sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
+    _saveSeriesSeqHwm_(parseInt(seriesId.slice(2), 10));  // Y-3：推進已發最高號，刪列後不重發
     SchoolPortalLib.logAction(adminId, 'ADD_REQUIREMENT', requirementId);
     return { success: true, requirementId, seriesId };
   } finally {
@@ -402,6 +403,7 @@ function renewRequirements(adminId, body) {
     sheet.clearContents();
     sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
+    _saveSeriesSeqHwm_(seriesSeq);  // Y-3：來源缺號而發新號時推進已發最高號
     SchoolPortalLib.logAction(adminId, 'RENEW_REQUIREMENTS', 'to_year_' + targetYear);
     if (newSeries.length) {
       // 來源任務缺系列代號：新任務與舊學年斷鏈，任務管理者授權不會延續，需人工補正。
@@ -1006,6 +1008,7 @@ function _backfillSeriesIds_(apply) {
   sheet.getRange(1, col + 1).setValue(schema.headers[col]);
   sheet.getRange(2, col + 1, colValues.length, 1).setValues(colValues);
   SpreadsheetApp.flush();
+  _saveSeriesSeqHwm_(seq);  // Y-3：推進已發最高號
   Logger.log('✅ backfillSeriesIds 寫入完成：' + changed + ' 筆。');
   return { changed, series: names.length, warns, conflicts };
 }
