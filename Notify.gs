@@ -68,9 +68,12 @@ function _buildNotificationList() {
     const endDate  = new Date(y, m - 1, d);
     const daysLeft = Math.ceil((endDate - today) / 86400000);
     const owner    = _resolveRecordOwner_(course, ownerIndex);
-    const replyTo  = _replyToForOwner_(owner, buckets);
+    const seriesId = ownerIndex.reqSeries[_resolveRecordRid_(course, ownerIndex)] || '';  // task_40e96378 Stage 1b
+    const reply    = _replyToFor_(owner, seriesId, buckets);
     // S-D-2：每門課程只算一次（原寫法在 teachers.forEach 內層，等同每位教師呼叫一次）
-    const adminEmails = daysLeft <= 0 ? _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners) : null;
+    const adminEmails = daysLeft <= 0 ? _adminEmailsFor_(owner, seriesId, buckets, loggedFallbackOwners) : null;
+    // D2：單課程信只涉及一個任務，任務有管理者即指向他，否則處室承辦人
+    const meta = { owner, seriesId, replyTo: reply.task || reply.dept, taskReplyTo: reply.task, deptReplyTo: reply.dept };
 
     teachers.forEach(teacher => {
       const key       = teacher.userId + '_' + course.catalogId;
@@ -79,11 +82,11 @@ function _buildNotificationList() {
 
       if (daysLeft > 0 && daysLeft <= 7) {
         if (!_hasNotifiedToday('N1', teacher.userId, course.catalogId)) {
-          list.push({ type: 'N1', teacher, course, daysLeft, adminEmails: [], owner, replyTo });
+          list.push(Object.assign({ type: 'N1', teacher, course, daysLeft, adminEmails: [] }, meta));
         }
       } else if (daysLeft <= 0) {
         if (!_hasNotifiedToday('N2', teacher.userId, course.catalogId)) {
-          list.push({ type: 'N2', teacher, course, daysLeft, adminEmails, owner, replyTo });
+          list.push(Object.assign({ type: 'N2', teacher, course, daysLeft, adminEmails }, meta));
         }
       }
     });
@@ -94,7 +97,7 @@ function _buildNotificationList() {
   const threeDaysAgo = new Date(today.getTime() - 3 * 86400000);
   const teacherById = {};
   teachers.forEach(t => { teacherById[t.userId] = t; }); // Y-F1：取代 O(n×m) 的 teachers.find()
-  const ownerAdminCache = {}; // S-D-2：N3 依 owner memoize，同一 owner 在本次執行只算一次
+  const ownerAdminCache = {}; // S-D-2：N3 依 owner＋系列 memoize，同一組合在本次執行只算一次（task_40e96378）
   records
     .filter(r => {
       if (r.status !== 'PENDING' || !r.submittedAt) return false;
@@ -104,14 +107,17 @@ function _buildNotificationList() {
     .forEach(record => {
       const teacher = teacherById[record.userId];
       if (!teacher) return;
-      const owner = _resolveRecordOwner_(record, ownerIndex);
-      if (!(owner in ownerAdminCache)) {
-        ownerAdminCache[owner] = _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners);
+      const owner    = _resolveRecordOwner_(record, ownerIndex);
+      const seriesId = ownerIndex.reqSeries[_resolveRecordRid_(record, ownerIndex)] || '';
+      const cacheKey = owner + '|' + seriesId;
+      if (!(cacheKey in ownerAdminCache)) {
+        ownerAdminCache[cacheKey] = _adminEmailsFor_(owner, seriesId, buckets, loggedFallbackOwners);
       }
-      const adminEmails = ownerAdminCache[owner];
-      if (!adminEmails.length) return; // 理論上 _adminEmailsForOwner_ 已保底退回全體，此判斷僅作防禦
-      const replyTo = _replyToForOwner_(owner, buckets);
-      list.push({ type: 'N3', teacher, record, adminEmails, owner, replyTo });
+      const adminEmails = ownerAdminCache[cacheKey];
+      if (!adminEmails.length) return; // 理論上 _adminEmailsFor_ 已保底退回全體，此判斷僅作防禦
+      const reply = _replyToFor_(owner, seriesId, buckets);
+      list.push({ type: 'N3', teacher, record, adminEmails, owner, seriesId,
+                  replyTo: reply.task || reply.dept, taskReplyTo: reply.task, deptReplyTo: reply.dept });
     });
 
   return list;
@@ -129,20 +135,22 @@ function _groupNotificationList(list) {
   list.forEach(item => {
     if (item.type === 'N1') {
       const key = item.course.catalogId + '_' + item.daysLeft;
-      if (!n1Map[key]) n1Map[key] = { course: item.course, daysLeft: item.daysLeft, teachers: [], owner: item.owner, replyTo: item.replyTo };
+      if (!n1Map[key]) n1Map[key] = { course: item.course, daysLeft: item.daysLeft, teachers: [], owner: item.owner, seriesId: item.seriesId, replyTo: item.replyTo };
       n1Map[key].teachers.push(item.teacher);
     } else if (item.type === 'N2') {
       const key = item.course.catalogId;
-      if (!n2Map[key]) n2Map[key] = { course: item.course, teachers: [], owner: item.owner, replyTo: item.replyTo };
+      if (!n2Map[key]) n2Map[key] = { course: item.course, teachers: [], owner: item.owner, seriesId: item.seriesId, replyTo: item.replyTo };
       n2Map[key].teachers.push(item.teacher);
       item.adminEmails.forEach(email => {
         if (!n2AdminMap[email]) n2AdminMap[email] = [];
-        n2AdminMap[email].push({ teacher: item.teacher, course: item.course, owner: item.owner, replyTo: item.replyTo });
+        n2AdminMap[email].push({ teacher: item.teacher, course: item.course, owner: item.owner, seriesId: item.seriesId,
+                                 replyTo: item.replyTo, taskReplyTo: item.taskReplyTo, deptReplyTo: item.deptReplyTo });
       });
     } else if (item.type === 'N3') {
       item.adminEmails.forEach(email => {
         if (!n3AdminMap[email]) n3AdminMap[email] = [];
-        n3AdminMap[email].push({ teacher: item.teacher, record: item.record, owner: item.owner, replyTo: item.replyTo });
+        n3AdminMap[email].push({ teacher: item.teacher, record: item.record, owner: item.owner, seriesId: item.seriesId,
+                                 replyTo: item.replyTo, taskReplyTo: item.taskReplyTo, deptReplyTo: item.deptReplyTo });
       });
     }
   });
@@ -169,18 +177,18 @@ function previewNotification(callerUserId, scope) {
   let { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList(list);
 
   if (!_isAllScope_(scope)) {
-    const inScope = owner => _inScope_(owner, scope);
-    n1Groups = n1Groups.filter(g => inScope(g.owner));
-    n2Groups = n2Groups.filter(g => inScope(g.owner));
+    const inScope = (owner, seriesId) => _inScopeItem_(owner, seriesId, scope);  // task_40e96378 Stage 1b：處室 ∪ TASK:
+    n1Groups = n1Groups.filter(g => inScope(g.owner, g.seriesId));
+    n2Groups = n2Groups.filter(g => inScope(g.owner, g.seriesId));
 
     const callerUser  = _getHubUser_(callerUserId);
     const callerEmail = callerUser ? String(callerUser.email || '') : '';
 
     const myN2Items = (callerEmail && n2AdminDigest[callerEmail])
-      ? n2AdminDigest[callerEmail].filter(it => inScope(it.owner))
+      ? n2AdminDigest[callerEmail].filter(it => inScope(it.owner, it.seriesId))
       : [];
     const myN3Items = (callerEmail && n3AdminDigest[callerEmail])
-      ? n3AdminDigest[callerEmail].filter(it => inScope(it.owner))
+      ? n3AdminDigest[callerEmail].filter(it => inScope(it.owner, it.seriesId))
       : [];
     n2AdminDigest = myN2Items.length ? { [callerEmail]: myN2Items } : {};
     n3AdminDigest = myN3Items.length ? { [callerEmail]: myN3Items } : {};
@@ -435,8 +443,9 @@ function _getActiveTeachers(preReadRows) {
 }
 
 /**
- * 建立「處室 → 管理者 email」對照表（task_6e2d40af Stage D，取代 _getTrainingAdminEmails_()）
- * scoped[dept]：training_scope 明列該處室者；all[]：ALL-scope（含未設定 training_scope）者。
+ * 建立「處室／任務系列 → 管理者 email」對照表（task_6e2d40af Stage D，取代 _getTrainingAdminEmails_()）
+ * scoped[dept]：training_scope 明列該處室者；task[seriesId]：明列 "TASK:<seriesId>" 者（task_40e96378 Stage 1b）；
+ * all[]：ALL-scope（含未設定 training_scope）者。
  * 判定一律走 _normalizeScope_() ＋ _isAllScope_()，不得另寫第二套 scope 判準（S-B-2 教訓）。
  * @param {Array[]} [preReadRows] 已讀入的 Hub 原始列（D-5，帶了就不重讀）
  */
@@ -450,6 +459,7 @@ function _buildAdminBuckets_(preReadRows) {
 
   const scoped = {};
   OWNER_DEPTS.forEach(dept => { scoped[dept] = []; });
+  const task = {};
   const all = [];
 
   data.slice(1).forEach(row => {
@@ -467,53 +477,63 @@ function _buildAdminBuckets_(preReadRows) {
       // Y-F6：scopeVal 含受控清單外的值（如舊「研習組」）時 scoped[dept] 不存在，
       // 該筆靜默跳過，此人不進 all[] 也不進任何 scoped[]——這是刻意結果，與
       // Stage B _inScope_() 的語意一致（後台同樣看不到清單外處室的資料），非缺陷
-      scopeVal.forEach(dept => { if (scoped[dept]) scoped[dept].push(email); });
+      scopeVal.forEach(v => {
+        if (scoped[v]) { scoped[v].push(email); return; }
+        const m = /^TASK:(\S+)$/.exec(String(v));
+        if (m) (task[m[1]] = task[m[1]] || []).push(email);
+      });
     }
   });
 
-  return { scoped, all };
+  return { scoped, task, all };
 }
 
 /**
- * 查表取得某處室的收件人（D-1／D-4）：scoped[owner] ∪ all[]。
- * owner 為空字串（查不到處室）僅寄全權管理者（task_c95dbe21 Stage 2a）。
+ * 查表取得某筆通知的管理者收件人（D-1／D-4）：scoped[owner] ∪ task[seriesId] ∪ all[]
+ * （task_40e96378 Stage 1b 加任務桶）。owner 與 seriesId 皆空（查不到任務）僅寄全權管理者（task_c95dbe21 Stage 2a）。
  * 退路觸發條件是 union 本身為空（S-D-1 訂正，不是 scoped[owner] 為空）——
  * owner 為受控清單外的舊值時，因 scoped[owner] 不存在，直接落到 union 判斷，
  * 邏輯與「該處室無 scoped 管理者」共用同一條退路，唯有 union 真的為空
- * （全校無任何 ALL-scope 管理者、該處室也無 scoped 管理者）才退回全體 ＋ 留痕（Q-I）。
- * @param {Set} [loggedFallbackOwners] 呼叫端傳入、跨迴圈共用的 owner 去重集合
- *   （S-D-2）：同一 owner 在本次執行只寫一筆 _logOp_ 留痕，避免雙層迴圈（N2 每位
+ * （全校無任何 ALL-scope 管理者、該處室與該任務也無管理者）才退回全體 ＋ 留痕（Q-I）。
+ * @param {Set} [loggedFallbackOwners] 呼叫端傳入、跨迴圈共用的去重集合（S-D-2）：
+ *   同一 owner＋系列組合在本次執行只寫一筆 _logOp_ 留痕，避免雙層迴圈（N2 每位
  *   教師、N3 每筆紀錄）在退化狀態下對 Hub AuditLog 造成數百次寫入而拖死執行時間。
  */
-function _adminEmailsForOwner_(owner, buckets, loggedFallbackOwners) {
+function _adminEmailsFor_(owner, seriesId, buckets, loggedFallbackOwners) {
   // task_c95dbe21 Stage 2a：owner 空值不再直接寄全體，改走 union（scoped[''] 不存在 → 僅 all[] 全權桶），
   // 全權桶為空時才落入下方保底（全體＋留痕），與 _inScope_('') 僅全權可見的語意一致
   const scoped = (OWNER_DEPTS.includes(owner) && buckets.scoped[owner]) || [];
-  const union = Array.from(new Set(scoped.concat(buckets.all)));
+  const tasked = (seriesId && buckets.task[seriesId]) || [];
+  const union = Array.from(new Set(scoped.concat(tasked, buckets.all)));
   if (union.length) return union;
-  if (!loggedFallbackOwners || !loggedFallbackOwners.has(owner)) {
-    if (loggedFallbackOwners) loggedFallbackOwners.add(owner);
-    _logOp_('', 'NOTIFY_FALLBACK_ALL_ADMINS', 'owner=' + (owner || '（空值）') + ' 查無對應管理者，改發全體管理者');
+  const key = owner + '|' + seriesId;
+  if (!loggedFallbackOwners || !loggedFallbackOwners.has(key)) {
+    if (loggedFallbackOwners) loggedFallbackOwners.add(key);
+    _logOp_('', 'NOTIFY_FALLBACK_ALL_ADMINS', 'owner=' + (owner || '（空值）') +
+      (seriesId ? ' series=' + seriesId : '') + ' 查無對應管理者，改發全體管理者');
   }
   return _allAdminEmails_(buckets);
 }
 
-/** 全體 training_admin email（四處室 scoped 併 all，去重）——Q-I 的最終退路 */
+/** 全體 training_admin email（四處室 scoped ＋ 任務桶 ＋ all，去重）——Q-I 的最終退路（task_40e96378 裁示含任務管理者） */
 function _allAdminEmails_(buckets) {
   let emails = buckets.all.slice();
   OWNER_DEPTS.forEach(dept => { emails = emails.concat(buckets.scoped[dept] || []); });
+  Object.keys(buckets.task || {}).forEach(sid => { emails = emails.concat(buckets.task[sid]); });
   return Array.from(new Set(emails));
 }
 
 /**
- * 某處室的 Reply-To 承辦人（D-2）：只從 scoped[owner] 取第一位（依 Hub 表列順序），
+ * 某筆通知的 Reply-To 候選（D-2；task_40e96378 Stage 1b 拆成兩個來源）：
+ * - task：task[seriesId] 第一位（任務管理者，依 Hub 表列順序），無則 null
+ * - dept：scoped[owner] 第一位（處室承辦人），查無（含 owner='' 或清單外值）則 null
  * 絕不可用 scoped ∪ all 的收件人清單——否則排在前面的全權管理者會讓每個處室的
- * Reply-To 全部指向同一人。查無 scoped 管理者（含 owner='' 或清單外值）回 null，
- * 由呼叫端統一決定是否退回 getMailReplyTo_()（Y-E1）。
+ * Reply-To 全部指向同一人。兩者皆 null 時由呼叫端統一退回 getMailReplyTo_()（Y-E1）。
  */
-function _replyToForOwner_(owner, buckets) {
+function _replyToFor_(owner, seriesId, buckets) {
   const scoped = (owner && OWNER_DEPTS.includes(owner) && buckets.scoped[owner]) || [];
-  return scoped.length ? scoped[0] : null;
+  const tasked = (seriesId && buckets.task[seriesId]) || [];
+  return { task: tasked.length ? tasked[0] : null, dept: scoped.length ? scoped[0] : null };
 }
 
 /**
@@ -524,12 +544,16 @@ function _replyToForOwner_(owner, buckets) {
  * 用 replyTo 直接去重會誤判：A 處室有承辦人、B 處室無承辦人混在同一封信時，
  * 非 null 的 replyTo 只剩 A 一個，會誤指向 A（讓 A 收到含 B 處室內容的回信），
  * 但 owner 相異值其實是 2 個，裁示要求此情況退回系統信箱。
+ * task_40e96378 D2：信內「每一筆」都屬同一系列（不含空值）且該系列有任務管理者時，優先指向任務管理者；
+ * 其餘沿用上述處室判定，且必須讀 deptReplyTo（處室承辦人）——replyTo 可能已是任務管理者，不可沿用。
  */
 function _digestReplyTo_(items) {
+  const sid = items.length ? items[0].seriesId : '';
+  if (sid && items.every(it => it.seriesId === sid) && items[0].taskReplyTo) return items[0].taskReplyTo;
   const distinctOwners = Array.from(new Set(items.map(it => it.owner).filter(Boolean)));
   if (distinctOwners.length !== 1) return getMailReplyTo_();
   const matched = items.find(it => it.owner === distinctOwners[0]);
-  return (matched && matched.replyTo) || getMailReplyTo_();
+  return (matched && matched.deptReplyTo) || getMailReplyTo_();
 }
 
 /** 除錯用：逐步印出通知邏輯各關卡的狀態，不發送任何信件 */
