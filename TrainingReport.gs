@@ -1637,8 +1637,11 @@ function calcRequirementStats(body, scope) {
     var isAll = _isAllScope_(scope);
     var requirements = parseSheetData(reqSheet)
       .filter(function(r) { return r.status === 'ACTIVE' && Number(r.academicYear) === academicYear; })
-      // Stage 3 任務層過濾：非全權只留 owner ∈ scope（空值 owner 僅全權，由 _inScope_('') 判定）
-      .filter(function(r) { return isAll || _inScope_(String(r.owner || '').trim(), scope); });
+      // Stage 3 任務層過濾：非全權只留 owner ∈ scope（空值 owner 僅全權）；
+      // task_40e96378 Stage 1b 起另含 TASK:<seriesId> 授權的任務
+      .filter(function(r) {
+        return isAll || _inScopeItem_(String(r.owner || '').trim(), String(r.seriesId || '').trim(), scope);
+      });
 
     if (requirements.length === 0) return _ok({ academicYear: academicYear, requirements: [] });
 

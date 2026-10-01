@@ -25,7 +25,8 @@ function getCatalogAdmin(scope) {
   const list = getCatalog();
   if (_isAllScope_(scope)) return list;
   const index = _buildOwnerIndex_(list);
-  return list.filter(c => _inScope_(_resolveRecordOwner_({ requirementId: c.requirementId }, index), scope));
+  // task_40e96378 Stage 1b：處室 ∪ TASK:（任務管理者看得到掛在自己系列任務下的課程）
+  return list.filter(c => _inScopeRid_(String(c.requirementId || '').trim(), index, scope));
 }
 
 /**
@@ -41,8 +42,7 @@ function addCatalog(userId, body, scope) {
   const requirementId = String(body.requirementId || '').trim();
   if (!_isAllScope_(scope)) {
     if (!requirementId) return _err('FORBIDDEN');
-    const owner = _buildOwnerIndex_().reqOwner[requirementId] || '';
-    if (!_inScope_(owner, scope)) return _err('FORBIDDEN');
+    if (!_inScopeRid_(requirementId, _buildOwnerIndex_(), scope)) return _err('FORBIDDEN');
   }
 
   const sheet = _getCatalogSheet();
@@ -110,13 +110,11 @@ function editCatalog(userId, body, scope) {
     if (!_isAllScope_(scope)) {
       const index = _buildOwnerIndex_();
       const currentReqId = String(data[rowIdx][reqIdIdx] || '').trim();
-      const currentOwner = currentReqId ? (index.reqOwner[currentReqId] || '') : '';
-      if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');
+      if (!_inScopeRid_(currentReqId, index, scope)) return _err('FORBIDDEN');
 
       if (body.requirementId !== undefined) {
         const newReqId = String(body.requirementId || '').trim();
-        const newOwner = newReqId ? (index.reqOwner[newReqId] || '') : '';
-        if (!_inScope_(newOwner, scope)) return _err('FORBIDDEN');
+        if (!_inScopeRid_(newReqId, index, scope)) return _err('FORBIDDEN');
       }
     }
 
@@ -166,8 +164,7 @@ function archiveCatalog(body, scope) {
 
       if (!_isAllScope_(scope)) {
         const currentReqId = String(data[i][reqIdIdx] || '').trim();
-        const owner = currentReqId ? (_buildOwnerIndex_().reqOwner[currentReqId] || '') : '';
-        if (!_inScope_(owner, scope)) return _err('FORBIDDEN');
+        if (!_inScopeRid_(currentReqId, _buildOwnerIndex_(), scope)) return _err('FORBIDDEN');
       }
 
       data[i][statusIdx] = 'ARCHIVED';

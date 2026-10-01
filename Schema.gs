@@ -388,29 +388,64 @@ function auditTrainingScopes() {
  *   供 getPendingReviews 同時建關鍵字索引時免重讀）。不帶時行為與改動前完全相同。
  */
 function _buildOwnerIndex_(preReadCatalog, preReadReq) {
-  const reqOwner = {};
+  const reqOwner  = {};
+  const reqSeries = {};  // task_40e96378 Stage 1b：任務編號 → 任務系列代號，供 TASK: 授權判定
   (preReadReq || parseSheetData(_getRequirementSheet())).forEach(r => {
-    reqOwner[r.requirementId] = String(r.owner || '').trim();
+    reqOwner[r.requirementId]  = String(r.owner || '').trim();
+    reqSeries[r.requirementId] = String(r.seriesId || '').trim();
   });
   const catReq = {};
   const catalogRows = preReadCatalog || parseSheetData(_getCatalogSheet());
   catalogRows.forEach(c => {
     catReq[c.catalogId] = String(c.requirementId || '').trim();
   });
-  return { reqOwner, catReq };
+  return { reqOwner, reqSeries, catReq };
+}
+
+/**
+ * 三段瀑布解析單筆紀錄／課程最終歸屬的任務編號（純函式，零 I/O，task_40e96378 Stage 1b 抽出）
+ * 1. 紀錄自身 requirementId
+ * 2. 上一步為空 → catalogId → catalog.requirementId
+ * 3. 仍為空 → ''（自由研習等，僅全權管理者可見）
+ */
+function _resolveRecordRid_(item, index) {
+  let rid = String(item.requirementId || '').trim();
+  if (!rid && item.catalogId) rid = index.catReq[String(item.catalogId).trim()] || '';
+  return rid;
 }
 
 /**
  * 三段瀑布解析單筆紀錄／課程所屬處室（純函式，零 I/O）
- * 1. requirementId → requirement.owner
- * 2. 上一步為空 → catalogId → catalog.requirementId → requirement.owner
- * 3. 仍為空 → ''（僅全權管理者可見，即 _inScope_ 的 owner='' 分支，task_c95dbe21 Stage 2a）
+ * 任務編號由 _resolveRecordRid_() 解析，再查 requirement.owner；查不到處室回 ''
+ * （僅全權管理者可見，即 _inScope_ 的 owner='' 分支，task_c95dbe21 Stage 2a）
  */
 function _resolveRecordOwner_(item, index) {
-  let rid = String(item.requirementId || '').trim();
-  if (!rid && item.catalogId) rid = index.catReq[String(item.catalogId).trim()] || '';
+  const rid = _resolveRecordRid_(item, index);
   if (!rid) return '';
   return index.reqOwner[rid] || '';
+}
+
+/**
+ * 任務層級權限判定（task_40e96378 Stage 1b）：全權 ∪ 處室命中 ∪ "TASK:<seriesId>" 命中。
+ * - owner 與 seriesId 皆空（自由研習等查不到任務者）→ 僅全權
+ * - 一個系列在同一學年可有多個任務，判定只看代號，不假設一學年一筆
+ * - 「新增任務」「封存任務」「改主責處室」維持處室層級，呼叫端改用 _inScope_()，不走本函式
+ */
+function _inScopeItem_(owner, seriesId, scope) {
+  if (_isAllScope_(scope)) return true;
+  if (owner && scope.indexOf(owner) !== -1) return true;
+  return !!seriesId && scope.indexOf('TASK:' + seriesId) !== -1;
+}
+
+/** 以任務編號查索引後判定（rid 空＝查不到任務，僅全權；task_40e96378 Stage 1b） */
+function _inScopeRid_(rid, index, scope) {
+  if (!rid) return _isAllScope_(scope);
+  return _inScopeItem_(index.reqOwner[rid] || '', index.reqSeries[rid] || '', scope);
+}
+
+/** 以紀錄／課程（三段瀑布）判定，等同 _inScopeRid_(_resolveRecordRid_(item))（task_40e96378 Stage 1b） */
+function _inScopeRecord_(item, index, scope) {
+  return _inScopeRid_(_resolveRecordRid_(item, index), index, scope);
 }
 
 // ==================== 審核狀態優先序（task_c95dbe21 Stage 4，R-2） ====================

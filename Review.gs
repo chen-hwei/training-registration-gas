@@ -11,7 +11,7 @@ function getPendingReviews(scope) {
     .map(r => ({ ...r, hours: Number(r.hours) || 0 }));
   if (_isAllScope_(scope)) return _attachReqSuggestions_(list);
   const index = _buildOwnerIndex_();
-  return list.filter(r => _inScope_(_resolveRecordOwner_(r, index), scope));
+  return list.filter(r => _inScopeRecord_(r, index, scope));  // task_40e96378 Stage 1b：含 TASK: 授權
 }
 
 /**
@@ -92,12 +92,9 @@ function reviewRecord(reviewerId, body, scope) {
       for (const r of body.records) {
         const row = idToRow[r.recordId];
         if (!row) continue; // 查無此筆，交由既有 RECORD_NOT_FOUND 流程處理
-        const owner = _resolveRecordOwner_({
-          requirementId: row[requirementIdIdx],
-          catalogId: row[catalogIdIdx]
-        }, index);
-        if (!_inScope_(owner, scope)) {
-          return _err('FORBIDDEN：紀錄 ' + r.recordId + ' 不屬於您的處室');
+        const item = { requirementId: row[requirementIdIdx], catalogId: row[catalogIdIdx] };
+        if (!_inScopeRecord_(item, index, scope)) {  // task_40e96378 Stage 1b：處室 ∪ TASK:
+          return _err('FORBIDDEN：紀錄 ' + r.recordId + ' 不屬於您的管理範圍');
         }
       }
     }
@@ -204,7 +201,7 @@ function getFileUrl(body, scope) {
 
   if (!_isAllScope_(scope)) {
     const index = _buildOwnerIndex_();
-    if (!_inScope_(_resolveRecordOwner_(record, index), scope)) return _err('FORBIDDEN');
+    if (!_inScopeRecord_(record, index, scope)) return _err('FORBIDDEN');
   }
 
   if (!record.fileId) return _err('FILE_NOT_FOUND');
@@ -232,7 +229,7 @@ function exportRecords(body, scope) {
 
   if (!_isAllScope_(scope)) {
     const index = _buildOwnerIndex_();
-    records = records.filter(r => _inScope_(_resolveRecordOwner_(r, index), scope));
+    records = records.filter(r => _inScopeRecord_(r, index, scope));
   }
 
   const csvHeader = schema.headers.join(',');
