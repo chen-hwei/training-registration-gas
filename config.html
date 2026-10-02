@@ -85,7 +85,7 @@ function getTrainingScope() {
     if (Array.isArray(s)) return s;
     if (typeof s === 'string' && s.trim() !== '') return [s.trim()];
     return [];  // 格式錯誤＝無權限（task_40e96378 fail-closed，與後端 _normalizeScope_() 同步）
-  } catch { return null; }
+  } catch { return []; }  // localStorage 內容損毀同樣 fail-closed，不以全權模式顯示畫面（task_40e96378 Y-4）
 }
 /** 僅 scope 未設定或含 "ALL" 視為全權管理者；空陣列不算（判準與後端 Schema.gs 的 _isAllScope_() 一致） */
 function isAllScope() {

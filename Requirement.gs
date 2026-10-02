@@ -121,7 +121,8 @@ function _normalizeSemesterSplit_(v) {
  * body 必填：name, endDate, owner（task_c95dbe21 Stage 2a 起必填）
  * body 選填：startDate, requiredHours, hoursNote, deliveryType, semesterSplit,
  *            notes, links, isRecurring, academicYear, targetAudience,
- *            matchKeywords, audienceRules, teacherNote
+ *            matchKeywords, audienceRules, teacherNote,
+ *            seriesId（task_40e96378 D3：歸入既有系列，僅全權；須為表內已存在代號，否則 INVALID_SERIES）
  * owner：純由前端傳入。Hub 的 department 欄位語意是「部別（高中部／國中部）」，
  * 不是「行政處室」，兩者不可互相 fallback，故不自動帶入。
  * 檢查順序（R-5）：MISSING_OWNER → INVALID_OWNER → scope。MISSING_OWNER 必須排在 scope 之前，
@@ -137,6 +138,11 @@ function addRequirement(adminId, body, scope) {
   if (!OWNER_DEPTS.includes(owner)) return _err('INVALID_OWNER');
   if (!_inScope_(owner, scope)) return _err('FORBIDDEN');  // 處室層級：任務管理者（TASK:）不可新增任務（task_40e96378 Q2②）
 
+  // task_40e96378 D3：歸入既有系列（選填），僅全權管理者可指定——系列是任務管理者授權的綁定鍵，
+  // 處室管理者若能把任務掛進別處室的系列，等於替該系列的任務管理者擴權
+  const joinSeries = String(body.seriesId || '').trim();
+  if (joinSeries && !_isAllScope_(scope)) return _err('FORBIDDEN');
+
   const lock = LockService.getScriptLock();
   try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
 
@@ -146,7 +152,16 @@ function addRequirement(adminId, body, scope) {
     const schema      = SHEET_SCHEMA.TRAINING_REQUIREMENT;
     const academicYear = body.academicYear ? Number(body.academicYear) : _currentAcademicYear();
     const requirementId = _generateRequirementId(allRows, academicYear);
-    const seriesId      = _formatSeriesId_(_maxSeriesSeq_(allRows) + 1);  // 新任務＝新系列（task_40e96378）
+    let seriesId;
+    if (joinSeries) {
+      // 只能歸入表內已存在的代號；不推進已發最高號（沒有發新號）
+      const col = schema.keys.indexOf('seriesId');
+      const exists = allRows.some((row, i) => i > 0 && String(row[col] || '').trim() === joinSeries);
+      if (!exists) return _err('INVALID_SERIES');
+      seriesId = joinSeries;
+    } else {
+      seriesId = _formatSeriesId_(_maxSeriesSeq_(allRows) + 1);  // 新任務＝新系列（task_40e96378）
+    }
 
     const newReq = {
       requirementId,
@@ -179,7 +194,7 @@ function addRequirement(adminId, body, scope) {
     sheet.clearContents();
     sheet.getRange(1, 1, rows.length, W).setValues(rows);
 
-    _saveSeriesSeqHwm_(parseInt(seriesId.slice(2), 10));  // Y-3：推進已發最高號，刪列後不重發
+    if (!joinSeries) _saveSeriesSeqHwm_(parseInt(seriesId.slice(2), 10));  // Y-3：推進已發最高號，刪列後不重發
     SchoolPortalLib.logAction(adminId, 'ADD_REQUIREMENT', requirementId);
     return { success: true, requirementId, seriesId };
   } finally {
