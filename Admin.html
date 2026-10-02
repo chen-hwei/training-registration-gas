@@ -103,7 +103,7 @@
                  class="form-control" placeholder="例：114">
         </div>
         <div class="form-group" style="flex:1">
-          <label class="form-label">截止日期</label>
+          <label class="form-label">截止日期 <span class="req">*</span><span style="color:var(--gray-500);font-weight:400;font-size:0.78rem">（新增時必填）</span></label>
           <input id="rqm-fend" type="date" class="form-control">
         </div>
       </div>
@@ -2019,6 +2019,12 @@
     if (!year || year < 100) { errEl.textContent = '請填寫正確的學年度（例：114）。'; errEl.style.display='block'; return; }
     if (!document.getElementById('rqm-fowner').value) {
       errEl.textContent = '請選擇主責單位。'; errEl.style.display='block'; return;
+    }
+    // 後端 addRequirement 截止日期必填（MISSING_END_DATE），前端原未檢查，且下方送出前即關閉視窗，
+    // 失敗時填寫內容全數遺失；改在視窗內先擋（task_40e96378 Stage 1c 驗收發現）。
+    // 只擋新增：editRequirement 不要求截止日期，既有任務有空白者，編輯時不得因此存不了檔
+    if (!_editReqId && !document.getElementById('rqm-fend').value) {
+      errEl.textContent = '請填寫截止日期。'; errEl.style.display='block'; return;
     }
     errEl.style.display = 'none';
 
