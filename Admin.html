@@ -433,7 +433,7 @@
         <div style="display:flex;gap:8px">
           <button id="btn-renew-req" class="btn btn-sm btn-outline" onclick="renewRequirements()">📋 複製到下學年</button>
           <button id="btn-yearswitch-hc" class="btn btn-sm btn-outline" onclick="runYearSwitchHealthCheck()">🩺 學年切換健檢</button>
-          <button class="btn btn-sm btn-primary" onclick="openReqModal(null)">＋ 新增任務</button>
+          <button id="btn-add-req" class="btn btn-sm btn-primary" onclick="openReqModal(null)">＋ 新增任務</button>
         </div>
       </div>
       <!-- task_c95dbe21 Stage 3b：任務達成狀況（依處室過濾由後端 report_req_stats 負責） -->
@@ -812,12 +812,25 @@
   var _rejectTargetId = null; // 目前正在退件的 recordId
   var _editCatalogId  = null; // null = 新增；string = 編輯
 
-  /* ── 處室權限（task_6e2d40af Stage B）：owner 為空僅全權可操作（task_c95dbe21 Stage 2a，
-        與後端 Schema.gs _inScope_() 同步）── */
-  function _inMyScope(owner) {
+  /* ── 處室權限（task_6e2d40af Stage B）：owner 為空僅全權可操作（task_c95dbe21 Stage 2a）。
+        task_40e96378 Stage 1c：帶 seriesId 時另含 "TASK:<seriesId>" 任務管理者，與後端 Schema.gs
+        _inScopeItem_() 同步；不帶 seriesId＝處室層級（與 _inScope_() 同步，供封存等只限處室的操作）── */
+  // ⚠️ 同步維護點：後端 Schema.gs OWNER_DEPTS 與上方 rqm-fowner 靜態 <option>
+  var _OWNER_DEPTS = ['教務處', '學務處', '輔導室', '圖書館'];
+
+  function _inMyScope(owner, seriesId) {
     var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
-    if (!owner) return isAll;
-    return isAll || (getTrainingScope() || []).indexOf(owner) !== -1;
+    if (isAll) return true;
+    var s = getTrainingScope() || [];
+    if (owner && s.indexOf(owner) !== -1) return true;
+    return !!seriesId && s.indexOf('TASK:' + seriesId) !== -1;
+  }
+
+  /** 是否具處室層級權限（全權或 scope 含任一受控處室）；只管任務者為 false（不可新增任務） */
+  function _hasDeptScope() {
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    if (isAll) return true;
+    return (getTrainingScope() || []).some(function(v) { return _OWNER_DEPTS.indexOf(v) !== -1; });
   }
 
   /* ── 登入成功後初始化（必須重新驗證管理者身分）── */
@@ -1303,31 +1316,33 @@
       });
   }
 
-  /** 依課程 requirementId 反查所屬任務的 owner（_reqRecords 已於載入時一併取得） */
-  function _catalogOwnerOf(c) {
-    if (!c.requirementId) return '';
+  /** 依課程 requirementId 反查所屬任務（_reqRecords 已於載入時一併取得）；查無回 null */
+  function _catalogReqOf(c) {
+    if (!c.requirementId) return null;
     for (var i = 0; i < _reqRecords.length; i++) {
-      if (_reqRecords[i].requirementId === c.requirementId) return _reqRecords[i].owner || '';
+      if (_reqRecords[i].requirementId === c.requirementId) return _reqRecords[i];
     }
-    return '';
+    return null;
   }
 
   /**
    * 課程列的編輯/封存鈕（Y-C4）：任務清單載入失敗（_reqLoadFailed）時，
-   * 掛了任務的課程無法反查 owner，_catalogOwnerOf 會回 ''而誤判為全體可操作——
+   * 掛了任務的課程無法反查 owner，_catalogReqOf 會回 null 而誤判為全體可操作——
    * 此時改顯示中性狀態，不讓前端「看起來」對所有人開放（後端仍會擋，這是體驗層修正）
    */
   function _catalogActionsHtml(c) {
     if (c.requirementId && _reqLoadFailed) {
       return '<span style="font-size:0.72rem;color:var(--gray-500)">⚠️ 任務清單載入失敗，無法確認處室</span>';
     }
-    return _inMyScope(_catalogOwnerOf(c))
+    // task_40e96378 Stage 1c：課程依所掛任務的處室＋系列判斷（任務管理者可編輯、封存自己系列的課程，與後端 archiveCatalog 一致）
+    var q = _catalogReqOf(c);
+    return _inMyScope(q ? (q.owner || '') : '', q ? (q.seriesId || '') : '')
       ? '<button class="btn btn-xs btn-outline"' +
         ' onclick="openCatalogModal(\'' + c.catalogId + '\')">✏️ 編輯</button>' +
         '<button class="btn btn-xs btn-outline"' +
         ' style="border-color:var(--warning);color:var(--warning)"' +
         ' onclick="archiveCatalog(\'' + c.catalogId + '\')">🗃 封存</button>'
-      : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非本處室</span>';
+      : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非管理範圍</span>';
   }
 
   function _renderCatalogAdmin() {
@@ -1852,11 +1867,14 @@
         '</div>' +
         '<div class="req-admin-actions">' +
           (r.status !== 'ARCHIVED'
-            ? (_inMyScope(r.owner)
+            // task_40e96378 Stage 1c：編輯＝處室 ∪ 任務；封存只限處室層級（與後端 archiveRequirement 一致）
+            ? (_inMyScope(r.owner, r.seriesId)
                 ? '<button class="btn btn-xs btn-outline" onclick="openReqModal(\'' + r.requirementId + '\')">✏️ 編輯</button>' +
-                  '<button class="btn btn-xs btn-outline" style="border-color:var(--warning);color:var(--warning)"' +
-                  ' onclick="archiveReq(\'' + r.requirementId + '\')">🗃 封存</button>'
-                : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非本處室</span>')
+                  (_inMyScope(r.owner)
+                    ? '<button class="btn btn-xs btn-outline" style="border-color:var(--warning);color:var(--warning)"' +
+                      ' onclick="archiveReq(\'' + r.requirementId + '\')">🗃 封存</button>'
+                    : '')
+                : '<span style="font-size:0.72rem;color:var(--gray-500)">🔒 非管理範圍</span>')
             : '') +
         '</div>' +
         '</div>';
@@ -1871,9 +1889,11 @@
    */
   function _rqmPopulateOwnerOptions(currentOwner, isNew) {
     var sel  = document.getElementById('rqm-fowner');
-    var all  = ['教務處', '學務處', '輔導室', '圖書館'];
+    var all  = _OWNER_DEPTS;
     var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
-    var allowed = isAll ? all : (getTrainingScope() || []).filter(function(d) { return d !== 'ALL'; });
+    // task_40e96378 Stage 1c：只列受控處室，濾掉 "TASK:…"／"ALL"／清單外值；只管任務者 allowed 為空，
+    // 編輯時靠下方「既有值補一個選項並選中」送回原 owner（後端主責處室鎖，值不變即放行）
+    var allowed = isAll ? all : (getTrainingScope() || []).filter(function(d) { return all.indexOf(d) !== -1; });
 
     // task_c95dbe21 R-5：主責單位必填，原「（未指定）」改為不可選提示（編輯既有空值任務時顯示此項，強制改選）
     var html = '<option value="" disabled>（請選擇主責單位）</option>' +
@@ -2108,8 +2128,21 @@
           .then(function(res) {
             hideSpinner();
             if (res && res.success) {
-              var cnt = res.data && res.data.created != null ? res.data.created : '─';
+              // 後端 renewRequirements 回傳扁平物件（無 data 包裝），兩種形狀都相容
+              var d = res.data || res;
+              var cnt = d.created != null ? d.created : '─';
               showToast('✅ 已複製 ' + cnt + ' 筆任務到 ' + targetYear + ' 學年度', 'success');
+              // task_40e96378 Y-1：來源任務缺系列代號而發了新號 → 任務管理者授權不會延續，提醒人工補正
+              // （toast 3.2 秒即消失，警示改用確認視窗，讓管理者看完再關）
+              if (d.newSeries && d.newSeries.length) {
+                showConfirmModal(
+                  '⚠️ 部分任務已另發新系列代號',
+                  '<p>下列新任務的來源缺系列代號，系統已另發新系列，<strong>任務管理者的授權不會延續</strong>：</p>' +
+                  '<p style="font-size:0.82rem;margin-top:6px">' + d.newSeries.map(_e).join('<br>') + '</p>' +
+                  '<p style="font-size:0.82rem;color:var(--gray-700);margin-top:6px">' +
+                  '如需併回原系列，請在研習試算表修改該列的「任務系列代號」欄。</p>',
+                  '我知道了', function() {}, 'btn-primary');
+              }
               _reqCurrentYear = targetYear;
               _reqRecords = [];
               _loadRequirements();
@@ -3503,6 +3536,12 @@
       hcBtn.disabled = true;
       hcBtn.title = '僅全權管理者可執行（含全校空值資料）';
     }
+    // task_40e96378 Stage 1c：只管任務者（無處室層級權限）不可新增任務，與後端 addRequirement 一致
+    var addReqBtn = document.getElementById('btn-add-req');
+    if (addReqBtn && !_hasDeptScope()) {
+      addReqBtn.disabled = true;
+      addReqBtn.title = '任務管理者只能編輯被指派的任務，新增任務請洽處室或全權管理者';
+    }
   }
 
   /* ────────────────────────────────
@@ -3533,7 +3572,11 @@
   function _rsScopeLabel() {
     var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
     if (isAll) return '全校';
-    return ((getTrainingScope() || []).join('、')) || '處室';
+    // task_40e96378 Stage 1c："TASK:RS002" 顯示為任務名稱（任務清單未載入時退回代號）
+    return (getTrainingScope() || []).map(function(v) {
+      var m = /^TASK:(\S+)$/.exec(String(v));
+      return m ? _seriesName(m[1]) : v;
+    }).join('、') || '處室';
   }
 
   /** 學年度選單：當學年起往前 3 個學年（8 月起算新學年） */
