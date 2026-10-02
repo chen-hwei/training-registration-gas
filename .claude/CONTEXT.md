@@ -34,7 +34,7 @@
 
 **`training_scope`** —— 存於 `Hub.UserStatusCache.systemAccess.training_scope`
 （既有 JSON 字串欄內的 key，非新增欄位），v3.23（`task_6e2d40af` Stage B）起生效。
-未設定或含 `"ALL"` ＝全權管理者；設處室清單（如 `["教務處"]`）則僅能操作/檢視
+未設定或含 `"ALL"` ＝全權管理者；v3.32（`task_40e96378`）起**空陣列、空字串、數字、物件一律無權限**（fail-closed，原「格式錯誤視為全權」已廢止）；陣列元素除了處室，還可以是 `"TASK:<seriesId>"`（見「任務管理者」），兩者取聯集。設處室清單（如 `["教務處"]`）則僅能操作/檢視
 落在該處室的資料；三段瀑布查不到處室者（自由研習等）v3.28 起**僅全權管理者可見**
 （`task_c95dbe21` Stage 2a，Q3 裁示，原「空值＝全體可見」已廢止）。判準函式 `Schema.gs`
 `_isAllScope_()`／`_inScope_()`，前端 `config.html getTrainingScope()`／
@@ -42,6 +42,21 @@
 避免人工填寫漏寫中括號時 fail-open 成全權。**與 `owner` 是同一組概念的一體兩面**：
 `owner` 是資料的歸屬標記，`training_scope` 是使用者的存取範圍，兩者靠三段瀑布
 （`_resolveRecordOwner_()`）串起來判定。
+
+**任務系列代號（`seriesId`）** —— `TRAINING_REQUIREMENT` 第 20 欄（v3.32，`task_40e96378`），格式 `RS` 加 3 位數。
+**任務編號 `requirementId` 每學年都會換，系列代號跨學年不變**：`renewRequirements` 沿用來源代號，`editRequirement` 不可改。
+一個系列在同一學年可以有多個任務（例如拆成上、下學期）。新增任務時預設開新系列，全權管理者可選「歸入既有系列」（D3）。
+沒選到既有系列的唯一補救方法：到試算表手改 T 欄。
+
+**任務管理者（`TASK:<seriesId>`）** —— `training_scope` 含 `"TASK:RS002"` 這類元素的研習管理者（v3.33）。
+權限只限該系列（跨學年）：審核、管理課程、編輯任務、看統計、收通知；**新增任務、封存任務、改主責處室維持處室層級**，
+任務管理者做不到。判定函式 `Schema.gs` `_inScopeItem_()`／`_inScopeRid_()`／`_inScopeRecord_()`，
+前端 `Admin.html` `_inMyScope(owner, seriesId)`；只傳 owner 時＝處室層級判定。
+**與處室管理者不同**：處室管理者看整個處室，任務管理者只看被指派的系列。
+
+**`SERIES_SEQ_HWM`（已發最高系列號）** —— Script Properties，記錄發過的最高系列序號（v3.33，初始值 17）。
+發號取「表內最大號」與它兩者較大值，所以任務列被實體刪除後**不會重發同一代號**
+（否則曾授權該代號的 `TASK:` 會悄悄綁到不相干的新任務）。只增不減；歸入既有系列時不推進。
 
 **通知收件者路由（處室桶）** —— v3.24（`task_6e2d40af` Stage D）起，`Notify.gs`
 `_buildAdminBuckets_()` 把管理者依 `training_scope` 分成 `scoped[dept]`（明列
@@ -52,6 +67,8 @@
 才動態指向該處室承辦人，0 個或 2 個以上一律退回系統信箱 `getMailReplyTo_()`
 ——用 `replyTo` 直接去重會在「A 處室有承辦人、B 處室無承辦人混一封信」時
 誤判成只剩 1 個相異值，錯把信件指向 A（S-D-3 教訓，改動這支函式前務必重讀）。
+v3.33 起另有任務桶 `task[seriesId]`：收件人＝`scoped[owner]∪task[seriesId]∪all[]`；回信候選拆成 `taskReplyTo`／`deptReplyTo`，
+彙整信只有「每一筆同系列且有任務管理者」時才指向任務管理者，其餘沿用處室判定且**必須讀 `deptReplyTo`**。
 
 **自訂 vs 自由研習** —— 兩個獨立維度，**不可混用**。「自訂」（`isCustom`，待審列上的標籤）
 是教師手動輸入課程名稱、未從研習目錄選課；「自由研習」是教師送出時選了「不歸屬年度任務」
