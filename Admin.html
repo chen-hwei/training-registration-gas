@@ -158,6 +158,16 @@
         </select>
       </div>
 
+      <!-- task_40e96378 D3：新增任務時歸入既有系列（僅全權管理者顯示）；編輯時唯讀顯示系列代號 -->
+      <div class="form-group" id="rqm-series-group" style="display:none">
+        <label class="form-label">任務系列</label>
+        <select id="rqm-fseries" class="form-control"></select>
+        <div style="font-size:0.78rem;color:var(--gray-500);margin-top:4px">
+          同一系列的任務共用任務管理者授權。名稱不同但屬於同一件事（例如拆成上、下學期）時，請選既有系列。
+        </div>
+      </div>
+      <div id="rqm-series-readonly" style="display:none;font-size:0.82rem;color:var(--gray-700);margin:-4px 0 12px"></div>
+
       <div class="form-group">
         <label class="form-label">備註說明<span style="color:var(--gray-500);font-weight:400">（僅管理者可見）</span></label>
         <textarea id="rqm-fnotes" class="form-control" rows="2"
@@ -1875,6 +1885,59 @@
     sel.value = (isNew && !isAll && allowed.length === 1) ? allowed[0] : (currentOwner || '');
   }
 
+  /**
+   * 任務系列對照（task_40e96378）：seriesId → 該系列「最新學年」的任務（同學年取編號較大者）。
+   * 供 D3 系列下拉與範圍標籤顯示任務名稱；資料來自 _reqRecords（已依 scope 由後端過濾）
+   */
+  function _seriesLatestMap() {
+    var map = {};
+    _reqRecords.forEach(function(r) {
+      var sid = String(r.seriesId || '').trim();
+      if (!sid) return;
+      var cur = map[sid];
+      var y = Number(r.academicYear) || 0, cy = cur ? (Number(cur.academicYear) || 0) : -1;
+      if (!cur || y > cy || (y === cy && String(r.requirementId) > String(cur.requirementId))) map[sid] = r;
+    });
+    return map;
+  }
+
+  /** 系列代號 → 顯示名稱（最新學年任務名）；任務清單未載入或查無時退回代號 */
+  function _seriesName(sid) {
+    var r = _seriesLatestMap()[sid];
+    return r ? r.name : sid;
+  }
+
+  /**
+   * D3 系列欄位：編輯既有任務 → 唯讀顯示代號；新增且為全權 → 顯示下拉（預設開新系列）；
+   * 其餘（處室管理者新增）→ 整區隱藏，後端也只允許全權帶 seriesId
+   */
+  function _rqmPopulateSeriesOptions(obj) {
+    var group = document.getElementById('rqm-series-group');
+    var ro    = document.getElementById('rqm-series-readonly');
+    var sel   = document.getElementById('rqm-fseries');
+    var isAll = (typeof isAllScope === 'function') ? isAllScope() : true;
+    group.style.display = 'none';
+    ro.style.display = 'none';
+    sel.innerHTML = '';
+    if (obj) {
+      if (obj.seriesId) {
+        ro.textContent = '系列代號：' + obj.seriesId;
+        ro.style.display = '';
+      }
+      return;
+    }
+    if (!isAll) return;
+    var map = _seriesLatestMap();
+    var sids = Object.keys(map).sort();
+    sel.innerHTML = '<option value="">開新系列（預設）</option>' +
+      sids.map(function(sid) {
+        var r = map[sid];
+        return '<option value="' + _e(sid) + '">' + _e(sid) + '　' + _e(r.name) +
+          '（最近 ' + _e(r.academicYear) + ' 學年）</option>';
+      }).join('');
+    group.style.display = '';
+  }
+
   /* ── 新增 / 編輯 Modal ── */
   function openReqModal(requirementId) {
     var obj = null;
@@ -1894,6 +1957,7 @@
     document.getElementById('rqm-fsemester').value   = obj ? (obj.semesterSplit || '') : '';
     document.getElementById('rqm-faudience').value   = obj ? (obj.targetAudience || '') : '';
     _rqmPopulateOwnerOptions(obj ? (obj.owner || '') : '', !obj);
+    _rqmPopulateSeriesOptions(obj);
     document.getElementById('rqm-fnotes').value      = obj ? (obj.notes || '') : '';
     document.getElementById('rqm-fteachernote').value= obj ? (obj.teacherNote || '') : '';
     document.getElementById('rqm-flinks').value      = obj ? (obj.links || '') : '';
@@ -1965,6 +2029,11 @@
 
     var action = _editReqId ? 'v1/admin/editRequirement' : 'v1/admin/addRequirement';
     if (_editReqId) body.requirementId = _editReqId;
+    // D3：新增時選了既有系列才帶 seriesId（欄位僅全權可見；未選＝開新系列，不送此鍵）
+    var seriesVal = document.getElementById('rqm-fseries').value;
+    if (!_editReqId && document.getElementById('rqm-series-group').style.display !== 'none' && seriesVal) {
+      body.seriesId = seriesVal;
+    }
 
     closeReqModal();
     showSpinner();
