@@ -12,7 +12,7 @@
 - **年度任務進度儀表板**：首頁依緊急程度顯示所有應修研習任務（過期 / 緊急 / 一般 / 已完成），每項任務顯示進度條與已核准時數
 - 瀏覽各處室推薦的研習課程（含必修標記）
 - 選擇推薦課程或自訂課程進行登錄；可在登錄時標記「完成哪項年度任務」
-- 上傳研習證明（PDF / JPG / PNG，上限 8MB）
+- 上傳研習證明（PDF / JPG / PNG / GIF，上限 8MB）
 - 即時查詢審核狀態（待審核 / 已通過 / 已退件）
 - 退件時顯示原因，可一鍵重新送出；若證明檔案無誤可選擇「沿用上次上傳的證明」，避免重複上傳
 - **一次登錄多門課程**：同任務底下有 2 門以上推薦課程時，可勾選多門一次送出，支援「共用同一份證明」或「每門課各自上傳」
@@ -40,7 +40,7 @@
 
 | 情境 | 觸發條件 | 收件者 | 寄送方式 |
 |---|---|---|---|
-| **到期前提醒**（N1） | 必修課程距截止日 ≤ 7 天，教師無登錄紀錄 | 教師本人 | 分組 BCC（同課程同天數合併一封） |
+| **到期前提醒**（N1） | 必修課程距截止日 1～7 天，教師該課程沒有已通過的紀錄（待審或退件仍會收到） | 教師本人 | 分組 BCC（同課程同天數合併一封） |
 | **逾期未完成**（N2） | 必修課程已過截止日，無通過審核的紀錄 | 教師本人 ＋ 所屬處室管理者 | 教師分組 BCC；管理者每日彙整一封 |
 | **待審逾時**（N3） | PENDING 紀錄超過 3 天未被審核 | 所屬處室管理者 | 管理者每日彙整一封 |
 
@@ -54,15 +54,15 @@
 | 項目 | 技術 |
 |---|---|
 | 後端 | Google Apps Script（clasp 管理） |
-| 資料庫 | Google Sheets（2 個工作表） |
+| 資料庫 | Google Sheets（研習紀錄試算表 6 張工作表：`TRAINING_REQUIREMENT`／`TRAINING_CATALOG`／`TRAINING_RECORD`／`ImportedData`／`TeacherSnapshot`／`StatsCache`） |
 | 檔案儲存 | Google Drive（依年份 / 教師 ID 分層管理） |
-| 身分驗證 | TRAIN 原生 Token（教師帳號 + 身分證後六碼，帳號字元集 `[A-Za-z0-9._-]`、1～30 字元，多數為 `txxxx` 格式但不限，SHA-256 雜湊，CacheService `train_` Token）；向後相容 SchoolPortalLib |
+| 身分驗證 | TRAIN 原生 Token（教師帳號 + 身分證後六碼，帳號字元集 `[A-Za-z0-9._-]`、1～30 字元，多數為 `txxxx` 格式但不限；密碼比對由 `SchoolPortalLib.verifyUserPassword` 處理，CacheService `train_` Token）；向後相容 SchoolPortalLib |
 | 前端 | HTML / CSS / Vanilla JS（GAS HtmlService） |
 | 檔案上傳 | FileReader → Base64 → `google.script.run`（單次上傳，上限 8MB） |
 | 圖片壓縮 | Canvas API 前端壓縮（JPG/PNG 自動壓縮至 2MB 以下再上傳，防手機大圖逾時） |
-| 併發保護 | `LockService.getScriptLock()` 保護所有試算表寫入（submitRecord / reviewRecord） |
+| 併發保護 | `LockService.getScriptLock()` 保護登錄、審核、研習目錄與年度任務的寫入（`Record.gs`／`Review.gs`／`Catalog.gs`／`Requirement.gs`）；研習統計模組（匯入、名冊快照、統計快取）與每晚同步未加鎖 |
 | 通知寄送 | GAS `MailApp`，分組 BCC + 管理者每日彙整（v3.10），統一寄件識別（`name`/`replyTo` 讀 Script Properties `MAIL_REPLY_TO`），1,500 人次/日配額 |
-| Email 來源 | `SchoolPortalLib.getUser(userId).email`，不重複儲存（教職員名冊為唯一來源） |
+| Email 來源 | Hub `UserStatusCache`（通知與權限判斷直接讀取，本系統試算表不重複儲存 email）；例外：上傳證明檔時授權教師本人唯讀，email 由 `SchoolPortalLib.getUser()` 取得（`Drive.gs`） |
 
 ---
 
@@ -116,6 +116,17 @@
 
 ## API 路由
 
+前端一律透過 `google.script.run` 呼叫 `handleRequest`（`程式碼.gs`）分派。
+
+### 公開路由（不需 Token）
+
+| action | 說明 |
+|---|---|
+| `train/getUserName` | 登入步驟 1：以帳號查姓名 |
+| `train/loginWithIdSuffix` | 登入步驟 2：驗證身分證後六碼／自訂密碼，換發 `train_` Token |
+| `train/redeemHandoff` | 兌換門戶核發的一次性 SSO 交換碼（v3.15） |
+| `logout` | 登出 |
+
 ### 教師端（Level 1：Token 驗證）
 
 | action | 說明 |
@@ -125,6 +136,8 @@
 | `v1/getMyRecords` | 取得自己的登錄紀錄與審核狀態 |
 | `v1/submitRecord` | 送出研習登錄（含 Base64 檔案，可附 requirementId） |
 | `v1/deleteRecord` | 刪除自己的 PENDING 紀錄 |
+| `v1/getMyImportedRecords` | 取得自己在全國／臺北市研習網的匯入紀錄（「已匯入」頁） |
+| `v1/checkImportedBeforeSubmit` | 選定任務後查詢是否已有符合該任務的匯入紀錄（送出前提醒） |
 
 ### 管理者端（Level 2：Token + `training_admin` 角色）
 
@@ -142,6 +155,22 @@
 | `v1/admin/getCatalogStats` | 研習目錄課程統計（每課三種狀態人數＋已登錄名單，非全權只回任務主責單位屬本處室的課程，v3.31） |
 | `v1/admin/reassignRecordRequirement` | 待審紀錄改歸屬任務（限全權，v3.29） |
 | `v1/admin/runHealthCheck` | 資料健檢（`scope=yearSwitch`／`preExport`），回傳問題清單（v3.28 起限全權） |
+| `v1/admin/previewNotification` | 預覽待寄通知名單（非全權只看得到自己相關的項目） |
+| `v1/admin/triggerNotification` | 立即寄出通知（限全權） |
+
+### 研習統計模組（Level 2，`TrainingReport.gs`）
+
+| action | 說明 |
+|---|---|
+| `report_import` · `report_snapshot` · `report_snapshot_batch` · `report_get_roster_sources` | 研習資料匯入、人事名冊快照與來源查詢 |
+| `report_calc` · `report_batch_calc` · `report_get_stats_cache` | 指標達成率計算、批次預計算、讀取統計快取 |
+| `report_export_csv` · `report_export_doc` | 雙欄審查 CSV、Google 簽呈文件 |
+| `report_get_settings` · `report_save_settings` | 報告設定（公文範本、校長姓名） |
+| `get_indicators` · `save_indicator` · `delete_indicator` | 政策指標規則 |
+| `get_identity_rules` · `save_identity_rules` · `get_stats_settings` · `save_stats_settings` | 身分分類規則、統計設定（如兼課教師是否計入） |
+| `report_req_stats` | 年度任務達成率（處室管理者與任務管理者可用，依權限過濾任務） |
+
+> 本節除 `report_req_stats` 外，v3.27 起都限全權管理者。
 
 ---
 
@@ -201,6 +230,8 @@
 ├── Notify.gs        # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
 ├── TrainingReport.gs # 研習統計分析模組（匯入/名冊快照/指標計算/StatsCache/匯出）
 ├── CatalogStats.gs  # 研習目錄課程統計（getCatalogStats：課程 × 審核狀態 × 部別）
+├── TrainAuth.gs     # 原生登入與 Token（帳號查詢 / 後六碼驗證 / SSO 交換碼兌換 / Session 驗證）
+├── HealthCheck.gs   # 資料健檢（學年切換前、簽呈匯出前）
 ├── Index.html       # 教師端首頁（年度任務進度儀表板 + 公告課程列表）
 ├── Submit.html      # 選課與上傳頁面（Step ① 任務選擇 → Step ② 研習資訊）
 ├── Records.html     # 教師端個人研習紀錄查詢（PENDING / APPROVED / REJECTED 分頁）
@@ -239,6 +270,7 @@
 | **v3.9** | GAS 優化任務單第 6 批：Hub.TrainingStats 口徑升級（含匯入時數/學年篩選/分眾覆寫/部別欄），登入密碼格式放寬為 4-8 碼英數 | ✅ 完成（2026-07-06） |
 | **v3.10** | GAS 優化任務單第 8 批：通知信改分組 BCC 群發 + 管理者每日彙整 + 統一寄件識別（`SYSTEM_MAIL_NAME`/`MAIL_REPLY_TO`） | ✅ 完成（2026-07-07） |
 | **v3.11** | GAS 優化任務單第 4 批：資料健檢模組（學年切換檢查＋簽呈匯出前檢查，警示式，`HealthCheck.gs` 新檔） | ✅ 完成（2026-07-10） |
+| **v3.12** | Hub 名冊覆蓋按鈕 UI 化＋`VALID_DEPT` 口徑收斂（PR #9） | ✅ 完成（2026-07-11） |
 | **v3.13** | 可移植性 P1-a：組態集中，`TRAINING_SS_ID`/`TRAINING_DRIVE_ROOT_FOLDER_ID`/`HUB_SPREADSHEET_ID` 改讀 Script Properties（fallback 兜底），移除零引用死碼 `LOG_SPREADSHEET_ID` | ✅ 完成（2026-07-19） |
 | **v3.14** | SSO 階段0/R5③：移除公開路由 `action:login`／`getTeachers`（全 repo 零呼叫的公開曝露入口，殘餘風險：門戶 `v1/login` 共用 PIN 通道仍在線，待 R5④ 完成才真正關閉） | ✅ 完成（2026-08-06） |
 | **v3.15** | SSO 方案 B Stage 2：新增 `train/redeemHandoff` 公開路由與前端 `_bootPage()`，接收門戶交換碼免重複登入（[PR #20](https://github.com/chen-hwei/training-registration-gas/pull/20)／[PR #21](https://github.com/chen-hwei/training-registration-gas/pull/21)） | ✅ 完成（2026-08-10） |
@@ -323,9 +355,9 @@ clasp push
 
 - 研習證明檔案依個資法限制存取，僅管理者可讀寫，上傳教師本人唯讀
 - 所有含個人資料的備份禁止設定公開連結
-- 共用 PIN 碼存放於 GAS `PropertiesService`，不得寫入程式碼或推送至 GitHub
+- 試算表 ID、網址等組態存放於 GAS 指令碼屬性（`PropertiesService`），換部署時改屬性即可
 - Token 使用 `CacheService`（非 `PropertiesService`），TTL 6 小時，自動回收
-- 所有試算表寫入操作（`submitRecord`、`reviewRecord`）均以 `LockService` 保護，防止多人同時送出時資料錯位
+- 登錄、審核、研習目錄與年度任務的寫入均以 `LockService` 保護，防止多人同時送出時資料錯位；研習統計模組與每晚同步未加鎖
 - 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
 - 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 人次；教師信改分組 BCC 群發，`to` 固定為系統回信地址、教師名單一律走 `bcc`，嚴禁互見；以 `CacheService` 防止同一教師/同一管理者同一天重複收到相同通知
 - 管理者**實際收信**對象依任務/紀錄所屬處室精準路由（v3.24 起，`task_6e2d40af` Stage D）：單一處室彙整信 Reply-To 動態指向該處室承辦人，橫跨多處室或查無對應管理者時退回系統信箱並留痕；`previewNotification`（預覽）與 `checkAndNotifyOverdue`（實際寄信）共用同一份計算結果，兩者口徑保證一致，Stage A／B／D 過渡狀態至此結案；v3.33 起收件人另含該任務系列的任務管理者（處室 ∪ 任務 ∪ 全權）
