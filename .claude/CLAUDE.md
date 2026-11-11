@@ -9,10 +9,10 @@
 > 需要絕對路徑時讀該檔取值，**不要在本檔寫死**。
 
 ## 本專案特別注意
-- Auth 統一使用 SchoolPortalLib（Token TTL 6 小時）
+- Auth 使用 TRAIN 原生 `train_` Token（`TrainAuth.gs`，CacheService，TTL 6 小時）；SchoolPortalLib 只負責密碼比對（`verifyUserPassword`）、SSO 交換碼兌換與舊 Token 的向後相容
 - 管理者識別：`systemAccess.training_admin = true`
 - Hub.TrainingStats 只計入 `status = 'APPROVED'`
-- 視覺主色：`--color-primary: #3730A3`（藍靛）
+- 視覺主色：`--primary: #3730A3`（藍靛）
 - 共用 CSS 從 `SchoolPortalLib.getSharedCSS()` 取得
 
 ## 收工補充（專案專屬）

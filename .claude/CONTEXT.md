@@ -23,7 +23,8 @@
 把本學年統計批次寫入 `Hub.TrainingStats`（**覆寫，非累加**）。主門戶儀表板讀的就是它。
 
 **管理者識別** —— `systemAccess.training_admin = true`（存於 `Hub.UserStatusCache`）。
-改了這個欄位必須登出重新登入，Token 才會帶到新的 `systemAccess`。
+Token 只記帳號，後端每次請求都即時讀 Hub（`verifyTrainSession_()`），所以權限變更與撤權在後端立即生效；
+只有前端畫面（`localStorage.spl_access` 決定是否顯示管理後台）要登出重新登入才會更新。
 
 **`owner`（負責處室）與 `OWNER_DEPTS`** —— `TRAINING_REQUIREMENT.owner` 是任務的
 「主責單位」，v3.22（`task_6e2d40af` Stage A）起收斂為受控清單 `OWNER_DEPTS`
@@ -60,8 +61,8 @@
 
 **通知收件者路由（處室桶）** —— v3.24（`task_6e2d40af` Stage D）起，`Notify.gs`
 `_buildAdminBuckets_()` 把管理者依 `training_scope` 分成 `scoped[dept]`（明列
-該處室者）與 `all[]`（ALL-scope／全權）兩桶；`_adminEmailsForOwner_(owner)`
-收件人＝`scoped[owner]∪all[]`，union 為空才退回全體管理者（並寫 AuditLog 留痕，
+該處室者）與 `all[]`（ALL-scope／全權）兩桶（v3.33 起另有 `task[seriesId]` 任務管理者桶）；
+`_adminEmailsFor_(owner, seriesId, …)` 收件人＝`scoped[owner]∪task[seriesId]∪all[]`，union 為空才退回全體管理者（並寫 AuditLog 留痕，
 同一 owner 每次執行僅留一筆）。**彙整信 Reply-To 判定基準是信內 items 的
 `owner`，不是 `replyTo`**（`_digestReplyTo_()`）：非空 owner 相異值恰好 1 個
 才動態指向該處室承辦人，0 個或 2 個以上一律退回系統信箱 `getMailReplyTo_()`
