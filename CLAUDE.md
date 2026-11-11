@@ -77,13 +77,13 @@ GAS 編輯器 → 右上「部署」→「管理部署」→ ✎ 編輯 → 版�
 
 ## 👤 管理者權限設定
 
-`isAdmin()` 讀取 `localStorage.spl_access`，此值由 `config.html` 的 `saveSession()`（:78-83）寫入，來自 `trainLoginWithIdSuffix_()`（`TrainAuth.gs:185-187`）回傳的 `systemAccess`，最終來源是 **Hub 試算表的 `UserStatusCache` 工作表**。
+`isAdmin()` 讀取 `localStorage.spl_access`，此值由 `config.html` 的 `saveSession()`（:96-101）寫入，來自 `trainLoginWithIdSuffix_()`（`TrainAuth.gs:185-187`）回傳的 `systemAccess`，最終來源是 **Hub 試算表的 `UserStatusCache` 工作表**。
 
 若管理者帳號看不到管理後台（跳回首頁）：
 1. 開啟 Hub 試算表 → `UserStatusCache` 工作表
 2. 找到該教師帳號（txxxx）的列
 3. `systemAccess` 欄位填入：`{"training_admin":true}`
-4. 登出後重新登入（重新取得 Token 讓新的 `systemAccess` 生效）
+4. 登出後重新登入，讓前端 `localStorage.spl_access` 更新、畫面顯示管理後台（後端每次請求都即時讀 Hub，權限本身改完就生效）
 
 ---
 
@@ -136,13 +136,13 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 ```css
 /* 研習登錄系統 style.html 頂部 */
 :root {
-  --color-primary:       #3730A3;  /* 藍靛 */
-  --color-primary-light: #EEF2FF;
-  --color-primary-dark:  #1E1B4B;
+  --primary:       #3730A3;  /* 藍靛 */
+  --primary-light: #EEF2FF;
+  --primary-dark:  #1E1B4B;
 }
 ```
 
-所有按鈕、Header、邊框讀 `var(--color-primary)`，換系統只改這三行。
+所有按鈕、Header、邊框讀 `var(--primary)`，換系統只改這三行。
 
 ### 共用元件 class（勿自行重新命名）
 `.system-header` / `.login-modal` / `.card` / `.btn-primary` / `.btn-ghost` / `.status-badge` / `.font-size-toggle` / `.page-footer`
@@ -161,7 +161,7 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 | 問題 | 原因 | 解法 |
 |---|---|---|
 | 白屏（連藍色頁首都沒有） | 使用消費者 URL，每次部署 `googleusercontent.com` hash 改變，localStorage Token 失效 | 改用 `/a/macros/zlsh.tp.edu.tw/` 域 URL |
-| 白屏（頁首可見，內容空白） | `showSpinner()` 的 `z-index:900` 蓋住 `z-index:100` 的頁首 | `style.html` spinner `z-index` 已改為 `90` |
+| 白屏（頁首可見，內容空白） | `showSpinner()` 的 `z-index:900` 蓋住 `z-index:100` 的頁首 | spinner `z-index` 已改為 `90`；載入遮罩 `#spinner-overlay` 現在由 SchoolPortalLib `getSharedCSS()` 提供 |
 | 點導覽連結又被帶到 `googleusercontent.com` | `window.top.location.href = '?page=...'` 是相對路徑；若 `window.top` 停在 `googleusercontent.com`，相對路徑就停留在 `googleusercontent.com` | `config.html` 新增 `_navigate()` helper，後端注入絕對 URL `APP_BASE_URL`（`Schema.gs` 的 `getWebAppBaseUrl_()` 優先讀 Script Properties `WEB_APP_BASE_URL`，讀不到才 fallback 回 `WEB_APP_BASE_URL_FALLBACK` 常數；`doGet()` 以 `template.appBaseUrl` 注入） |
 | 資料載入後內容靜默空白（Date 序列化地雷） | 日期欄位 `getValues()` 回傳 JS `Date` 物件，`google.script.run` postMessage 無法序列化 → `result = null` → `withSuccessHandler(null)` → 靜默白屏，不進 `.catch()` | `Schema.gs parseSheetData` 補 `instanceof Date` 判斷，強制 `Utilities.formatDate()` 轉字串（同教職員名冊管理系統） |
 | 管理後台跳回首頁 | Hub `UserStatusCache` 的 `systemAccess` 欄未設 `training_admin:true` | 見上方「管理者權限設定」 |
@@ -176,7 +176,7 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 
 ## 📋 UAT 狀態
 
-目前正在進行端對端驗收測試（T1–T9）。執行前確保：
+端對端驗收測試（T1–T9）已於 2026-05-31 全部通過，系統已上線。日後重跑或新環境驗收前確保：
 1. Hub `UserStatusCache` 有測試教師帳號與管理者帳號（含 `training_admin:true`）
 2. 使用 `/a/macros/zlsh.tp.edu.tw/` 正確 URL 存取
 3. 有執行 `setupSyncTrigger()` 和 `setupNotifyTriggers()` 設定定時觸發器
@@ -195,11 +195,16 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 ├── Drive.gs       # Google Drive 資料夾與授權管理
 ├── Sync.gs        # 每晚同步 TrainingStats → Portal Hub
 ├── Notify.gs      # 通知系統（N1/N2/N3）
+├── Requirement.gs # 年度研習任務 CRUD 與學年複製
+├── TrainAuth.gs   # 原生登入與 Token（含 SSO 交換碼兌換）
+├── TrainingReport.gs # 研習統計分析模組（匯入 / 名冊快照 / 指標 / 報告匯出）
+├── CatalogStats.gs # 研習目錄課程統計
+├── HealthCheck.gs # 資料健檢（學年切換前 / 簽呈匯出前）
 ├── Index.html     # 教師端首頁（研習公告列表）
 ├── Submit.html    # 選課與上傳頁面
 ├── Records.html   # 教師端個人研習紀錄查詢
 ├── Admin.html     # 管理者審核後台
-├── style.html     # 共用 CSS
+├── style.html     # 系統識別色變數 + 注入 SchoolPortalLib 共用 CSS + 系統專屬 CSS
 ├── config.html    # 共用 JS（api() / Token / 登入 Modal）
 ├── appsscript.json # GAS 設定（含 SchoolPortalLib Library）
 ├── .clasp.json    # scriptId + rootDir
