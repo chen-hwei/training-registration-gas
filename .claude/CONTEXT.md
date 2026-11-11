@@ -63,7 +63,7 @@ Token 只記帳號，後端每次請求都即時讀 Hub（`verifyTrainSession_()
 `_buildAdminBuckets_()` 把管理者依 `training_scope` 分成 `scoped[dept]`（明列
 該處室者）與 `all[]`（ALL-scope／全權）兩桶（v3.33 起另有 `task[seriesId]` 任務管理者桶）；
 `_adminEmailsFor_(owner, seriesId, …)` 收件人＝`scoped[owner]∪task[seriesId]∪all[]`，union 為空才退回全體管理者（並寫 AuditLog 留痕，
-同一 owner 每次執行僅留一筆）。**彙整信 Reply-To 判定基準是信內 items 的
+同一「owner＋系列代號」組合每次執行僅留一筆）。**彙整信 Reply-To 判定基準是信內 items 的
 `owner`，不是 `replyTo`**（`_digestReplyTo_()`）：非空 owner 相異值恰好 1 個
 才動態指向該處室承辦人，0 個或 2 個以上一律退回系統信箱 `getMailReplyTo_()`
 ——用 `replyTo` 直接去重會在「A 處室有承辦人、B 處室無承辦人混一封信」時

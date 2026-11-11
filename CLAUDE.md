@@ -161,7 +161,7 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 | 問題 | 原因 | 解法 |
 |---|---|---|
 | 白屏（連藍色頁首都沒有） | 使用消費者 URL，每次部署 `googleusercontent.com` hash 改變，localStorage Token 失效 | 改用 `/a/macros/zlsh.tp.edu.tw/` 域 URL |
-| 白屏（頁首可見，內容空白） | `showSpinner()` 的 `z-index:900` 蓋住 `z-index:100` 的頁首 | spinner `z-index` 已改為 `90`；載入遮罩 `#spinner-overlay` 現在由 SchoolPortalLib `getSharedCSS()` 提供 |
+| 白屏（頁首可見，內容空白） | `showSpinner()` 的 `z-index:900` 蓋住 `z-index:100` 的頁首 | spinner `z-index` 已改為 `90`；現在遮罩元素 `#spinner-overlay` 在 `config.html`，樣式由 SchoolPortalLib `getSharedCSS()` 提供 |
 | 點導覽連結又被帶到 `googleusercontent.com` | `window.top.location.href = '?page=...'` 是相對路徑；若 `window.top` 停在 `googleusercontent.com`，相對路徑就停留在 `googleusercontent.com` | `config.html` 新增 `_navigate()` helper，後端注入絕對 URL `APP_BASE_URL`（`Schema.gs` 的 `getWebAppBaseUrl_()` 優先讀 Script Properties `WEB_APP_BASE_URL`，讀不到才 fallback 回 `WEB_APP_BASE_URL_FALLBACK` 常數；`doGet()` 以 `template.appBaseUrl` 注入） |
 | 資料載入後內容靜默空白（Date 序列化地雷） | 日期欄位 `getValues()` 回傳 JS `Date` 物件，`google.script.run` postMessage 無法序列化 → `result = null` → `withSuccessHandler(null)` → 靜默白屏，不進 `.catch()` | `Schema.gs parseSheetData` 補 `instanceof Date` 判斷，強制 `Utilities.formatDate()` 轉字串（同教職員名冊管理系統） |
 | 管理後台跳回首頁 | Hub `UserStatusCache` 的 `systemAccess` 欄未設 `training_admin:true` | 見上方「管理者權限設定」 |

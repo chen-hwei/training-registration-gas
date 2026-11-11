@@ -62,7 +62,7 @@
 | 圖片壓縮 | Canvas API 前端壓縮（JPG/PNG 自動壓縮至 2MB 以下再上傳，防手機大圖逾時） |
 | 併發保護 | `LockService.getScriptLock()` 保護登錄、審核、研習目錄與年度任務的寫入（`Record.gs`／`Review.gs`／`Catalog.gs`／`Requirement.gs`）；研習統計模組（匯入、名冊快照、統計快取）與每晚同步未加鎖 |
 | 通知寄送 | GAS `MailApp`，分組 BCC + 管理者每日彙整（v3.10），統一寄件識別（`name`/`replyTo` 讀 Script Properties `MAIL_REPLY_TO`），1,500 人次/日配額 |
-| Email 來源 | Hub `UserStatusCache`（通知與權限判斷直接讀取，本系統試算表不重複儲存 email） |
+| Email 來源 | Hub `UserStatusCache`（通知與權限判斷直接讀取，本系統試算表不重複儲存 email）；例外：上傳證明檔時授權教師本人唯讀，email 由 `SchoolPortalLib.getUser()` 取得（`Drive.gs`） |
 
 ---
 
