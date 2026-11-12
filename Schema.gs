@@ -106,7 +106,7 @@ const SHEET_SCHEMA = {
       'deliveryType', 'semesterSplit', 'notes', 'links',
       'isRecurring', 'status', 'createdAt', 'audienceRules', 'matchKeywords',
       'teacherNote', 'targetAudience',
-      // task_40e96378：跨學年穩定的任務系列代號（RS001…），renewRequirements 沿用、不可編輯；
+      // task_40e96378：跨學年穩定的任務系列代號（RS001…），renewRequirements_ 沿用、不可編輯；
       // 任務管理者授權（training_scope 的 "TASK:RSxxx"）綁此代號，學年切換後不必重新指派
       'seriesId'
     ]
@@ -242,7 +242,7 @@ function _isCountedInStats_(dept, job, includePartTime) {
 
 /**
  * 應受訓人員名單：_isTeacherJob_() 或行政人員。用於讀 Hub.UserStatusCache 的路徑
- * （Sync.gs、calcRequirementStats、Notify.gs）。不套 VALID_DEPT——行政人員部別本就
+ * （Sync.gs、calcRequirementStats_、Notify.gs）。不套 VALID_DEPT——行政人員部別本就
  * 空白，套了等於把他們全刪，而 audienceRules 分眾任務本就為行政人員設有應達時數。
  * ⚠️ 行政人員判定用「嚴格相等」，與 _classifyIdentity_() 對同一欄位採「包含」比對
  * （如 jobPrimary_equals／compound 的 indexOf）不一致——目前 Hub 資料值恰好都是
@@ -385,9 +385,9 @@ function auditTrainingScopes() {
  * @param {Object[]} [preReadCatalog] 已解析的完整 TRAINING_CATALOG 陣列
  *   （task_6e2d40af Stage D，D-5）。帶了就不重讀 TRAINING_CATALOG；不帶時行為與
  *   改動前完全相同，`Review.gs`／`Catalog.gs`／`Requirement.gs`／
- *   `previewNotification()` 既有無參數呼叫零影響。
+ *   `previewNotification_()` 既有無參數呼叫零影響。
  * @param {Object[]} [preReadReq] 已解析的完整 TRAINING_REQUIREMENT 陣列（task_c95dbe21 Stage 2b，
- *   供 getPendingReviews 同時建關鍵字索引時免重讀）。不帶時行為與改動前完全相同。
+ *   供 getPendingReviews_ 同時建關鍵字索引時免重讀）。不帶時行為與改動前完全相同。
  */
 function _buildOwnerIndex_(preReadCatalog, preReadReq) {
   const reqOwner  = {};
@@ -539,7 +539,7 @@ const SERIES_SEQ_HWM_KEY = 'SERIES_SEQ_HWM';
 /**
  * 任務系列代號目前最大序號（task_40e96378）：取「seriesId 欄 RS 前綴最大值」與
  * 「SERIES_SEQ_HWM 已發最高號」兩者較大者，皆無回 0。
- * 批次產號（addRequirement／renewRequirements／backfillSeriesIdsApply）呼叫端自行遞增，
+ * 批次產號（addRequirement_／renewRequirements_／backfillSeriesIdsApply）呼叫端自行遞增，
  * 寫入後須呼叫 _saveSeriesSeqHwm_() 推進紀錄（皆在持鎖期間）。
  */
 function _maxSeriesSeq_(allRows) {

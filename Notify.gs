@@ -125,7 +125,7 @@ function _buildNotificationList() {
 
 /**
  * 將名單依「課程 × 剩餘天數」（N1）／「課程」（N2 教師）／「管理者信箱」（N2/N3 彙整）分組
- * checkAndNotifyOverdue 與 previewNotification 共用，確保預覽與實發口徑一致
+ * checkAndNotifyOverdue 與 previewNotification_ 共用，確保預覽與實發口徑一致
  * （Y-F4：Stage D 起兩邊共用同一份 _buildNotificationList() 算出的 owner／
  * adminEmails，Y-B4 登記的「Stage B～D 之間暫時性偏離」至此結案）
  */
@@ -172,7 +172,7 @@ function _groupNotificationList(list) {
  * Y-E3：items 已在 _buildNotificationList() 階段掛好 owner，這裡直接讀用，
  * 不重建 _buildOwnerIndex_()，省一次 TRAINING_CATALOG／TRAINING_REQUIREMENT 重讀。
  */
-function previewNotification(callerUserId, scope) {
+function previewNotification_(callerUserId, scope) {
   const list = _buildNotificationList();
   let { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList(list);
 
@@ -413,7 +413,7 @@ function _readHubUserStatusRows_() {
 /**
  * 取得應收催辦通知的人員清單（從 Hub.UserStatusCache）
  * task_c5f2e08d Q-6：套用 _isTrainingTracked_()，兼課教師與實習老師不再收催辦信，
- * 行政人員維持照收（與 Sync.gs／calcRequirementStats 口徑一致）
+ * 行政人員維持照收（與 Sync.gs／calcRequirementStats_ 口徑一致）
  * @param {Array[]} [preReadRows] 已讀入的 Hub 原始列（D-5，帶了就不重讀；
  *   不帶時行為與改動前完全相同，供 debugNotify() 等既有無參數呼叫零影響）
  */

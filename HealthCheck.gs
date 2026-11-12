@@ -11,7 +11,7 @@ var HEALTHCHECK_SAMPLE_LIMIT = 30;
  * @param {string} scope - 'yearSwitch' 或 'preExport'（健檢群組；⚠️ 與處室權限 training_scope 同名異義，不可混用）
  * @param {number} academicYear - 目標學年度
  */
-function runDataHealthCheck(userId, scope, academicYear) {
+function runDataHealthCheck_(userId, scope, academicYear) {
   try {
     var year = Number(academicYear || _currentAcademicYear());
     var groups = (scope === 'preExport') ? _healthCheckPreExport_(year) : _healthCheckYearSwitch_(year);
@@ -115,7 +115,7 @@ function _healthCheckYearSwitch_(year) {
   reqRows.forEach(function(r) { ownerIndex.reqOwner[r.requirementId] = String(r.owner || '').trim(); });
   catalogRows.forEach(function(c) { ownerIndex.catReq[c.catalogId] = String(c.requirementId || '').trim(); });
 
-  // ⑤ ACTIVE 任務主責單位空白（不限學年；Y-2：renewRequirements 會原樣複製空 owner，複製前即應補正）
+  // ⑤ ACTIVE 任務主責單位空白（不限學年；Y-2：renewRequirements_ 會原樣複製空 owner，複製前即應補正）
   var ownerEmpty = reqRows
     .filter(function(r) { return r.status === 'ACTIVE' && !String(r.owner || '').trim(); })
     .map(function(r) { return '[' + r.requirementId + '] ' + r.name + '（' + r.academicYear + ' 學年度）：主責單位空白'; });
@@ -170,8 +170,8 @@ function _healthCheckPreExport_(year) {
   var groups = [];
   var ss = SpreadsheetApp.openById(getTrainingSsId_());
 
-  // ⑤ 教師名單一致性：TeacherSnapshot 該學年度全部姓名 vs calcStats 實際納入統計的篩選條件
-  // （不呼叫 calcStats() 本體，因其內含 saveStatsCache_ 寫入快取，健檢須維持零寫入）
+  // ⑤ 教師名單一致性：TeacherSnapshot 該學年度全部姓名 vs calcStats_ 實際納入統計的篩選條件
+  // （不呼叫 calcStats_() 本體，因其內含 saveStatsCache_ 寫入快取，健檢須維持零寫入）
   var snapSheet = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
   var excluded = [];
   if (snapSheet) {
@@ -207,7 +207,7 @@ function _healthCheckPreExport_(year) {
     var hCol = iHdr.indexOf('hours');
     var dCol = iHdr.indexOf('date');
     iData.slice(1).forEach(function(r, idx) {
-      if (Number(r[yCol]) > year) return;  // 累積口徑：只看截至目標學年（比照 calcStats cumulative 模式）
+      if (Number(r[yCol]) > year) return;  // 累積口徑：只看截至目標學年（比照 calcStats_ cumulative 模式）
       var rowLabel = '第 ' + (idx + 2) + ' 列';
       var name = String(r[nCol] || '').trim();
       var title = String(r[tCol] || '').trim();
@@ -218,7 +218,7 @@ function _healthCheckPreExport_(year) {
       var dateStr = dateRaw instanceof Date
         ? Utilities.formatDate(dateRaw, 'Asia/Taipei', 'yyyy/M/d')
         : String(dateRaw || '').trim();
-      // 空白日期是系統既有容許的正常狀態（calcStats／syncTrainingStats 皆不因此出錯），只標記「有值但解析失敗」
+      // 空白日期是系統既有容許的正常狀態（calcStats_／syncTrainingStats 皆不因此出錯），只標記「有值但解析失敗」
       // 沿用既有 _detectAcademicYearFromDate_（會回傳 null），不重寫日期解析邏輯
       if (dateStr && _detectAcademicYearFromDate_(dateStr) === null) {
         dateBad.push(rowLabel + '（' + name + '）：日期「' + dateStr + '」無法解析');
@@ -281,13 +281,13 @@ function debugScopeProbe() {
   const lines = PROBES.map(raw => {
     const scope = _normalizeScope_(raw);
     const label = raw === undefined ? '全權(未設定)' : JSON.stringify(raw);
-    const pending = safe(() => getPendingReviews(scope).length);
-    const catalog = safe(() => getCatalogAdmin(scope).length);
-    const reqs    = safe(() => getAllRequirements({ academicYear: year }, scope).map(r => r.requirementId).join('/') || '（無）');
-    const reqStat = safe(() => ((calcRequirementStats({ academicYear: year }, scope).data || {}).requirements || []).length);
-    const catStat = safe(() => ((getCatalogStats({ academicYear: year }, scope).data || {}).courses || []).length);
-    const exp     = safe(() => exportRecords({}, scope).count);
-    const preview = safe(() => { const g = previewNotification('', scope).groups; return 'N1=' + g.n1.length + ' N2=' + g.n2.length; });
+    const pending = safe(() => getPendingReviews_(scope).length);
+    const catalog = safe(() => getCatalogAdmin_(scope).length);
+    const reqs    = safe(() => getAllRequirements_({ academicYear: year }, scope).map(r => r.requirementId).join('/') || '（無）');
+    const reqStat = safe(() => ((calcRequirementStats_({ academicYear: year }, scope).data || {}).requirements || []).length);
+    const catStat = safe(() => ((getCatalogStats_({ academicYear: year }, scope).data || {}).courses || []).length);
+    const exp     = safe(() => exportRecords_({}, scope).count);
+    const preview = safe(() => { const g = previewNotification_('', scope).groups; return 'N1=' + g.n1.length + ' N2=' + g.n2.length; });
     return label + ' | 待審 ' + pending + ' | 課程 ' + catalog + ' | 匯出 ' + exp +
       ' | 任務統計 ' + reqStat + ' | 課程統計 ' + catStat + ' | 通知 ' + preview + ' | ' + year + '學年任務 ' + reqs;
   });

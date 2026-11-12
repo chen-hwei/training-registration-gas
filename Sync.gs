@@ -13,7 +13,7 @@ function syncTrainingStats() {
   const academicYear = _currentAcademicYear();
 
   // ── Step 1：當學年 ACTIVE 任務，預先算好關鍵字、硬性區間與 audienceRules（迴圈外算一次）──
-  // baseRequiredHours 與 audienceRules 口徑須與 Requirement.gs 的 getRequirements 一致：
+  // baseRequiredHours 與 audienceRules 口徑須與 Requirement.gs 的 getRequirements_ 一致：
   // 若任務本身 requiredHours 為 0 但有 audienceRules，改依教師身分分類覆寫實際應達時數
   const reqDefs = parseSheetData(_getRequirementSheet())
     .filter(r => r.status === 'ACTIVE' && Number(r.academicYear) === academicYear)
@@ -128,7 +128,7 @@ function syncTrainingStats() {
     if (!_isTrainingTracked_(jobPrimary, includePartTime)) return;
     const name = String(row[nameCol] || '').trim();
 
-    // 身分分類（供 audienceRules 分眾覆寫應達時數，口徑與 getRequirements 一致）
+    // 身分分類（供 audienceRules 分眾覆寫應達時數，口徑與 getRequirements_ 一致）
     const identityGroup = _classifyIdentity_({
       jobPrimary: jpCol >= 0 ? row[jpCol] : '',
       title:      ttCol >= 0 ? row[ttCol] : '',

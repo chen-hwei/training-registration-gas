@@ -1,7 +1,7 @@
 // ==================== 研習登錄紀錄（教師端，Level 1） ====================
 
 /** 取得教師自己的所有登錄紀錄 */
-function getMyRecords(userId) {
+function getMyRecords_(userId) {
   return parseSheetData(_getRecordSheet())
     .filter(r => r.userId === userId)
     .map(r => ({
@@ -20,7 +20,7 @@ function getMyRecords(userId) {
  *   B. 沿用舊檔案：{ reuseFileId, fileName }（退件後重送，不重複佔用 Drive 空間）
  * 選填：catalogId（自訂課程時省略）
  */
-function submitRecord(userId, body) {
+function submitRecord_(userId, body) {
   if (!body.title)        return _err('MISSING_TITLE');
   if (!body.trainingDate) return _err('MISSING_TRAINING_DATE');
   // 後端寬鬆驗證：只擋年份離譜的值（前端已擋格式，此處防繞過前端直呼 API）
@@ -94,7 +94,7 @@ function submitRecord(userId, body) {
 }
 
 /** 刪除自己的 PENDING 紀錄（僅允許刪除尚未進入審核的紀錄） */
-function deleteRecord(userId, body) {
+function deleteRecord_(userId, body) {
   if (!body.recordId) return _err('MISSING_RECORD_ID');
 
   const lock = LockService.getScriptLock();

@@ -8,12 +8,12 @@
  * - 處室過濾：非全權只回任務 owner ∈ scope 的課程，空 owner 僅全權（沿用 _buildOwnerIndex_／_resolveRecordOwner_）
  * - 一人一狀態（R-2）：同一教師同一課程多筆紀錄取最高狀態（_statusRank_）
  * - 名冊查無：紀錄的教師在 Hub.UserStatusCache 查無帳號時照列，部別／email 留空並標 inRoster=false
- * - 部別歸桶與 calcRequirementStats 相同：高中部→hs、國中部→jh、其餘→other
+ * - 部別歸桶與 calcRequirementStats_ 相同：高中部→hs、國中部→jh、其餘→other
  * - 紀錄以 catalogId 對課程，catalogId 為空的自訂課程紀錄不計入
  * @param {Object} body { academicYear }（缺省為當學年）
  * @param {string[]} scope 呼叫者處室範圍
  */
-function getCatalogStats(body, scope) {
+function getCatalogStats_(body, scope) {
   try {
     const academicYear = Number((body || {}).academicYear || _currentAcademicYear());
     const isAll = _isAllScope_(scope);

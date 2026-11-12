@@ -28,7 +28,7 @@ var DEFAULT_INDICATORS_ = [
 
 // ==================== F2：指標規則管理 ====================
 
-function getIndicators() {
+function getIndicators_() {
   try {
     const props = PropertiesService.getScriptProperties();
     const raw   = props.getProperty(INDICATOR_RULES_KEY);
@@ -39,7 +39,7 @@ function getIndicators() {
   }
 }
 
-function saveIndicator(body) {
+function saveIndicator_(body) {
   try {
     const { id, label, patterns } = body || {};
     if (!id || !label || !Array.isArray(patterns) || patterns.length === 0)
@@ -61,7 +61,7 @@ function saveIndicator(body) {
   }
 }
 
-function deleteIndicator(id) {
+function deleteIndicator_(id) {
   try {
     if (!id) return _err('id 為必填');
     const props = PropertiesService.getScriptProperties();
@@ -156,7 +156,7 @@ function detectSource_(rec) {
  * body.appendMode    - true：追加合併（不刪現有資料，以 teacherName 去重更新）
  * body.fileName      - 來源 CSV 檔名（供 rosterSources 記錄）
  */
-function snapshotTeacherRoster(body) {
+function snapshotTeacherRoster_(body) {
   try {
     var academicYear = Number(body.academicYear || _currentAcademicYear());
     var rosterRows   = body.rosterRows || [];
@@ -197,7 +197,7 @@ function snapshotTeacherRoster(body) {
         // CSV 名冊無 status 欄，母數判定只能套 VALID_DEPT ＋ _isTeacherJob_()（task_c5f2e08d Q-2）；
         // 是否已離職這件事在 CSV 路徑無從得知，屬已知且刻意保留的結構性缺口
         // includePartTime 固定傳 true：快照建立時一律保留兼課教師的列，開關判定完全留給
-        // 讀取端三條路徑（calcStats／exportDoubleColumnCSV／HealthCheck），開關才能對
+        // 讀取端三條路徑（calcStats_／exportDoubleColumnCSV_／HealthCheck），開關才能對
         // CSV 來源快照可逆（R-13）——否則關閉時建立的快照裡沒有兼課列，事後開啟開關
         // 也讀不到，母數不會跟著變
         rosterRows.forEach(function(row) {
@@ -306,7 +306,7 @@ function _saveRosterSource_(academicYear, source, fileName, count) {
 /**
  * 取得各學年度名冊來源記錄（供前端摘要顯示）
  */
-function getRosterSources() {
+function getRosterSources_() {
   try {
     var props = PropertiesService.getScriptProperties();
     var raw   = props.getProperty(ROSTER_SOURCES_KEY);
@@ -323,7 +323,7 @@ function getRosterSources() {
  * body.fileName    - 來源 CSV 檔名
  * body.years       - 要處理的年度陣列（管理者勾選的）
  */
-function snapshotRosterBatch(body) {
+function snapshotRosterBatch_(body) {
   try {
     var yearGroups = body.yearGroups || {};
     var years      = body.years || Object.keys(yearGroups).map(Number).sort();
@@ -334,7 +334,7 @@ function snapshotRosterBatch(body) {
     years.forEach(function(yr) {
       yr = Number(yr);
       var rows = yearGroups[String(yr)] || [];
-      var res  = snapshotTeacherRoster({
+      var res  = snapshotTeacherRoster_({
         academicYear: yr,
         rosterRows:   rows,
         overwrite:    !appendMode,
@@ -372,7 +372,7 @@ function _detectAcademicYearFromDate_(dateStr) {
  * body.rows         - [{ rawRow, headers }] 前端解析後的原始列資料
  * body.appendMode   - true：追加合併（保留現有同年度紀錄）；false（預設）：取代
  */
-function importTrainingData(body) {
+function importTrainingData_(body) {
   try {
     var academicYear = Number(body.academicYear || _currentAcademicYear());
     var rows         = body.rows || [];
@@ -605,7 +605,7 @@ function manualAddImportedRecord() {
 // ==================== F3-cache：伺服器端統計快取 ====================
 
 /**
- * 診斷：確認 getRequirements 的分眾身分查詢與日期過濾是否正常
+ * 診斷：確認 getRequirements_ 的分眾身分查詢與日期過濾是否正常
  * 在 GAS 編輯器執行此函式（TrainingReport.gs），結果顯示於執行記錄
  */
 function debugRequirementsAndDateFilter() {
@@ -724,7 +724,7 @@ function debugRequirementsAndDateFilter() {
  * 取得指定年度+模式的伺服器快取
  * 回傳 { success: true, data: { statsData, cachedAt } } 或 { success: true, data: null }
  */
-function getStatsCache(academicYear, mode) {
+function getStatsCache_(academicYear, mode) {
   try {
     var key   = _statsCacheKey_(academicYear, mode);
     var ss    = SpreadsheetApp.openById(getTrainingSsId_());
@@ -796,13 +796,13 @@ function _statsCacheKey_(academicYear, mode) {
  * body.combinations = [{ academicYear: 114, mode: 'cumulative' }, ...]
  * 在同一次 GAS 執行中完成（修掉 Bug 後每組合約 5–10 秒，10 組合 < 2 分鐘，安全）
  */
-function batchCalcStats(body) {
+function batchCalcStats_(body) {
   try {
     var combinations = body.combinations || [];
     if (combinations.length === 0) return _err('combinations 為必填');
     var results = [];
     combinations.forEach(function(c) {
-      var res = calcStats(Number(c.academicYear), c.mode);  // 內含 saveStatsCache_()
+      var res = calcStats_(Number(c.academicYear), c.mode);  // 內含 saveStatsCache_()
       results.push({
         academicYear: c.academicYear,
         mode:         c.mode,
@@ -823,7 +823,7 @@ function batchCalcStats(body) {
  * mode = 'year'        → 只計算該學年度的研習紀錄（每年重算型指標）
  * mode = 'cumulative'  → 累積至該學年度的所有紀錄（終身有效型指標，預設）
  */
-function calcStats(academicYear, mode) {
+function calcStats_(academicYear, mode) {
   try {
     academicYear = Number(academicYear || _currentAcademicYear());
     mode = (mode === 'year') ? 'year' : 'cumulative';  // 預設 cumulative
@@ -926,10 +926,10 @@ function calcStats(academicYear, mode) {
 
 // ==================== F4-a：雙欄審查 CSV ====================
 
-function exportDoubleColumnCSV(academicYear) {
+function exportDoubleColumnCSV_(academicYear) {
   try {
     academicYear = Number(academicYear || _currentAcademicYear());
-    var statsRes = calcStats(academicYear);
+    var statsRes = calcStats_(academicYear);
     if (!statsRes.success) return statsRes;
 
     var ss        = SpreadsheetApp.openById(getTrainingSsId_());
@@ -961,7 +961,7 @@ function exportDoubleColumnCSV(academicYear) {
       s.pendingList.forEach(function(p) { /* 反推通過者 */ });
     });
 
-    // 直接從 calcStats 的 stats 重組每位教師通過的指標列表
+    // 直接從 calcStats_ 的 stats 重組每位教師通過的指標列表
     var passMap = {};
     teachers.forEach(function(t) { passMap[t.name] = []; });
 
@@ -1031,13 +1031,13 @@ function exportDoubleColumnCSV(academicYear) {
 
 // ==================== F4-b：Google 文件公文 ====================
 
-function generateGoogleDoc(academicYear) {
+function generateGoogleDoc_(academicYear) {
   try {
     academicYear = Number(academicYear || _currentAcademicYear());
     var templateId = _getReportTemplateId_();
     if (!templateId) return _err('公文範本尚未建立，請於 GAS 編輯器執行 createReportDocTemplate()');
 
-    var statsRes = calcStats(academicYear);
+    var statsRes = calcStats_(academicYear);
     if (!statsRes.success) return statsRes;
     var stats    = statsRes.data.stats;
     var totals   = statsRes.data.totals;
@@ -1155,7 +1155,7 @@ function _getPrincipalName_() {
 }
 
 /** 管理後台：讀取報告設定（校長姓名 + 範本文件連結） */
-function getReportSettings() {
+function getReportSettings_() {
   try {
     var templateId = _getReportTemplateId_();
     return _ok({
@@ -1169,7 +1169,7 @@ function getReportSettings() {
 }
 
 /** 管理後台：儲存報告設定（目前僅校長姓名） */
-function saveReportSettings(body) {
+function saveReportSettings_(body) {
   try {
     var name = String((body || {}).principalName || '').trim();
     if (!name) return _err('校長姓名為必填');
@@ -1240,21 +1240,21 @@ function createReportDocTemplate() {
  * 維運函式：用 Hub.UserStatusCache 目前在職名單完全覆蓋（非合併）指定學年度 TeacherSnapshot
  * - 命名不帶結尾底線，於 GAS 編輯器手動執行（下拉選單可見）
  * - 與現有 rptDoImport 的 appendMode 合併語意不同：合併只會新增/更新，不會移除已從 Hub 下架的舊名單；
- *   本函式改用 snapshotTeacherRoster(overwrite:true) 的取代模式，才能真正清掉已離職／測試帳號
+ *   本函式改用 snapshotTeacherRoster_(overwrite:true) 的取代模式，才能真正清掉已離職／測試帳號
  * - 執行前務必先確認 Hub.UserStatusCache 本身已無測試帳號（本函式只如實反映 Hub 現況，不做額外過濾）
  * - 不帶參數時預設覆蓋當前學年度；如需指定學年度，直接在編輯器改傳入值後執行
  */
 function overwriteSnapshotFromHub(academicYear) {
   _assertManualRunByDeployer_('overwriteSnapshotFromHub');  // task_52660e35 損-06：維運函式禁止前端直呼
   var year = Number(academicYear || _currentAcademicYear());
-  var res  = snapshotTeacherRoster({ academicYear: year, rosterRows: [], overwrite: true });
+  var res  = snapshotTeacherRoster_({ academicYear: year, rosterRows: [], overwrite: true });
   Logger.log(JSON.stringify(res));
   return res;
 }
 
 /**
  * 統計母數稽核（task_c5f2e08d R-6／R-7／S-3／S-5／S-7）：非一次性工具，保留為長期哨兵，
- * 施工前後皆可執行，確認 Sync.gs／calcRequirementStats 現行邏輯（在職/轉調 ＋
+ * 施工前後皆可執行，確認 Sync.gs／calcRequirementStats_ 現行邏輯（在職/轉調 ＋
  * _isTrainingTracked_()）會排除哪些人，以及 jobPrimary 空白人數（S-5：_isTeacherJob_()
  * 對空白值一律放行，此欄位是長期監控該風險是否真的發生的哨兵，而非資料巧合的假設）。
  * 純讀取 Hub.UserStatusCache，不寫入任何資料。於 GAS 編輯器手動執行，看「執行記錄」。
@@ -1446,7 +1446,7 @@ function _classifyIdentity_(user, rules) {
  * Level 2 API：管理者儲存自訂身分分類規則
  * body.rules: 規則陣列（格式同 DEFAULT_IDENTITY_RULES_）
  */
-function saveIdentityRules(body) {
+function saveIdentityRules_(body) {
   try {
     var rules = (body || {}).rules;
     if (!Array.isArray(rules) || rules.length === 0)
@@ -1465,7 +1465,7 @@ function saveIdentityRules(body) {
  * Level 2 API：取得兼課教師計入統計設定，並在同一次讀取 Hub.UserStatusCache 時
  * 一併算出「不含兼課」「含兼課」兩個母數供後台對照顯示（同一次迭代算出，不重跑整個統計）
  */
-function getStatsSettings() {
+function getStatsSettings_() {
   try {
     var includePartTime = _loadStatsIncludePartTime_();
     var hub    = SpreadsheetApp.openById(getHubSpreadsheetId_());
@@ -1503,7 +1503,7 @@ function getStatsSettings() {
 }
 
 /** Level 2 API：儲存兼課教師計入統計設定 */
-function saveStatsSettings(body) {
+function saveStatsSettings_(body) {
   try {
     var includePartTime = (body || {}).includePartTime === true;
     PropertiesService.getScriptProperties()
@@ -1529,7 +1529,7 @@ function resetIdentityRulesToDefault() {
 /**
  * Level 2 API：取得目前的身分分類規則（含預設值）
  */
-function getIdentityRules() {
+function getIdentityRules_() {
   try {
     return _ok(_loadIdentityRules_());
   } catch (e) {
@@ -1586,7 +1586,7 @@ function _importDateTs_(rawDate) {
  * owner 空值的任務僅全權可見；留下的任務一律附完整 pendingList（含 schoolEmail）。
  * 部別拆分 hs（高中部）／jh（國中部）／other（其餘），三組加總＝全校數。
  */
-function calcRequirementStats(body, scope) {
+function calcRequirementStats_(body, scope) {
   try {
     var academicYear = Number((body || {}).academicYear || _currentAcademicYear());
 
@@ -1728,7 +1728,7 @@ function calcRequirementStats(body, scope) {
 
         var passed  = 0;
         var pending = [];
-        // 部別拆分：非高中部／國中部者歸 other，不沿用 calcStats 的「非高中部一律國中部」
+        // 部別拆分：非高中部／國中部者歸 other，不沿用 calcStats_ 的「非高中部一律國中部」
         var dept = { hs: { passed: 0, total: 0 }, jh: { passed: 0, total: 0 }, other: { passed: 0, total: 0 } };
         members.forEach(function(u) {
           var dk = u.department === '高中部' ? 'hs' : (u.department === '國中部' ? 'jh' : 'other');
@@ -1793,7 +1793,7 @@ function calcRequirementStats(body, scope) {
 
 /**
  * 讀一次 Hub.UserStatusCache，取得姓名／同名判斷／身分分類欄位
- * 供 getRequirements（audienceRules 分眾）與匯入比對共用，避免重複開 Hub 試算表
+ * 供 getRequirements_（audienceRules 分眾）與匯入比對共用，避免重複開 Hub 試算表
  * 回傳 null 表示找不到此帳號
  */
 function _getHubUserInfo_(userId) {
@@ -1861,7 +1861,7 @@ function _matchImportedToRequirements_(myName, academicYear) {
   var reqKeywords = requirements.map(function(r) {
     var kws = [];
     try { kws = r.matchKeywords ? JSON.parse(r.matchKeywords) : []; } catch (e) {}
-    // 硬性計算區間依學年度＋semesterSplit 推算（與管理端 calcRequirementStats 一致）；
+    // 硬性計算區間依學年度＋semesterSplit 推算（與管理端 calcRequirementStats_ 一致）；
     // endDate 僅作催辦顯示，不參與比對，避免軟性截止日誤砍達成紀錄
     var win = _requirementWindow_(r.academicYear, r.semesterSplit);
     return { requirementId: r.requirementId, name: r.name, keywords: kws, startTs: win.startTs, endTs: win.endTs };
@@ -1914,7 +1914,7 @@ function _matchImportedToRequirements_(myName, academicYear) {
  * 同時標示每筆是否符合任一年度任務關鍵字
  * 回傳 { records: [...], hasSameName: bool, academicYear }
  */
-function getMyImportedRecords(userId, body) {
+function getMyImportedRecords_(userId, body) {
   try {
     // academicYear 空字串或 0 → 全部年度（不篩選）
     var rawYear      = (body || {}).academicYear;
@@ -1942,7 +1942,7 @@ function getMyImportedRecords(userId, body) {
  * 教師選定任務後，查詢 ImportedData 是否已有符合的紀錄
  * 回傳 { matched: bool, records: [...], totalHours, requiredHours }
  */
-function checkImportedBeforeSubmit(userId, body) {
+function checkImportedBeforeSubmit_(userId, body) {
   try {
     var requirementId = (body || {}).requirementId;
     if (!requirementId) return _err('requirementId 為必填');

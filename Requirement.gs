@@ -8,7 +8,7 @@
  * 有效時數 = 核准紀錄與匯入時數取較大值（口徑與 Records.html 一致，見 v3.6 修正）
  * 回傳格式：[{ ...requirement, requiredHours, approvedHours, pendingHours, importedHours, effectiveHours, hasSameName, isCompleted }, ...]
  */
-function getRequirements(userId, body) {
+function getRequirements_(userId, body) {
   const academicYear = (body && body.academicYear) ? Number(body.academicYear) : _currentAcademicYear();
   const requirements = parseSheetData(_getRequirementSheet())
     .filter(r => r.status === 'ACTIVE' && Number(r.academicYear) === academicYear);
@@ -90,7 +90,7 @@ function getRequirements(userId, body) {
  * 可傳入 body.academicYear 篩選特定學年度
  * scope 限制下只回 owner ∈ scope 的任務；owner 空值僅全權可見（task_c95dbe21 Stage 2a，2e／Q-a）
  */
-function getAllRequirements(body, scope) {
+function getAllRequirements_(body, scope) {
   let all = parseSheetData(_getRequirementSheet()).map(r => ({
     ...r,
     requiredHours: Number(r.requiredHours) || 0
@@ -129,7 +129,7 @@ function _normalizeSemesterSplit_(v) {
  * 否則處室管理者送空 owner 會先撞 _inScope_('') 回 FORBIDDEN。
  * scope 限制下，寫入的 owner 須 ∈ scope（B-4／C-3：寫入 owner 的入口驗改後 owner）
  */
-function addRequirement(adminId, body, scope) {
+function addRequirement_(adminId, body, scope) {
   if (!body.name)    return _err('MISSING_NAME');
   if (!body.endDate) return _err('MISSING_END_DATE');
 
@@ -213,7 +213,7 @@ function addRequirement(adminId, body, scope) {
  * task_40e96378 Stage 1b：編輯權＝處室 ∪ TASK:<seriesId>；owner 值有變更時，改前與改後 owner 皆須 ∈ 處室 scope（B-4）：
  * 防止管理者把任務單方面轉出自己 scope 後無法復原（空值僅全權，故處室管理者無法認領空值任務）
  */
-function editRequirement(adminId, body, scope) {
+function editRequirement_(adminId, body, scope) {
   if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');
 
   const lock = LockService.getScriptLock();
@@ -263,7 +263,7 @@ function editRequirement(adminId, body, scope) {
       }
     });
 
-    // 補齊寬度：理由同 addRequirement()（R-2）
+    // 補齊寬度：理由同 addRequirement_()（R-2）
     const W = Math.max(schema.keys.length, data[0].length);
     const rows = data.map(r => { const a = r.slice(); while (a.length < W) a.push(''); return a; });
     sheet.clearContents();
@@ -282,7 +282,7 @@ function editRequirement(adminId, body, scope) {
  * body 必填：requirementId
  * scope 限制下，改前 owner 須 ∈ scope（B-4／C-3：改動既有任務的入口驗改前 owner；空值僅全權，task_c95dbe21 Stage 2a）
  */
-function archiveRequirement(adminId, body, scope) {
+function archiveRequirement_(adminId, body, scope) {
   if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');
 
   const lock = LockService.getScriptLock();
@@ -319,7 +319,7 @@ function archiveRequirement(adminId, body, scope) {
  * body 必填：sourceYear（來源學年度，如 114）
  * body 選填：targetYear（目標學年度，預設 sourceYear + 1）
  */
-function renewRequirements(adminId, body) {
+function renewRequirements_(adminId, body) {
   const sourceYear = Number(body.sourceYear);
   if (!sourceYear) return _err('MISSING_SOURCE_YEAR');
   const targetYear = body.targetYear ? Number(body.targetYear) : sourceYear + 1;
@@ -411,7 +411,7 @@ function renewRequirements(adminId, body) {
       newIds.push(requirementId);
     });
 
-    // 補齊寬度：理由同 addRequirement()（R-2），新列已用新版 schema 長度寫入，
+    // 補齊寬度：理由同 addRequirement_()（R-2），新列已用新版 schema 長度寫入，
     // 若舊列仍是舊欄寬會造成 ragged array
     const W = Math.max(schema.keys.length, allRows[0].length);
     const rows = allRows.map(r => { const a = r.slice(); while (a.length < W) a.push(''); return a; });

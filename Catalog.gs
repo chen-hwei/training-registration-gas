@@ -3,7 +3,7 @@
 // ── Level 1（教師端） ──
 
 /** 取得所有 ACTIVE 狀態的研習課程清單 */
-function getCatalog() {
+function getCatalog_() {
   return parseSheetData(_getCatalogSheet())
     .filter(c => c.status === 'ACTIVE')
     .map(c => ({
@@ -17,12 +17,12 @@ function getCatalog() {
 
 /**
  * 管理端研習目錄清單（task_c95dbe21 Stage 2a，2e／Q-a）
- * N-1：直接重用 getCatalog()（ACTIVE 篩選＋hours／isRequired 正規化），全權管理者回傳與其完全相同；
+ * N-1：直接重用 getCatalog_()（ACTIVE 篩選＋hours／isRequired 正規化），全權管理者回傳與其完全相同；
  * 非全權只回「所掛任務 owner ∈ scope」的課程，未掛任務者僅全權可見。
  * 教師端共用路由 v1/getCatalog 不動（教師端不可受處室過濾影響）。
  */
-function getCatalogAdmin(scope) {
-  const list = getCatalog();
+function getCatalogAdmin_(scope) {
+  const list = getCatalog_();
   if (_isAllScope_(scope)) return list;
   const index = _buildOwnerIndex_(list);
   // task_40e96378 Stage 1b：處室 ∪ TASK:（任務管理者看得到掛在自己系列任務下的課程）
@@ -35,7 +35,7 @@ function getCatalogAdmin(scope) {
  * （B-4：課程若掛任務，視同該任務的處室資產；task_c95dbe21 R-1：非全權不掛任務即 FORBIDDEN，
  * 原條件在 requirementId 為空時整段跳過，光改 _inScope_ 擋不住）
  */
-function addCatalog(userId, body, scope) {
+function addCatalog_(userId, body, scope) {
   if (!body.title)  return _err('MISSING_TITLE');
   if (!body.hours)  return _err('MISSING_HOURS');
 
@@ -87,10 +87,10 @@ function addCatalog(userId, body, scope) {
  * 編輯研習課程（不可修改 catalogId、createdBy、createdAt、status）
  * scope 限制下，改前 requirementId 與改後 requirementId 對應的 owner 皆須 ∈ scope
  * （空值僅全權可過，task_c95dbe21 Stage 2a：非全權改成不掛任務即 FORBIDDEN）
- * （B-4：requirementId 改綁與 editRequirement 的 owner 改前／改後同型，防止把課程從
+ * （B-4：requirementId 改綁與 editRequirement_ 的 owner 改前／改後同型，防止把課程從
  * A 處室任務改掛到 B 處室繞過權限）
  */
-function editCatalog(userId, body, scope) {
+function editCatalog_(userId, body, scope) {
   if (!body.catalogId) return _err('MISSING_CATALOG_ID');
 
   const sheet  = _getCatalogSheet();
@@ -145,7 +145,7 @@ function editCatalog(userId, body, scope) {
  * 封存研習課程（狀態設為 ARCHIVED，不實體刪除）
  * scope 限制下，課程現有 requirementId 對應的 owner 須 ∈ scope（B-4 同型；空值僅全權，task_c95dbe21 Stage 2a）
  */
-function archiveCatalog(body, scope) {
+function archiveCatalog_(body, scope) {
   if (!body.catalogId) return _err('MISSING_CATALOG_ID');
 
   const sheet  = _getCatalogSheet();
