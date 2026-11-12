@@ -299,6 +299,7 @@ function _isAllScope_(scope) {
  * （task_c95dbe21 Stage 2a：原「空值＝全體可見」改制，Q3 裁示）
  */
 function _inScope_(owner, scope) {
+  scope = _normalizeScope_(scope);  // task_52660e35 損-15：防未正規化字串走子字串比對
   if (!owner) return _isAllScope_(scope);
   return _isAllScope_(scope) || scope.indexOf(owner) !== -1;
 }
@@ -446,6 +447,7 @@ function _resolveRecordOwner_(item, index) {
  * - 「新增任務」「封存任務」「改主責處室」維持處室層級，呼叫端改用 _inScope_()，不走本函式
  */
 function _inScopeItem_(owner, seriesId, scope) {
+  scope = _normalizeScope_(scope);  // task_52660e35 損-15：防未正規化字串走子字串比對
   if (_isAllScope_(scope)) return true;
   if (owner && scope.indexOf(owner) !== -1) return true;
   return !!seriesId && scope.indexOf('TASK:' + seriesId) !== -1;

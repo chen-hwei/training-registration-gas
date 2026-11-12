@@ -26,19 +26,6 @@ function include(filename) {
   return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
 }
 
-function doPost(e) {
-  try {
-    const payload = JSON.parse(e.postData.contents);
-    return ContentService
-      .createTextOutput(JSON.stringify(handleRequest(payload)))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
 // ==================== 路由分流（handleRequest） ====================
 
 // 僅全權管理者（scope 含 "ALL" 或未設 training_scope）可執行的路由（task_6e2d40af Stage B）
@@ -77,7 +64,9 @@ function handleRequest(payload) {
     const { token, body } = payload || {};
     action = (payload || {}).action;
 
-    if (!action) return _err_('MISSING_ACTION');
+    if (!action || typeof action !== 'string') return _err_('MISSING_ACTION');
+    // task_52660e35 損-08：token 只接受字串（或未帶），避免非字串真值讓 startsWith 拋錯
+    if (token !== undefined && token !== null && typeof token !== 'string') return _err_('TOKEN_EXPIRED');
 
     // ── 公開路由（無需 Token）──
     if (action === 'train/getUserName') {
@@ -178,7 +167,10 @@ function handleRequest(payload) {
       default: return _err_('UNKNOWN_ACTION');
     }
   } catch (err) {
-    _logOp_(userId, 'ERROR_' + (action || 'UNKNOWN'), err.message);
+    // task_52660e35 損-08：通過身分驗證前（userId 空）的例外不寫五系統共用 AuditLog，
+    // 避免匿名者以自填 action 灌入稽核表；改記本專案執行紀錄
+    if (userId) _logOp_(userId, 'ERROR_' + (action || 'UNKNOWN'), err.message);
+    else Logger.log('[handleRequest] 未驗證請求例外 action=' + String(action).slice(0, 60) + '：' + err.message);
     return { success: false, error: err.message };
   }
 }
