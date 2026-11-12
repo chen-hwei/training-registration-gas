@@ -115,16 +115,16 @@ const SHEET_SCHEMA = {
 
 // ==================== 工作表存取輔助 ====================
 
-function _getTrainingSheet(sheetName) {
+function _getTrainingSheet_(sheetName) {
   const ss = SpreadsheetApp.openById(getTrainingSsId_());
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) throw new Error('工作表不存在：' + sheetName);
   return sheet;
 }
 
-function _getCatalogSheet()      { return _getTrainingSheet(SHEET_SCHEMA.TRAINING_CATALOG.name);     }
-function _getRecordSheet()       { return _getTrainingSheet(SHEET_SCHEMA.TRAINING_RECORD.name);      }
-function _getRequirementSheet()  { return _getTrainingSheet(SHEET_SCHEMA.TRAINING_REQUIREMENT.name); }
+function _getCatalogSheet_()      { return _getTrainingSheet_(SHEET_SCHEMA.TRAINING_CATALOG.name);     }
+function _getRecordSheet_()       { return _getTrainingSheet_(SHEET_SCHEMA.TRAINING_RECORD.name);      }
+function _getRequirementSheet_()  { return _getTrainingSheet_(SHEET_SCHEMA.TRAINING_REQUIREMENT.name); }
 
 // ==================== 資料讀寫工具 ====================
 
@@ -132,7 +132,7 @@ function _getRequirementSheet()  { return _getTrainingSheet(SHEET_SCHEMA.TRAININ
  * 將工作表資料（不含標題列）依 SHEET_SCHEMA 解析為英文 Key 的物件陣列
  * 以工作表名稱自動比對 SHEET_SCHEMA
  */
-function parseSheetData(sheet) {
+function parseSheetData_(sheet) {
   const schema = SHEET_SCHEMA[sheet.getName()];
   if (!schema) throw new Error('SHEET_SCHEMA 找不到：' + sheet.getName());
   const data = sheet.getDataRange().getValues();
@@ -392,12 +392,12 @@ function auditTrainingScopes() {
 function _buildOwnerIndex_(preReadCatalog, preReadReq) {
   const reqOwner  = {};
   const reqSeries = {};  // task_40e96378 Stage 1b：任務編號 → 任務系列代號，供 TASK: 授權判定
-  (preReadReq || parseSheetData(_getRequirementSheet())).forEach(r => {
+  (preReadReq || parseSheetData_(_getRequirementSheet_())).forEach(r => {
     reqOwner[r.requirementId]  = String(r.owner || '').trim();
     reqSeries[r.requirementId] = String(r.seriesId || '').trim();
   });
   const catReq = {};
-  const catalogRows = preReadCatalog || parseSheetData(_getCatalogSheet());
+  const catalogRows = preReadCatalog || parseSheetData_(_getCatalogSheet_());
   catalogRows.forEach(c => {
     catReq[c.catalogId] = String(c.requirementId || '').trim();
   });
@@ -465,7 +465,7 @@ function _statusRank_(status) {
 
 /**
  * 研習日期嚴格解析：只接受 yyyy/M/d 與 yyyy-MM-dd，年 2000～2100、月 1～12、日 1～31，其餘一律 null。
- * trainingDate 寫入時為斜線（Record.gs 正規化），Sheets 判讀為日期後 parseSheetData 讀出為破折號；
+ * trainingDate 寫入時為斜線（Record.gs 正規化），Sheets 判讀為日期後 parseSheetData_ 讀出為破折號；
  * 在鎖內直接讀 getValues() 時可能拿到 Date 物件，先以 Asia/Taipei 轉字串再解析。
  * ⚠️ 2c 建議與 2d 改歸屬的學年判定一律用本函式，禁止用 toAcademicYear_()——
  * 後者解析失敗時回傳當前學年，壞日期會靜默通過（task_f4b8c2d1 R-5 同型）。
@@ -496,7 +496,7 @@ function _academicYearOfDate_(p) {
  * @param {number} padLen  - 序號補零至幾位
  * @param {number} idColIdx - ID 欄在 schema.keys 中的 index（即欄的 0-based 位置）
  */
-function _generateSequentialId(allRows, prefix, padLen, idColIdx) {
+function _generateSequentialId_(allRows, prefix, padLen, idColIdx) {
   let maxSeq = 0;
   for (let i = 1; i < allRows.length; i++) {
     const id = String(allRows[i][idColIdx] || '');
@@ -508,16 +508,16 @@ function _generateSequentialId(allRows, prefix, padLen, idColIdx) {
   return prefix + String(maxSeq + 1).padStart(padLen, '0');
 }
 
-function _generateCatalogId(allRows) {
+function _generateCatalogId_(allRows) {
   const year = String(new Date().getFullYear());
   const idColIdx = SHEET_SCHEMA.TRAINING_CATALOG.keys.indexOf('catalogId');
-  return _generateSequentialId(allRows, 'C' + year, 4, idColIdx);
+  return _generateSequentialId_(allRows, 'C' + year, 4, idColIdx);
 }
 
-function _generateRecordId(allRows) {
+function _generateRecordId_(allRows) {
   const year = String(new Date().getFullYear());
   const idColIdx = SHEET_SCHEMA.TRAINING_RECORD.keys.indexOf('recordId');
-  return _generateSequentialId(allRows, 'R' + year, 6, idColIdx);
+  return _generateSequentialId_(allRows, 'R' + year, 6, idColIdx);
 }
 
 /**
@@ -525,10 +525,10 @@ function _generateRecordId(allRows) {
  * @param {string[][]} allRows - getDataRange().getValues()
  * @param {number} academicYear - 台灣學年度（如 114）
  */
-function _generateRequirementId(allRows, academicYear) {
+function _generateRequirementId_(allRows, academicYear) {
   const prefix  = 'RQ' + String(academicYear);
   const idColIdx = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('requirementId');
-  return _generateSequentialId(allRows, prefix, 3, idColIdx);
+  return _generateSequentialId_(allRows, prefix, 3, idColIdx);
 }
 
 // 已發過的最高系列序號（Script Properties，task_40e96378 Stage 1b Y-3 裁示 A）：
@@ -571,13 +571,13 @@ function _formatSeriesId_(seq) {
  * 回傳目前台灣學年度（民國年）
  * 8月以後為新學年（例：2025/9 → 114學年度，2026/5 → 114學年度）
  */
-function _currentAcademicYear() {
+function _currentAcademicYear_() {
   const d = new Date();
   const rocYear = d.getFullYear() - 1911;
   return (d.getMonth() + 1) >= 8 ? rocYear : rocYear - 1;
 }
 
 /** 回傳台北時間的 ISO 格式 Timestamp */
-function _now() {
+function _now_() {
   return Utilities.formatDate(new Date(), 'Asia/Taipei', "yyyy-MM-dd'T'HH:mm:ss");
 }

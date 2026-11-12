@@ -9,9 +9,9 @@
  * @param {string} trainingDate  - 格式 'YYYY/M/D'
  * @param {string} courseTitle   - 課程名稱（用於建構標準化檔名）
  */
-function _saveFileToDrive(userId, base64, mimeType, originalName, trainingDate, courseTitle) {
-  const folder   = _getOrCreateUserFolder(userId, trainingDate);
-  const fileName = _buildFileName(userId, trainingDate, courseTitle, originalName);
+function _saveFileToDrive_(userId, base64, mimeType, originalName, trainingDate, courseTitle) {
+  const folder   = _getOrCreateUserFolder_(userId, trainingDate);
+  const fileName = _buildFileName_(userId, trainingDate, courseTitle, originalName);
   const blob     = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, fileName);
   const file     = folder.createFile(blob);
 
@@ -34,14 +34,14 @@ function _saveFileToDrive(userId, base64, mimeType, originalName, trainingDate, 
  * 取得或建立教師個人資料夾
  * 結構：研習證明根目錄 / {年份} / {txxxx}
  */
-function _getOrCreateUserFolder(userId, trainingDate) {
+function _getOrCreateUserFolder_(userId, trainingDate) {
   const year       = String(trainingDate).split('/')[0] || String(new Date().getFullYear());
   const root       = DriveApp.getFolderById(getTrainingDriveRootFolderId_());
-  const yearFolder = _getOrCreateSubFolder(root, year);
-  return _getOrCreateSubFolder(yearFolder, userId);
+  const yearFolder = _getOrCreateSubFolder_(root, year);
+  return _getOrCreateSubFolder_(yearFolder, userId);
 }
 
-function _getOrCreateSubFolder(parent, name) {
+function _getOrCreateSubFolder_(parent, name) {
   const it = parent.getFoldersByName(name);
   if (it.hasNext()) return it.next();
   return parent.createFolder(name);
@@ -51,7 +51,7 @@ function _getOrCreateSubFolder(parent, name) {
  * 建立標準化檔名：{年份}_{txxxx}_{課程名稱前20字}_{YYYYMMDD}.{副檔名}
  * 特殊字元統一替換為底線
  */
-function _buildFileName(userId, trainingDate, courseTitle, originalName) {
+function _buildFileName_(userId, trainingDate, courseTitle, originalName) {
   const parts   = String(trainingDate).split('/');
   const year    = parts[0] || String(new Date().getFullYear());
   const dateStr = year + String(parts[1] || '01').padStart(2, '0') + String(parts[2] || '01').padStart(2, '0');
@@ -68,7 +68,7 @@ function _buildFileName(userId, trainingDate, courseTitle, originalName) {
  * 用於 reuseFileId 驗證，防止偽造他人檔案 ID
  * @returns {any[]|null} 找到的資料列，否則 null
  */
-function _findRecordByFileId(allRows, fileId, userId) {
+function _findRecordByFileId_(allRows, fileId, userId) {
   const schema    = SHEET_SCHEMA.TRAINING_RECORD;
   const fileIdIdx = schema.keys.indexOf('fileId');
   const userIdIdx = schema.keys.indexOf('userId');

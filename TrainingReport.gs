@@ -33,9 +33,9 @@ function getIndicators_() {
     const props = PropertiesService.getScriptProperties();
     const raw   = props.getProperty(INDICATOR_RULES_KEY);
     const rules = raw ? JSON.parse(raw) : DEFAULT_INDICATORS_;
-    return _ok(rules);
+    return _ok_(rules);
   } catch (e) {
-    return _err('getIndicators 失敗：' + e.message);
+    return _err_('getIndicators 失敗：' + e.message);
   }
 }
 
@@ -43,7 +43,7 @@ function saveIndicator_(body) {
   try {
     const { id, label, patterns } = body || {};
     if (!id || !label || !Array.isArray(patterns) || patterns.length === 0)
-      return _err('id、label、patterns 為必填');
+      return _err_('id、label、patterns 為必填');
 
     const props = PropertiesService.getScriptProperties();
     const raw   = props.getProperty(INDICATOR_RULES_KEY);
@@ -55,23 +55,23 @@ function saveIndicator_(body) {
     else rules.push(entry);
 
     props.setProperty(INDICATOR_RULES_KEY, JSON.stringify(rules));
-    return _ok({ saved: entry });
+    return _ok_({ saved: entry });
   } catch (e) {
-    return _err('saveIndicator 失敗：' + e.message);
+    return _err_('saveIndicator 失敗：' + e.message);
   }
 }
 
 function deleteIndicator_(id) {
   try {
-    if (!id) return _err('id 為必填');
+    if (!id) return _err_('id 為必填');
     const props = PropertiesService.getScriptProperties();
     const raw   = props.getProperty(INDICATOR_RULES_KEY);
     const rules = raw ? JSON.parse(raw) : DEFAULT_INDICATORS_.slice();
     const next  = rules.filter(r => r.id !== id);
     props.setProperty(INDICATOR_RULES_KEY, JSON.stringify(next));
-    return _ok({ deleted: id });
+    return _ok_({ deleted: id });
   } catch (e) {
-    return _err('deleteIndicator 失敗：' + e.message);
+    return _err_('deleteIndicator 失敗：' + e.message);
   }
 }
 
@@ -136,7 +136,7 @@ function normalizeRow_(row, headers) {
 // ── 內部：學年度計算（月份 >= 8 為新學年；regex 取年月，不經 new Date 避免字串解析與時區地雷）──
 function toAcademicYear_(dateStr) {
   var m = String(dateStr || '').match(/(\d{4})[\/\-](\d{1,2})/);
-  if (!m) return _currentAcademicYear();
+  if (!m) return _currentAcademicYear_();
   var y = parseInt(m[1], 10) - 1911;
   return parseInt(m[2], 10) >= 8 ? y : y - 1;
 }
@@ -158,7 +158,7 @@ function detectSource_(rec) {
  */
 function snapshotTeacherRoster_(body) {
   try {
-    var academicYear = Number(body.academicYear || _currentAcademicYear());
+    var academicYear = Number(body.academicYear || _currentAcademicYear_());
     var rosterRows   = body.rosterRows || [];
     var overwrite    = body.overwrite  || false;
     var appendMode   = body.appendMode || false;
@@ -212,7 +212,7 @@ function snapshotTeacherRoster_(body) {
         sourceTag = 'hub';
         var hub2  = SpreadsheetApp.openById(getHubSpreadsheetId_());
         var cs2   = hub2.getSheetByName('UserStatusCache');
-        if (!cs2) return _err('Hub UserStatusCache 工作表不存在');
+        if (!cs2) return _err_('Hub UserStatusCache 工作表不存在');
         var cd2   = cs2.getDataRange().getValues();
         var ch2   = cd2[0];
         var nC2   = ch2.indexOf('name'), dC2 = ch2.indexOf('department');
@@ -233,7 +233,7 @@ function snapshotTeacherRoster_(body) {
       sheet.clearContents();
       sheet.getRange(1, 1, allData.length, 4).setValues(allData);
       _saveRosterSource_(academicYear, sourceTag, fileName, mergedRows.length);
-      return _ok({ academicYear: academicYear, snapshotCount: mergedRows.length, appended: true });
+      return _ok_({ academicYear: academicYear, snapshotCount: mergedRows.length, appended: true });
     }
 
     // ── 取代模式（overwrite 或 新建）──
@@ -260,7 +260,7 @@ function snapshotTeacherRoster_(body) {
       sourceTag = 'hub';
       var hub       = SpreadsheetApp.openById(getHubSpreadsheetId_());
       var cacheSheet = hub.getSheetByName('UserStatusCache');
-      if (!cacheSheet) return _err('Hub UserStatusCache 工作表不存在');
+      if (!cacheSheet) return _err_('Hub UserStatusCache 工作表不存在');
       var cacheData = cacheSheet.getDataRange().getValues();
       var ch        = cacheData[0];
       var nameCol   = ch.indexOf('name');
@@ -285,9 +285,9 @@ function snapshotTeacherRoster_(body) {
     sheet.clearContents();
     sheet.getRange(1, 1, allData.length, 4).setValues(allData);
     _saveRosterSource_(academicYear, sourceTag, fileName, newRows.length);
-    return _ok({ academicYear: academicYear, snapshotCount: newRows.length });
+    return _ok_({ academicYear: academicYear, snapshotCount: newRows.length });
   } catch (e) {
-    return _err('snapshotTeacherRoster 失敗：' + e.message);
+    return _err_('snapshotTeacherRoster 失敗：' + e.message);
   }
 }
 
@@ -310,9 +310,9 @@ function getRosterSources_() {
   try {
     var props = PropertiesService.getScriptProperties();
     var raw   = props.getProperty(ROSTER_SOURCES_KEY);
-    return _ok(raw ? JSON.parse(raw) : {});
+    return _ok_(raw ? JSON.parse(raw) : {});
   } catch (e) {
-    return _err('getRosterSources 失敗：' + e.message);
+    return _err_('getRosterSources 失敗：' + e.message);
   }
 }
 
@@ -345,9 +345,9 @@ function snapshotRosterBatch_(body) {
     });
 
     var failed = results.filter(function(r) { return !r.success; });
-    return _ok({ results: results, failedCount: failed.length });
+    return _ok_({ results: results, failedCount: failed.length });
   } catch (e) {
-    return _err('snapshotRosterBatch 失敗：' + e.message);
+    return _err_('snapshotRosterBatch 失敗：' + e.message);
   }
 }
 
@@ -374,10 +374,10 @@ function _detectAcademicYearFromDate_(dateStr) {
  */
 function importTrainingData_(body) {
   try {
-    var academicYear = Number(body.academicYear || _currentAcademicYear());
+    var academicYear = Number(body.academicYear || _currentAcademicYear_());
     var rows         = body.rows || [];
     var appendMode   = body.appendMode || false;
-    if (rows.length === 0) return _err('無匯入資料');
+    if (rows.length === 0) return _err_('無匯入資料');
 
     // 讀取 TeacherSnapshot 建立姓名集合（用於 unmatchedNames 偵測）
     var ss            = SpreadsheetApp.openById(getTrainingSsId_());
@@ -492,14 +492,14 @@ function importTrainingData_(body) {
     importSheet.getRange(1, 1, allData.length, keys.length).setValues(allData);
 
     clearStatsCache_(academicYear);  // 資料已更新，清除伺服器端統計快取
-    return _ok({
+    return _ok_({
       imported:           toWrite.length,
       duplicatesResolved: dedupeCount,
       skipped:            skipped,
       unmatchedNames:     unmatchedNames
     });
   } catch (e) {
-    return _err('importTrainingData 失敗：' + e.message);
+    return _err_('importTrainingData 失敗：' + e.message);
   }
 }
 
@@ -613,8 +613,8 @@ function debugRequirementsAndDateFilter() {
   var TEST_USER_ID = 't1180';   // ← 改成您的工號
 
   Logger.log('=== Step 1：確認 audienceRules 是否有寫入 ===');
-  var reqSheet = _getRequirementSheet();
-  var reqs = parseSheetData(reqSheet).filter(function(r) { return r.status === 'ACTIVE' && Number(r.academicYear) === 114; });
+  var reqSheet = _getRequirementSheet_();
+  var reqs = parseSheetData_(reqSheet).filter(function(r) { return r.status === 'ACTIVE' && Number(r.academicYear) === 114; });
   reqs.forEach(function(r) {
     Logger.log('requirementId:' + r.requirementId + ' | name:' + r.name
       + ' | requiredHours:' + r.requiredHours
@@ -729,18 +729,18 @@ function getStatsCache_(academicYear, mode) {
     var key   = _statsCacheKey_(academicYear, mode);
     var ss    = SpreadsheetApp.openById(getTrainingSsId_());
     var sheet = ss.getSheetByName(STATS_CACHE_SHEET);
-    if (!sheet) return _ok(null);
+    if (!sheet) return _ok_(null);
     var rows = sheet.getDataRange().getValues();
     // 標題列：cacheKey | cachedAt | data
     for (var i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === key) {
         var parsed = JSON.parse(String(rows[i][2] || 'null'));
-        return _ok({ statsData: parsed, cachedAt: String(rows[i][1]) });
+        return _ok_({ statsData: parsed, cachedAt: String(rows[i][1]) });
       }
     }
-    return _ok(null);
+    return _ok_(null);
   } catch (e) {
-    return _ok(null);  // 快取讀取失敗不影響主流程
+    return _ok_(null);  // 快取讀取失敗不影響主流程
   }
 }
 
@@ -799,7 +799,7 @@ function _statsCacheKey_(academicYear, mode) {
 function batchCalcStats_(body) {
   try {
     var combinations = body.combinations || [];
-    if (combinations.length === 0) return _err('combinations 為必填');
+    if (combinations.length === 0) return _err_('combinations 為必填');
     var results = [];
     combinations.forEach(function(c) {
       var res = calcStats_(Number(c.academicYear), c.mode);  // 內含 saveStatsCache_()
@@ -811,9 +811,9 @@ function batchCalcStats_(body) {
       });
     });
     var failed = results.filter(function(r) { return !r.success; });
-    return _ok({ results: results, failedCount: failed.length });
+    return _ok_({ results: results, failedCount: failed.length });
   } catch (e) {
-    return _err('batchCalcStats 失敗：' + e.message);
+    return _err_('batchCalcStats 失敗：' + e.message);
   }
 }
 
@@ -825,13 +825,13 @@ function batchCalcStats_(body) {
  */
 function calcStats_(academicYear, mode) {
   try {
-    academicYear = Number(academicYear || _currentAcademicYear());
+    academicYear = Number(academicYear || _currentAcademicYear_());
     mode = (mode === 'year') ? 'year' : 'cumulative';  // 預設 cumulative
     var ss = SpreadsheetApp.openById(getTrainingSsId_());
 
     // Step 1：讀取 TeacherSnapshot，建立教師 Map
     var snapSheet = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
-    if (!snapSheet) return _err('TeacherSnapshot 工作表不存在，請先執行名冊快照');
+    if (!snapSheet) return _err_('TeacherSnapshot 工作表不存在，請先執行名冊快照');
     var snapData  = snapSheet.getDataRange().getValues();
     var sHdr      = snapData[0];
     var sYearCol  = sHdr.indexOf('academicYear');
@@ -918,9 +918,9 @@ function calcStats_(academicYear, mode) {
 
     var resultData = { academicYear: academicYear, mode: mode, stats: result, totals: { school: total, hs: totalHS, jh: totalJH } };
     saveStatsCache_(academicYear, mode, resultData);  // 同步寫入伺服器快取
-    return _ok(resultData);
+    return _ok_(resultData);
   } catch (e) {
-    return _err('calcStats 失敗：' + e.message);
+    return _err_('calcStats 失敗：' + e.message);
   }
 }
 
@@ -928,13 +928,13 @@ function calcStats_(academicYear, mode) {
 
 function exportDoubleColumnCSV_(academicYear) {
   try {
-    academicYear = Number(academicYear || _currentAcademicYear());
+    academicYear = Number(academicYear || _currentAcademicYear_());
     var statsRes = calcStats_(academicYear);
     if (!statsRes.success) return statsRes;
 
     var ss        = SpreadsheetApp.openById(getTrainingSsId_());
     var snapSheet = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
-    if (!snapSheet) return _err('TeacherSnapshot 不存在');
+    if (!snapSheet) return _err_('TeacherSnapshot 不存在');
 
     // 讀取該學年度教師清單（保持原始順序）
     var snapData  = snapSheet.getDataRange().getValues();
@@ -1023,9 +1023,9 @@ function exportDoubleColumnCSV_(academicYear) {
     var file   = folder.createFile(fileName, csvContent, MimeType.PLAIN_TEXT);
     file.setName(fileName);
 
-    return _ok({ downloadUrl: file.getDownloadUrl(), fileName: fileName });
+    return _ok_({ downloadUrl: file.getDownloadUrl(), fileName: fileName });
   } catch (e) {
-    return _err('exportDoubleColumnCSV 失敗：' + e.message);
+    return _err_('exportDoubleColumnCSV 失敗：' + e.message);
   }
 }
 
@@ -1033,9 +1033,9 @@ function exportDoubleColumnCSV_(academicYear) {
 
 function generateGoogleDoc_(academicYear) {
   try {
-    academicYear = Number(academicYear || _currentAcademicYear());
+    academicYear = Number(academicYear || _currentAcademicYear_());
     var templateId = _getReportTemplateId_();
-    if (!templateId) return _err('公文範本尚未建立，請於 GAS 編輯器執行 createReportDocTemplate()');
+    if (!templateId) return _err_('公文範本尚未建立，請於 GAS 編輯器執行 createReportDocTemplate()');
 
     var statsRes = calcStats_(academicYear);
     if (!statsRes.success) return statsRes;
@@ -1136,9 +1136,9 @@ function generateGoogleDoc_(academicYear) {
     }
 
     doc.saveAndClose();
-    return _ok({ docUrl: newFile.getUrl(), docName: docName });
+    return _ok_({ docUrl: newFile.getUrl(), docName: docName });
   } catch (e) {
-    return _err('generateGoogleDoc 失敗：' + e.message);
+    return _err_('generateGoogleDoc 失敗：' + e.message);
   }
 }
 
@@ -1158,13 +1158,13 @@ function _getPrincipalName_() {
 function getReportSettings_() {
   try {
     var templateId = _getReportTemplateId_();
-    return _ok({
+    return _ok_({
       principalName: _getPrincipalName_(),
       templateId:    templateId,
       templateUrl:   templateId ? 'https://docs.google.com/document/d/' + templateId + '/edit' : ''
     });
   } catch (e) {
-    return _err('getReportSettings 失敗：' + e.message);
+    return _err_('getReportSettings 失敗：' + e.message);
   }
 }
 
@@ -1172,12 +1172,12 @@ function getReportSettings_() {
 function saveReportSettings_(body) {
   try {
     var name = String((body || {}).principalName || '').trim();
-    if (!name) return _err('校長姓名為必填');
-    if (name.length > 20) return _err('校長姓名長度不可超過 20 字');
+    if (!name) return _err_('校長姓名為必填');
+    if (name.length > 20) return _err_('校長姓名長度不可超過 20 字');
     PropertiesService.getScriptProperties().setProperty(PRINCIPAL_NAME_KEY, name);
-    return _ok({ principalName: name });
+    return _ok_({ principalName: name });
   } catch (e) {
-    return _err('saveReportSettings 失敗：' + e.message);
+    return _err_('saveReportSettings 失敗：' + e.message);
   }
 }
 
@@ -1246,7 +1246,7 @@ function createReportDocTemplate() {
  */
 function overwriteSnapshotFromHub(academicYear) {
   _assertManualRunByDeployer_('overwriteSnapshotFromHub');  // task_52660e35 損-06：維運函式禁止前端直呼
-  var year = Number(academicYear || _currentAcademicYear());
+  var year = Number(academicYear || _currentAcademicYear_());
   var res  = snapshotTeacherRoster_({ academicYear: year, rosterRows: [], overwrite: true });
   Logger.log(JSON.stringify(res));
   return res;
@@ -1450,12 +1450,12 @@ function saveIdentityRules_(body) {
   try {
     var rules = (body || {}).rules;
     if (!Array.isArray(rules) || rules.length === 0)
-      return _err('rules 陣列為必填且不可為空');
+      return _err_('rules 陣列為必填且不可為空');
     PropertiesService.getScriptProperties()
       .setProperty(IDENTITY_RULES_KEY_, JSON.stringify(rules));
-    return _ok({ saved: rules.length });
+    return _ok_({ saved: rules.length });
   } catch (e) {
-    return _err('saveIdentityRules 失敗：' + e.message);
+    return _err_('saveIdentityRules 失敗：' + e.message);
   }
 }
 
@@ -1474,7 +1474,7 @@ function getStatsSettings_() {
     var uidCol    = hdr.indexOf('userId');
     var jobCol    = hdr.indexOf('jobPrimary');
     var statusCol = hdr.indexOf('status');
-    if (statusCol === -1) return _err('Hub.UserStatusCache 找不到 status 欄，無法計算統計母數。');
+    if (statusCol === -1) return _err_('Hub.UserStatusCache 找不到 status 欄，無法計算統計母數。');
     var ACTIVE    = ['在職', '轉調'];
 
     var countExcluding = 0;  // 開關關閉時的應受訓人數
@@ -1491,14 +1491,14 @@ function getStatsSettings_() {
       if (!_isTrainingTracked_(job, true)) permanentExcluded++;
     });
 
-    return _ok({
+    return _ok_({
       includePartTime: includePartTime,
       countExcluding: countExcluding,
       countIncluding: countIncluding,
       permanentExcluded: permanentExcluded
     });
   } catch (e) {
-    return _err('getStatsSettings 失敗：' + e.message);
+    return _err_('getStatsSettings 失敗：' + e.message);
   }
 }
 
@@ -1508,9 +1508,9 @@ function saveStatsSettings_(body) {
     var includePartTime = (body || {}).includePartTime === true;
     PropertiesService.getScriptProperties()
       .setProperty(STATS_PARTTIME_KEY, includePartTime ? 'true' : 'false');
-    return _ok({ includePartTime: includePartTime });
+    return _ok_({ includePartTime: includePartTime });
   } catch (e) {
-    return _err('saveStatsSettings 失敗：' + e.message);
+    return _err_('saveStatsSettings 失敗：' + e.message);
   }
 }
 
@@ -1531,9 +1531,9 @@ function resetIdentityRulesToDefault() {
  */
 function getIdentityRules_() {
   try {
-    return _ok(_loadIdentityRules_());
+    return _ok_(_loadIdentityRules_());
   } catch (e) {
-    return _err('getIdentityRules 失敗：' + e.message);
+    return _err_('getIdentityRules 失敗：' + e.message);
   }
 }
 
@@ -1588,12 +1588,12 @@ function _importDateTs_(rawDate) {
  */
 function calcRequirementStats_(body, scope) {
   try {
-    var academicYear = Number((body || {}).academicYear || _currentAcademicYear());
+    var academicYear = Number((body || {}).academicYear || _currentAcademicYear_());
 
     // ── Step 1：從 Hub.UserStatusCache 讀取在職人員 ──
     var hub      = SpreadsheetApp.openById(getHubSpreadsheetId_());
     var uscSheet = hub.getSheetByName('UserStatusCache');
-    if (!uscSheet) return _err('Hub.UserStatusCache 工作表不存在');
+    if (!uscSheet) return _err_('Hub.UserStatusCache 工作表不存在');
 
     var uscData = uscSheet.getDataRange().getValues();
     var uHdr    = uscData[0];
@@ -1640,9 +1640,9 @@ function calcRequirementStats_(body, scope) {
     var allUsers = Object.keys(userMap).map(function(k) { return userMap[k]; });
 
     // ── Step 2：讀取 TRAINING_REQUIREMENT ──
-    var reqSheet     = _getRequirementSheet();
+    var reqSheet     = _getRequirementSheet_();
     var isAll = _isAllScope_(scope);
-    var requirements = parseSheetData(reqSheet)
+    var requirements = parseSheetData_(reqSheet)
       .filter(function(r) { return r.status === 'ACTIVE' && Number(r.academicYear) === academicYear; })
       // Stage 3 任務層過濾：非全權只留 owner ∈ scope（空值 owner 僅全權）；
       // task_40e96378 Stage 1b 起另含 TASK:<seriesId> 授權的任務
@@ -1650,11 +1650,11 @@ function calcRequirementStats_(body, scope) {
         return isAll || _inScopeItem_(String(r.owner || '').trim(), String(r.seriesId || '').trim(), scope);
       });
 
-    if (requirements.length === 0) return _ok({ academicYear: academicYear, requirements: [] });
+    if (requirements.length === 0) return _ok_({ academicYear: academicYear, requirements: [] });
 
     // ── Step 3：讀取 TRAINING_RECORD（APPROVED），建立 { userId_reqId → hours } ──
     var approvedMap = {};
-    parseSheetData(_getRecordSheet())
+    parseSheetData_(_getRecordSheet_())
       .filter(function(r) { return r.status === 'APPROVED' && r.requirementId; })
       .forEach(function(r) {
         var key = r.userId + '_' + r.requirementId;
@@ -1783,9 +1783,9 @@ function calcRequirementStats_(body, scope) {
       };
     });
 
-    return _ok({ academicYear: academicYear, requirements: result });
+    return _ok_({ academicYear: academicYear, requirements: result });
   } catch (e) {
-    return _err('calcRequirementStats 失敗：' + e.message);
+    return _err_('calcRequirementStats 失敗：' + e.message);
   }
 }
 
@@ -1853,7 +1853,7 @@ function _matchImportedToRequirements_(myName, academicYear) {
   var iSrCol  = iHdr.indexOf('source');    // 來源（全國/臺北市）
 
   // 讀取年度任務關鍵字（全部年度模式下不篩年度，讓跨年資料也能對應任務）
-  var requirements = parseSheetData(_getRequirementSheet())
+  var requirements = parseSheetData_(_getRequirementSheet_())
     .filter(function(r) {
       if (r.status !== 'ACTIVE') return false;
       return academicYear === null || Number(r.academicYear) === academicYear;
@@ -1918,21 +1918,21 @@ function getMyImportedRecords_(userId, body) {
   try {
     // academicYear 空字串或 0 → 全部年度（不篩選）
     var rawYear      = (body || {}).academicYear;
-    var academicYear = (rawYear === '' || rawYear === 0 || rawYear === '0') ? null : Number(rawYear || _currentAcademicYear());
+    var academicYear = (rawYear === '' || rawYear === 0 || rawYear === '0') ? null : Number(rawYear || _currentAcademicYear_());
 
     var userInfo = _getHubUserInfo_(userId);
-    if (!userInfo) return _err('找不到此帳號對應的姓名');
+    if (!userInfo) return _err_('找不到此帳號對應的姓名');
 
     var matched = _matchImportedToRequirements_(userInfo.myName, academicYear);
 
-    return _ok({
+    return _ok_({
       records:     matched.records,
       hasSameName: userInfo.hasSameName,
       myName:      userInfo.myName,
       academicYear: academicYear
     });
   } catch (e) {
-    return _err('getMyImportedRecords 失敗：' + e.message);
+    return _err_('getMyImportedRecords 失敗：' + e.message);
   }
 }
 
@@ -1945,9 +1945,9 @@ function getMyImportedRecords_(userId, body) {
 function checkImportedBeforeSubmit_(userId, body) {
   try {
     var requirementId = (body || {}).requirementId;
-    if (!requirementId) return _err('requirementId 為必填');
+    if (!requirementId) return _err_('requirementId 為必填');
 
-    var academicYear = Number((body || {}).academicYear || _currentAcademicYear());
+    var academicYear = Number((body || {}).academicYear || _currentAcademicYear_());
 
     // 取得教師姓名
     var hub      = SpreadsheetApp.openById(getHubSpreadsheetId_());
@@ -1963,16 +1963,16 @@ function checkImportedBeforeSubmit_(userId, body) {
         break;
       }
     }
-    if (!myName) return _ok({ matched: false, records: [], totalHours: 0 });
+    if (!myName) return _ok_({ matched: false, records: [], totalHours: 0 });
 
     // 取得此任務的關鍵字與應達時數
-    var reqData = parseSheetData(_getRequirementSheet())
+    var reqData = parseSheetData_(_getRequirementSheet_())
       .find(function(r) { return r.requirementId === requirementId; });
-    if (!reqData) return _ok({ matched: false, records: [], totalHours: 0 });
+    if (!reqData) return _ok_({ matched: false, records: [], totalHours: 0 });
 
     var keywords = [];
     try { keywords = reqData.matchKeywords ? JSON.parse(reqData.matchKeywords) : []; } catch (e) {}
-    if (keywords.length === 0) return _ok({ matched: false, records: [], totalHours: 0 });
+    if (keywords.length === 0) return _ok_({ matched: false, records: [], totalHours: 0 });
 
     // 硬性計算區間：以任務所屬學年度＋semesterSplit 推算（與達成率計算一致）
     var win = _requirementWindow_(reqData.academicYear, reqData.semesterSplit);
@@ -1980,7 +1980,7 @@ function checkImportedBeforeSubmit_(userId, body) {
     // 查 ImportedData
     var ss          = SpreadsheetApp.openById(getTrainingSsId_());
     var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
-    if (!importSheet) return _ok({ matched: false, records: [], totalHours: 0 });
+    if (!importSheet) return _ok_({ matched: false, records: [], totalHours: 0 });
 
     var iData  = importSheet.getDataRange().getValues();
     var iHdr   = iData[0];
@@ -2017,7 +2017,7 @@ function checkImportedBeforeSubmit_(userId, body) {
     var totalHours    = matched.reduce(function(s, r) { return s + r.hours; }, 0);
     var requiredHours = Number(reqData.requiredHours) || 0;
 
-    return _ok({
+    return _ok_({
       matched:       matched.length > 0,
       records:       matched,
       totalHours:    totalHours,
@@ -2025,6 +2025,6 @@ function checkImportedBeforeSubmit_(userId, body) {
       requirementName: reqData.name
     });
   } catch (e) {
-    return _err('checkImportedBeforeSubmit 失敗：' + e.message);
+    return _err_('checkImportedBeforeSubmit 失敗：' + e.message);
   }
 }

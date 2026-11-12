@@ -2,7 +2,7 @@
 
 /** 取得教師自己的所有登錄紀錄 */
 function getMyRecords_(userId) {
-  return parseSheetData(_getRecordSheet())
+  return parseSheetData_(_getRecordSheet_())
     .filter(r => r.userId === userId)
     .map(r => ({
       ...r,
@@ -21,29 +21,29 @@ function getMyRecords_(userId) {
  * 選填：catalogId（自訂課程時省略）
  */
 function submitRecord_(userId, body) {
-  if (!body.title)        return _err('MISSING_TITLE');
-  if (!body.trainingDate) return _err('MISSING_TRAINING_DATE');
+  if (!body.title)        return _err_('MISSING_TITLE');
+  if (!body.trainingDate) return _err_('MISSING_TRAINING_DATE');
   // 後端寬鬆驗證：只擋年份離譜的值（前端已擋格式，此處防繞過前端直呼 API）
   const _tdMatch = String(body.trainingDate).match(/^(\d+)[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
   if (!_tdMatch || Number(_tdMatch[1]) < 2000 || Number(_tdMatch[1]) > 2100) {
-    return _err('INVALID_TRAINING_DATE');
+    return _err_('INVALID_TRAINING_DATE');
   }
   // 正規化為斜線格式：Drive.gs 的資料夾／檔名邏輯只認 split('/')，若放行破折號格式
   // （如 '2026-08-27'）會被當成整串塞進年份欄位，產生孤兒資料夾——這正是本任務要消滅的問題
   body.trainingDate = Number(_tdMatch[1]) + '/' + Number(_tdMatch[2]) + '/' + Number(_tdMatch[3]);
   if (!body.reuseFileId && (!body.base64 || !body.mimeType || !body.fileName)) {
-    return _err('MISSING_FILE_DATA');
+    return _err_('MISSING_FILE_DATA');
   }
 
   const lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
   } catch (_) {
-    return _err('系統正忙，請稍後再試（約 10 秒後重新送出）。');
+    return _err_('系統正忙，請稍後再試（約 10 秒後重新送出）。');
   }
 
   try {
-    const sheet   = _getRecordSheet();
+    const sheet   = _getRecordSheet_();
     const allRows = sheet.getDataRange().getValues();
     const schema  = SHEET_SCHEMA.TRAINING_RECORD;
 
@@ -51,16 +51,16 @@ function submitRecord_(userId, body) {
 
     if (body.reuseFileId) {
       // 驗證舊 fileId 確實屬於此教師，防止偽造他人檔案 ID
-      const prevRow = _findRecordByFileId(allRows, body.reuseFileId, userId);
-      if (!prevRow) return _err('找不到原始檔案，請重新上傳。');
+      const prevRow = _findRecordByFileId_(allRows, body.reuseFileId, userId);
+      if (!prevRow) return _err_('找不到原始檔案，請重新上傳。');
       fileId   = body.reuseFileId;
       fileName = body.fileName || prevRow[schema.keys.indexOf('fileName')];
     } else {
-      fileId   = _saveFileToDrive(userId, body.base64, body.mimeType, body.fileName, body.trainingDate, body.title);
+      fileId   = _saveFileToDrive_(userId, body.base64, body.mimeType, body.fileName, body.trainingDate, body.title);
       fileName = body.fileName;
     }
 
-    const recordId = _generateRecordId(allRows);
+    const recordId = _generateRecordId_(allRows);
     const newRecord = {
       recordId,
       userId,
@@ -76,7 +76,7 @@ function submitRecord_(userId, body) {
       reviewedBy:    '',
       reviewNote:    '',
       reviewedAt:    '',
-      submittedAt:   _now(),
+      submittedAt:   _now_(),
       resubmitOf:    String(body.resubmitOf    || ''),
       requirementId: String(body.requirementId || '')
     };
@@ -95,12 +95,12 @@ function submitRecord_(userId, body) {
 
 /** 刪除自己的 PENDING 紀錄（僅允許刪除尚未進入審核的紀錄） */
 function deleteRecord_(userId, body) {
-  if (!body.recordId) return _err('MISSING_RECORD_ID');
+  if (!body.recordId) return _err_('MISSING_RECORD_ID');
 
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const sheet   = _getRecordSheet();
+    const sheet   = _getRecordSheet_();
     const schema  = SHEET_SCHEMA.TRAINING_RECORD;
     const data    = sheet.getDataRange().getValues();
     const header  = data[0];
@@ -110,8 +110,8 @@ function deleteRecord_(userId, body) {
     const statusIdx = schema.keys.indexOf('status');
 
     const target = rows.find(r => r[idIdx] === body.recordId && r[userIdx] === userId);
-    if (!target)                       return _err('RECORD_NOT_FOUND');
-    if (target[statusIdx] !== 'PENDING') return _err('只能刪除「待審核」狀態的紀錄。');
+    if (!target)                       return _err_('RECORD_NOT_FOUND');
+    if (target[statusIdx] !== 'PENDING') return _err_('只能刪除「待審核」狀態的紀錄。');
 
     const newData = [header, ...rows.filter(r => !(r[idIdx] === body.recordId && r[userIdx] === userId))];
     sheet.clearContents();

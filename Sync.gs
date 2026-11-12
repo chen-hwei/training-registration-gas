@@ -10,12 +10,12 @@
  * 逐教師迭代時只做記憶體比對，禁止對每位教師重新讀表或重算區間。
  */
 function syncTrainingStats() {
-  const academicYear = _currentAcademicYear();
+  const academicYear = _currentAcademicYear_();
 
   // ── Step 1：當學年 ACTIVE 任務，預先算好關鍵字、硬性區間與 audienceRules（迴圈外算一次）──
   // baseRequiredHours 與 audienceRules 口徑須與 Requirement.gs 的 getRequirements_ 一致：
   // 若任務本身 requiredHours 為 0 但有 audienceRules，改依教師身分分類覆寫實際應達時數
-  const reqDefs = parseSheetData(_getRequirementSheet())
+  const reqDefs = parseSheetData_(_getRequirementSheet_())
     .filter(r => r.status === 'ACTIVE' && Number(r.academicYear) === academicYear)
     .map(r => {
       let keywords = [];
@@ -36,7 +36,7 @@ function syncTrainingStats() {
 
   // ── Step 2：課程 Hash Map：catalogId → isRequired（原「必修達成數」欄位語意，維持不變）──
   const catalogMap = {};
-  parseSheetData(_getCatalogSheet()).forEach(c => {
+  parseSheetData_(_getCatalogSheet_()).forEach(c => {
     catalogMap[c.catalogId] = c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE';
   });
 
@@ -45,7 +45,7 @@ function syncTrainingStats() {
   //   (b) { userId → 必修課程達成數 }（原邏輯：課程 isRequired 計數，全期間不分學年）──
   const approvedMap    = {};
   const requiredDoneMap = {};
-  parseSheetData(_getRecordSheet())
+  parseSheetData_(_getRecordSheet_())
     .filter(r => r.status === 'APPROVED')
     .forEach(r => {
       if (r.requirementId) {
@@ -115,7 +115,7 @@ function syncTrainingStats() {
     return VALID_DEPT.includes(d) ? d : '';
   }
 
-  const now      = _now();
+  const now      = _now_();
   const dataRows = [];
   cacheData.slice(1).forEach(row => {
     const uid = row[uidCol];

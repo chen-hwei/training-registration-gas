@@ -15,13 +15,13 @@
  */
 function getCatalogStats_(body, scope) {
   try {
-    const academicYear = Number((body || {}).academicYear || _currentAcademicYear());
+    const academicYear = Number((body || {}).academicYear || _currentAcademicYear_());
     const isAll = _isAllScope_(scope);
 
     // ── 各表只讀一次 ──
-    const reqRows     = parseSheetData(_getRequirementSheet());
-    const catalogRows = parseSheetData(_getCatalogSheet());
-    const recordRows  = parseSheetData(_getRecordSheet());
+    const reqRows     = parseSheetData_(_getRequirementSheet_());
+    const catalogRows = parseSheetData_(_getCatalogSheet_());
+    const recordRows  = parseSheetData_(_getRecordSheet_());
     const hubRows     = _readHubUserStatusRows_();
 
     // ── 任務：ACTIVE 且學年相符 ──
@@ -37,7 +37,7 @@ function getCatalogStats_(body, scope) {
       if (!rid || !reqMap[rid]) return false;
       return isAll || _inScopeRid_(rid, ownerIndex, scope);  // task_40e96378 Stage 1b：處室 ∪ TASK:
     });
-    if (courses.length === 0) return _ok({ academicYear: academicYear, courses: [] });
+    if (courses.length === 0) return _ok_({ academicYear: academicYear, courses: [] });
 
     // ── 名冊：userId → { name, department, schoolEmail }（不篩在職，查無才標 inRoster=false）──
     const hdr = hubRows[0];
@@ -105,8 +105,8 @@ function getCatalogStats_(body, scope) {
         registrants:     registrants
       };
     });
-    return _ok({ academicYear: academicYear, courses: result });
+    return _ok_({ academicYear: academicYear, courses: result });
   } catch (e) {
-    return _err('getCatalogStats 失敗：' + e.message);
+    return _err_('getCatalogStats 失敗：' + e.message);
   }
 }

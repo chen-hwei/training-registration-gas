@@ -9,14 +9,14 @@
  * 回傳格式：[{ ...requirement, requiredHours, approvedHours, pendingHours, importedHours, effectiveHours, hasSameName, isCompleted }, ...]
  */
 function getRequirements_(userId, body) {
-  const academicYear = (body && body.academicYear) ? Number(body.academicYear) : _currentAcademicYear();
-  const requirements = parseSheetData(_getRequirementSheet())
+  const academicYear = (body && body.academicYear) ? Number(body.academicYear) : _currentAcademicYear_();
+  const requirements = parseSheetData_(_getRequirementSheet_())
     .filter(r => r.status === 'ACTIVE' && Number(r.academicYear) === academicYear);
 
   if (requirements.length === 0) return [];
 
   // 讀取此教師所有紀錄，建立任務進度 Map
-  const records = parseSheetData(_getRecordSheet())
+  const records = parseSheetData_(_getRecordSheet_())
     .filter(r => r.userId === userId && r.requirementId);
 
   const approvedMap = {};
@@ -91,7 +91,7 @@ function getRequirements_(userId, body) {
  * scope 限制下只回 owner ∈ scope 的任務；owner 空值僅全權可見（task_c95dbe21 Stage 2a，2e／Q-a）
  */
 function getAllRequirements_(body, scope) {
-  let all = parseSheetData(_getRequirementSheet()).map(r => ({
+  let all = parseSheetData_(_getRequirementSheet_()).map(r => ({
     ...r,
     requiredHours: Number(r.requiredHours) || 0
   }));
@@ -130,34 +130,34 @@ function _normalizeSemesterSplit_(v) {
  * scope 限制下，寫入的 owner 須 ∈ scope（B-4／C-3：寫入 owner 的入口驗改後 owner）
  */
 function addRequirement_(adminId, body, scope) {
-  if (!body.name)    return _err('MISSING_NAME');
-  if (!body.endDate) return _err('MISSING_END_DATE');
+  if (!body.name)    return _err_('MISSING_NAME');
+  if (!body.endDate) return _err_('MISSING_END_DATE');
 
   const owner = String(body.owner || '').trim();
-  if (!owner) return _err('MISSING_OWNER');
-  if (!OWNER_DEPTS.includes(owner)) return _err('INVALID_OWNER');
-  if (!_inScope_(owner, scope)) return _err('FORBIDDEN');  // 處室層級：任務管理者（TASK:）不可新增任務（task_40e96378 Q2②）
+  if (!owner) return _err_('MISSING_OWNER');
+  if (!OWNER_DEPTS.includes(owner)) return _err_('INVALID_OWNER');
+  if (!_inScope_(owner, scope)) return _err_('FORBIDDEN');  // 處室層級：任務管理者（TASK:）不可新增任務（task_40e96378 Q2②）
 
   // task_40e96378 D3：歸入既有系列（選填），僅全權管理者可指定——系列是任務管理者授權的綁定鍵，
   // 處室管理者若能把任務掛進別處室的系列，等於替該系列的任務管理者擴權
   const joinSeries = String(body.seriesId || '').trim();
-  if (joinSeries && !_isAllScope_(scope)) return _err('FORBIDDEN');
+  if (joinSeries && !_isAllScope_(scope)) return _err_('FORBIDDEN');
 
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
+  try { lock.waitLock(10000); } catch (_) { return _err_('系統正忙，請稍後再試。'); }
 
   try {
-    const sheet       = _getRequirementSheet();
+    const sheet       = _getRequirementSheet_();
     const allRows     = sheet.getDataRange().getValues();
     const schema      = SHEET_SCHEMA.TRAINING_REQUIREMENT;
-    const academicYear = body.academicYear ? Number(body.academicYear) : _currentAcademicYear();
-    const requirementId = _generateRequirementId(allRows, academicYear);
+    const academicYear = body.academicYear ? Number(body.academicYear) : _currentAcademicYear_();
+    const requirementId = _generateRequirementId_(allRows, academicYear);
     let seriesId;
     if (joinSeries) {
       // 只能歸入表內已存在的代號；不推進已發最高號（沒有發新號）
       const col = schema.keys.indexOf('seriesId');
       const exists = allRows.some((row, i) => i > 0 && String(row[col] || '').trim() === joinSeries);
-      if (!exists) return _err('INVALID_SERIES');
+      if (!exists) return _err_('INVALID_SERIES');
       seriesId = joinSeries;
     } else {
       seriesId = _formatSeriesId_(_maxSeriesSeq_(allRows) + 1);  // 新任務＝新系列（task_40e96378）
@@ -178,7 +178,7 @@ function addRequirement_(adminId, body, scope) {
       links:         String(body.links        || ''),
       isRecurring:   body.isRecurring !== false,  // 預設 true
       status:        'ACTIVE',
-      createdAt:     _now(),
+      createdAt:     _now_(),
       audienceRules: String(body.audienceRules || ''),
       matchKeywords: String(body.matchKeywords || ''),
       teacherNote:   String(body.teacherNote   || ''),
@@ -214,13 +214,13 @@ function addRequirement_(adminId, body, scope) {
  * 防止管理者把任務單方面轉出自己 scope 後無法復原（空值僅全權，故處室管理者無法認領空值任務）
  */
 function editRequirement_(adminId, body, scope) {
-  if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');
+  if (!body.requirementId) return _err_('MISSING_REQUIREMENT_ID');
 
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
+  try { lock.waitLock(10000); } catch (_) { return _err_('系統正忙，請稍後再試。'); }
 
   try {
-    const sheet    = _getRequirementSheet();
+    const sheet    = _getRequirementSheet_();
     const data     = sheet.getDataRange().getValues();
     const schema   = SHEET_SCHEMA.TRAINING_REQUIREMENT;
     const idIdx     = schema.keys.indexOf('requirementId');
@@ -228,19 +228,19 @@ function editRequirement_(adminId, body, scope) {
     const seriesIdx = schema.keys.indexOf('seriesId');
 
     const rowIdx = data.findIndex((row, i) => i > 0 && row[idIdx] === body.requirementId);
-    if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
+    if (rowIdx === -1) return _err_('REQUIREMENT_NOT_FOUND');
 
     const currentOwner  = String(data[rowIdx][ownerIdx] || '').trim();
     const currentSeries = String(data[rowIdx][seriesIdx] || '').trim();
     const mergedOwner   = body.owner !== undefined ? String(body.owner || '').trim() : currentOwner;
-    if (!mergedOwner) return _err('MISSING_OWNER');
-    if (body.owner !== undefined && !OWNER_DEPTS.includes(mergedOwner)) return _err('INVALID_OWNER');
+    if (!mergedOwner) return _err_('MISSING_OWNER');
+    if (body.owner !== undefined && !OWNER_DEPTS.includes(mergedOwner)) return _err_('INVALID_OWNER');
 
     // task_40e96378 Stage 1b：編輯權＝處室 ∪ TASK:；改主責處室（值有變）維持處室層級，
     // 改前、改後皆須 ∈ 處室 scope——只管任務者改不了 owner（Q2② 主責處室鎖定），處室管理者行為不變
-    if (!_inScopeItem_(currentOwner, currentSeries, scope)) return _err('FORBIDDEN');
+    if (!_inScopeItem_(currentOwner, currentSeries, scope)) return _err_('FORBIDDEN');
     if (mergedOwner !== currentOwner &&
-        !(_inScope_(currentOwner, scope) && _inScope_(mergedOwner, scope))) return _err('FORBIDDEN');
+        !(_inScope_(currentOwner, scope) && _inScope_(mergedOwner, scope))) return _err_('FORBIDDEN');
 
     // seriesId 刻意不列入：系列代號是任務管理者授權的綁定鍵，改動會讓授權靜默失效（task_40e96378）
     const EDITABLE = ['name', 'startDate', 'endDate', 'requiredHours', 'hoursNote',
@@ -283,13 +283,13 @@ function editRequirement_(adminId, body, scope) {
  * scope 限制下，改前 owner 須 ∈ scope（B-4／C-3：改動既有任務的入口驗改前 owner；空值僅全權，task_c95dbe21 Stage 2a）
  */
 function archiveRequirement_(adminId, body, scope) {
-  if (!body.requirementId) return _err('MISSING_REQUIREMENT_ID');
+  if (!body.requirementId) return _err_('MISSING_REQUIREMENT_ID');
 
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
+  try { lock.waitLock(10000); } catch (_) { return _err_('系統正忙，請稍後再試。'); }
 
   try {
-    const sheet    = _getRequirementSheet();
+    const sheet    = _getRequirementSheet_();
     const data     = sheet.getDataRange().getValues();
     const schema   = SHEET_SCHEMA.TRAINING_REQUIREMENT;
     const idIdx     = schema.keys.indexOf('requirementId');
@@ -297,10 +297,10 @@ function archiveRequirement_(adminId, body, scope) {
     const ownerIdx  = schema.keys.indexOf('owner');
 
     const rowIdx = data.findIndex((row, i) => i > 0 && row[idIdx] === body.requirementId);
-    if (rowIdx === -1) return _err('REQUIREMENT_NOT_FOUND');
+    if (rowIdx === -1) return _err_('REQUIREMENT_NOT_FOUND');
 
     const currentOwner = String(data[rowIdx][ownerIdx] || '').trim();
-    if (!_inScope_(currentOwner, scope)) return _err('FORBIDDEN');  // 處室層級：任務管理者不可封存（task_40e96378 Q2②）
+    if (!_inScope_(currentOwner, scope)) return _err_('FORBIDDEN');  // 處室層級：任務管理者不可封存（task_40e96378 Q2②）
 
     data[rowIdx][statusIdx] = 'ARCHIVED';
     sheet.clearContents();
@@ -321,15 +321,15 @@ function archiveRequirement_(adminId, body, scope) {
  */
 function renewRequirements_(adminId, body) {
   const sourceYear = Number(body.sourceYear);
-  if (!sourceYear) return _err('MISSING_SOURCE_YEAR');
+  if (!sourceYear) return _err_('MISSING_SOURCE_YEAR');
   const targetYear = body.targetYear ? Number(body.targetYear) : sourceYear + 1;
-  if (targetYear <= sourceYear) return _err('TARGET_YEAR_MUST_BE_GREATER');
+  if (targetYear <= sourceYear) return _err_('TARGET_YEAR_MUST_BE_GREATER');
 
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
+  try { lock.waitLock(10000); } catch (_) { return _err_('系統正忙，請稍後再試。'); }
 
   try {
-    const sheet   = _getRequirementSheet();
+    const sheet   = _getRequirementSheet_();
     const allRows = sheet.getDataRange().getValues();
     const schema  = SHEET_SCHEMA.TRAINING_REQUIREMENT;
 
@@ -337,15 +337,15 @@ function renewRequirements_(adminId, body) {
     const existTarget = allRows.slice(1).some(
       row => Number(row[schema.keys.indexOf('academicYear')]) === targetYear
     );
-    if (existTarget) return _err(`${targetYear} 學年度已有任務紀錄，請先封存再重新建立。`);
+    if (existTarget) return _err_(`${targetYear} 學年度已有任務紀錄，請先封存再重新建立。`);
 
     const sourceBoolTrue = v => v === true || String(v).toUpperCase() === 'TRUE';
-    const sourceReqs = parseSheetData(sheet).filter(
+    const sourceReqs = parseSheetData_(sheet).filter(
       r => Number(r.academicYear) === sourceYear &&
            sourceBoolTrue(r.isRecurring) &&
            r.status === 'ACTIVE'
     );
-    if (sourceReqs.length === 0) return _err('沒有找到可複製的循環任務（isRecurring=TRUE）。');
+    if (sourceReqs.length === 0) return _err_('沒有找到可複製的循環任務（isRecurring=TRUE）。');
 
     // 找出目標學年度現有最大序號，確保 ID 不重複
     const idColIdx = schema.keys.indexOf('requirementId');
@@ -394,7 +394,7 @@ function renewRequirements_(adminId, body) {
         links:         req.links  || '',
         isRecurring:   true,
         status:        'ACTIVE',
-        createdAt:     _now(),
+        createdAt:     _now_(),
         // 統計模組欄位必須一併複製，否則新學年匯入紀錄比對不到任務（靜默失效）
         audienceRules: req.audienceRules || '',
         matchKeywords: req.matchKeywords || '',
@@ -441,11 +441,11 @@ function renewRequirements_(adminId, body) {
  */
 function seed114Requirements() {
   _assertManualRunByDeployer_('seed114Requirements');  // task_52660e35 損-06：維運函式禁止前端直呼
-  const sheet   = _getRequirementSheet();
+  const sheet   = _getRequirementSheet_();
   const schema  = SHEET_SCHEMA.TRAINING_REQUIREMENT;
 
   // 確認工作表是否已有資料（防止重複執行）
-  const existing = parseSheetData(sheet).filter(r => Number(r.academicYear) === 114);
+  const existing = parseSheetData_(sheet).filter(r => Number(r.academicYear) === 114);
   if (existing.length > 0) {
     Logger.log('⚠️ 114 學年度任務已存在（' + existing.length + ' 筆），跳過 seed。如需重新匯入請先清空工作表。');
     return;
@@ -667,7 +667,7 @@ function seed114Requirements() {
   const allRows = sheet.getDataRange().getValues();
 
   data.forEach(req => {
-    req.createdAt = _now();
+    req.createdAt = _now_();
     allRows.push(schema.keys.map(k => req[k] !== undefined ? req[k] : ''));
   });
 
@@ -688,7 +688,7 @@ function seed114Requirements() {
  */
 function updateAudienceRules114() {
   _assertManualRunByDeployer_('updateAudienceRules114');  // task_52660e35 損-06：維運函式禁止前端直呼
-  const sheet  = _getRequirementSheet();
+  const sheet  = _getRequirementSheet_();
   const schema = SHEET_SCHEMA.TRAINING_REQUIREMENT;
   const data   = sheet.getDataRange().getValues();
   const headers = data[0];
@@ -752,12 +752,12 @@ function seedHistoricalRequirements() {
   const TARGET_YEARS = [110, 111, 112, 113];
   const SOURCE_YEAR  = 114;
 
-  const sheet   = _getRequirementSheet();
+  const sheet   = _getRequirementSheet_();
   const schema  = SHEET_SCHEMA.TRAINING_REQUIREMENT;
   const allRows = sheet.getDataRange().getValues();
 
   const boolTrue = v => v === true || String(v).toUpperCase() === 'TRUE';
-  const sourceReqs = parseSheetData(sheet).filter(
+  const sourceReqs = parseSheetData_(sheet).filter(
     r => Number(r.academicYear) === SOURCE_YEAR && r.status === 'ACTIVE'
   );
   if (sourceReqs.length === 0) {
@@ -808,7 +808,7 @@ function seedHistoricalRequirements() {
         links:         req.links || '',
         isRecurring:   boolTrue(req.isRecurring),
         status:        'ACTIVE',
-        createdAt:     _now(),
+        createdAt:     _now_(),
         audienceRules: req.audienceRules || '',
         matchKeywords: req.matchKeywords || ''
       };
@@ -834,7 +834,7 @@ function seedHistoricalRequirements() {
  */
 function fixSemesterEndDates114() {
   _assertManualRunByDeployer_('fixSemesterEndDates114');  // task_52660e35 損-06：維運函式禁止前端直呼
-  const sheet  = _getRequirementSheet();
+  const sheet  = _getRequirementSheet_();
   const keys   = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
   const idCol  = keys.indexOf('requirementId');
   const edCol  = keys.indexOf('endDate');
@@ -868,7 +868,7 @@ function fixSemesterEndDates114() {
  */
 function seedMatchKeywords114() {
   _assertManualRunByDeployer_('seedMatchKeywords114');  // task_52660e35 損-06：維運函式禁止前端直呼
-  const sheet  = _getRequirementSheet();
+  const sheet  = _getRequirementSheet_();
   const keys   = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
   const idCol  = keys.indexOf('requirementId');
   const kwCol  = keys.indexOf('matchKeywords');
@@ -915,7 +915,7 @@ function seedMatchKeywords114() {
  */
 function backfillSemesterSplit() {
   _assertManualRunByDeployer_('backfillSemesterSplit');  // task_52660e35 損-06：維運函式禁止前端直呼
-  const sheet    = _getRequirementSheet();
+  const sheet    = _getRequirementSheet_();
   const data     = sheet.getDataRange().getValues();
   const keys     = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
   const nameCol  = keys.indexOf('name');
@@ -960,7 +960,7 @@ function backfillSeriesIds() {
  * @param {boolean} [apply=false] true 才實際寫入
  */
 function _backfillSeriesIds_(apply) {
-  const sheet  = _getRequirementSheet();
+  const sheet  = _getRequirementSheet_();
   const data   = sheet.getDataRange().getValues();
   const schema = SHEET_SCHEMA.TRAINING_REQUIREMENT;
   const k      = key => schema.keys.indexOf(key);

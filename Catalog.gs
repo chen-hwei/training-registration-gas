@@ -4,7 +4,7 @@
 
 /** 取得所有 ACTIVE 狀態的研習課程清單 */
 function getCatalog_() {
-  return parseSheetData(_getCatalogSheet())
+  return parseSheetData_(_getCatalogSheet_())
     .filter(c => c.status === 'ACTIVE')
     .map(c => ({
       ...c,
@@ -36,21 +36,21 @@ function getCatalogAdmin_(scope) {
  * 原條件在 requirementId 為空時整段跳過，光改 _inScope_ 擋不住）
  */
 function addCatalog_(userId, body, scope) {
-  if (!body.title)  return _err('MISSING_TITLE');
-  if (!body.hours)  return _err('MISSING_HOURS');
+  if (!body.title)  return _err_('MISSING_TITLE');
+  if (!body.hours)  return _err_('MISSING_HOURS');
 
   const requirementId = String(body.requirementId || '').trim();
   if (!_isAllScope_(scope)) {
-    if (!requirementId) return _err('FORBIDDEN');
-    if (!_inScopeRid_(requirementId, _buildOwnerIndex_(), scope)) return _err('FORBIDDEN');
+    if (!requirementId) return _err_('FORBIDDEN');
+    if (!_inScopeRid_(requirementId, _buildOwnerIndex_(), scope)) return _err_('FORBIDDEN');
   }
 
-  const sheet = _getCatalogSheet();
+  const sheet = _getCatalogSheet_();
   const lock  = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const allRows   = sheet.getDataRange().getValues();
-    const catalogId = _generateCatalogId(allRows);
+    const catalogId = _generateCatalogId_(allRows);
     const schema    = SHEET_SCHEMA.TRAINING_CATALOG;
 
     const newCatalog = {
@@ -67,7 +67,7 @@ function addCatalog_(userId, body, scope) {
       link:           String(body.link           || ''),
       isRequired:     body.isRequired === true || body.isRequired === 'TRUE',
       status:         'ACTIVE',
-      createdAt:      _now(),
+      createdAt:      _now_(),
       requirementId:  String(body.requirementId   || '')
     };
 
@@ -91,9 +91,9 @@ function addCatalog_(userId, body, scope) {
  * A 處室任務改掛到 B 處室繞過權限）
  */
 function editCatalog_(userId, body, scope) {
-  if (!body.catalogId) return _err('MISSING_CATALOG_ID');
+  if (!body.catalogId) return _err_('MISSING_CATALOG_ID');
 
-  const sheet  = _getCatalogSheet();
+  const sheet  = _getCatalogSheet_();
   const schema = SHEET_SCHEMA.TRAINING_CATALOG;
   const lock   = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -105,16 +105,16 @@ function editCatalog_(userId, body, scope) {
     for (let i = 1; i < data.length; i++) {
       if (data[i][idIdx] === body.catalogId) { rowIdx = i; break; }
     }
-    if (rowIdx === -1) return _err('CATALOG_NOT_FOUND');
+    if (rowIdx === -1) return _err_('CATALOG_NOT_FOUND');
 
     if (!_isAllScope_(scope)) {
       const index = _buildOwnerIndex_();
       const currentReqId = String(data[rowIdx][reqIdIdx] || '').trim();
-      if (!_inScopeRid_(currentReqId, index, scope)) return _err('FORBIDDEN');
+      if (!_inScopeRid_(currentReqId, index, scope)) return _err_('FORBIDDEN');
 
       if (body.requirementId !== undefined) {
         const newReqId = String(body.requirementId || '').trim();
-        if (!_inScopeRid_(newReqId, index, scope)) return _err('FORBIDDEN');
+        if (!_inScopeRid_(newReqId, index, scope)) return _err_('FORBIDDEN');
       }
     }
 
@@ -146,9 +146,9 @@ function editCatalog_(userId, body, scope) {
  * scope 限制下，課程現有 requirementId 對應的 owner 須 ∈ scope（B-4 同型；空值僅全權，task_c95dbe21 Stage 2a）
  */
 function archiveCatalog_(body, scope) {
-  if (!body.catalogId) return _err('MISSING_CATALOG_ID');
+  if (!body.catalogId) return _err_('MISSING_CATALOG_ID');
 
-  const sheet  = _getCatalogSheet();
+  const sheet  = _getCatalogSheet_();
   const schema = SHEET_SCHEMA.TRAINING_CATALOG;
   const lock   = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -164,7 +164,7 @@ function archiveCatalog_(body, scope) {
 
       if (!_isAllScope_(scope)) {
         const currentReqId = String(data[i][reqIdIdx] || '').trim();
-        if (!_inScopeRid_(currentReqId, _buildOwnerIndex_(), scope)) return _err('FORBIDDEN');
+        if (!_inScopeRid_(currentReqId, _buildOwnerIndex_(), scope)) return _err_('FORBIDDEN');
       }
 
       data[i][statusIdx] = 'ARCHIVED';
@@ -172,7 +172,7 @@ function archiveCatalog_(body, scope) {
       break;
     }
 
-    if (!found) return _err('CATALOG_NOT_FOUND');
+    if (!found) return _err_('CATALOG_NOT_FOUND');
     sheet.clearContents();
     sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
     return { success: true };

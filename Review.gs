@@ -6,7 +6,7 @@
  * 的紀錄（task_6e2d40af Stage B）；查不到處室者（自由研習等）僅全權可見（task_c95dbe21 Stage 2a）
  */
 function getPendingReviews_(scope) {
-  const list = parseSheetData(_getRecordSheet())
+  const list = parseSheetData_(_getRecordSheet_())
     .filter(r => r.status === 'PENDING')
     .map(r => ({ ...r, hours: Number(r.hours) || 0 }));
   if (_isAllScope_(scope)) return _attachReqSuggestions_(list);
@@ -22,8 +22,8 @@ function getPendingReviews_(scope) {
  * 只建議，不改資料。
  */
 function _attachReqSuggestions_(list) {
-  const reqRows = parseSheetData(_getRequirementSheet());
-  const index   = _buildOwnerIndex_(parseSheetData(_getCatalogSheet()), reqRows);
+  const reqRows = parseSheetData_(_getRequirementSheet_());
+  const index   = _buildOwnerIndex_(parseSheetData_(_getCatalogSheet_()), reqRows);
 
   const byYear = {};  // 學年 → [{ requirementId, name, owner, keywords }]
   reqRows.forEach(r => {
@@ -59,11 +59,11 @@ function _attachReqSuggestions_(list) {
  * （B-3：避免「過濾掉違規筆、其餘照做」造成 { reviewed: n } 的靜默部分失敗）
  */
 function reviewRecord_(reviewerId, body, scope) {
-  if (!Array.isArray(body.records) || body.records.length === 0) return _err('MISSING_RECORDS');
+  if (!Array.isArray(body.records) || body.records.length === 0) return _err_('MISSING_RECORDS');
 
   for (const r of body.records) {
-    if (!['APPROVED', 'REJECTED'].includes(r.status)) return _err('狀態值無效，只接受 APPROVED 或 REJECTED。');
-    if (r.status === 'REJECTED' && !r.reviewNote) return _err('退件原因不可為空。');
+    if (!['APPROVED', 'REJECTED'].includes(r.status)) return _err_('狀態值無效，只接受 APPROVED 或 REJECTED。');
+    if (r.status === 'REJECTED' && !r.reviewNote) return _err_('退件原因不可為空。');
   }
 
   const schema           = SHEET_SCHEMA.TRAINING_RECORD;
@@ -78,7 +78,7 @@ function reviewRecord_(reviewerId, body, scope) {
   const lock = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
-    const sheet = _getRecordSheet();
+    const sheet = _getRecordSheet_();
     const data  = sheet.getDataRange().getValues();
 
     if (!_isAllScope_(scope)) {
@@ -94,7 +94,7 @@ function reviewRecord_(reviewerId, body, scope) {
         if (!row) continue; // 查無此筆，交由既有 RECORD_NOT_FOUND 流程處理
         const item = { requirementId: row[requirementIdIdx], catalogId: row[catalogIdIdx] };
         if (!_inScopeRecord_(item, index, scope)) {  // task_40e96378 Stage 1b：處室 ∪ TASK:
-          return _err('FORBIDDEN：紀錄 ' + r.recordId + ' 不屬於您的管理範圍');
+          return _err_('FORBIDDEN：紀錄 ' + r.recordId + ' 不屬於您的管理範圍');
         }
       }
     }
@@ -103,7 +103,7 @@ function reviewRecord_(reviewerId, body, scope) {
     const updateMap = {};
     body.records.forEach(r => { updateMap[r.recordId] = r; });
 
-    const now = _now();
+    const now = _now_();
     let updatedCount = 0;
     // 直接更新命中列的 4 個欄位（status/reviewedBy/reviewNote/reviewedAt 為連續欄）
     // 避免 clearContents + 全表 setValues 因混有 Date 物件導致隱性失敗
@@ -119,7 +119,7 @@ function reviewRecord_(reviewerId, body, scope) {
       updatedCount++;
     }
 
-    if (updatedCount === 0) return _err('RECORD_NOT_FOUND');
+    if (updatedCount === 0) return _err_('RECORD_NOT_FOUND');
     SpreadsheetApp.flush();
 
     body.records.forEach(r => {
@@ -144,8 +144,8 @@ function reviewRecord_(reviewerId, body, scope) {
 function reassignRecordRequirement_(adminId, body) {
   const recordId = String((body || {}).recordId || '').trim();
   const newReqId = String((body || {}).requirementId || '').trim();
-  if (!recordId) return _err('MISSING_RECORD_ID');
-  if (!newReqId) return _err('MISSING_REQUIREMENT_ID');
+  if (!recordId) return _err_('MISSING_RECORD_ID');
+  if (!newReqId) return _err_('MISSING_REQUIREMENT_ID');
 
   const schema    = SHEET_SCHEMA.TRAINING_RECORD;
   const idIdx     = schema.keys.indexOf('recordId');
@@ -154,27 +154,27 @@ function reassignRecordRequirement_(adminId, body) {
   const reqIdx    = schema.keys.indexOf('requirementId');
 
   const lock = LockService.getScriptLock();
-  try { lock.waitLock(10000); } catch (_) { return _err('系統正忙，請稍後再試。'); }
+  try { lock.waitLock(10000); } catch (_) { return _err_('系統正忙，請稍後再試。'); }
   try {
-    const sheet = _getRecordSheet();
+    const sheet = _getRecordSheet_();
     const data  = sheet.getDataRange().getValues();
     let rowIdx = -1;
     for (let i = 1; i < data.length; i++) {
       if (String(data[i][idIdx]).trim() === recordId) { rowIdx = i; break; }
     }
-    if (rowIdx === -1) return _err('RECORD_NOT_FOUND');
-    if (data[rowIdx][statusIdx] !== 'PENDING') return _err('NOT_PENDING');
+    if (rowIdx === -1) return _err_('RECORD_NOT_FOUND');
+    if (data[rowIdx][statusIdx] !== 'PENDING') return _err_('NOT_PENDING');
 
     const oldReqId = String(data[rowIdx][reqIdx] || '').trim();
-    if (oldReqId === newReqId) return _err('SAME_REQUIREMENT');
+    if (oldReqId === newReqId) return _err_('SAME_REQUIREMENT');
 
     const p = _parseTrainingDateStrict_(data[rowIdx][dateIdx]);
-    if (!p) return _err('INVALID_TRAINING_DATE');
+    if (!p) return _err_('INVALID_TRAINING_DATE');
 
-    const target = parseSheetData(_getRequirementSheet()).find(r => r.requirementId === newReqId);
-    if (!target) return _err('REQUIREMENT_NOT_FOUND');
-    if (target.status !== 'ACTIVE') return _err('REQUIREMENT_NOT_ACTIVE');
-    if (Number(target.academicYear) !== _academicYearOfDate_(p)) return _err('ACADEMIC_YEAR_MISMATCH');
+    const target = parseSheetData_(_getRequirementSheet_()).find(r => r.requirementId === newReqId);
+    if (!target) return _err_('REQUIREMENT_NOT_FOUND');
+    if (target.status !== 'ACTIVE') return _err_('REQUIREMENT_NOT_ACTIVE');
+    if (Number(target.academicYear) !== _academicYearOfDate_(p)) return _err_('ACADEMIC_YEAR_MISMATCH');
 
     sheet.getRange(rowIdx + 1, reqIdx + 1).setValue(newReqId);
     SpreadsheetApp.flush();
@@ -193,23 +193,23 @@ function reassignRecordRequirement_(adminId, body) {
  */
 function getFileUrl_(body, scope) {
   if (!body.recordId) {
-    return body.fileId ? _err('STALE_CLIENT') : _err('MISSING_RECORD_ID');
+    return body.fileId ? _err_('STALE_CLIENT') : _err_('MISSING_RECORD_ID');
   }
 
-  const record = parseSheetData(_getRecordSheet()).find(r => r.recordId === body.recordId);
-  if (!record) return _err('RECORD_NOT_FOUND');
+  const record = parseSheetData_(_getRecordSheet_()).find(r => r.recordId === body.recordId);
+  if (!record) return _err_('RECORD_NOT_FOUND');
 
   if (!_isAllScope_(scope)) {
     const index = _buildOwnerIndex_();
-    if (!_inScopeRecord_(record, index, scope)) return _err('FORBIDDEN');
+    if (!_inScopeRecord_(record, index, scope)) return _err_('FORBIDDEN');
   }
 
-  if (!record.fileId) return _err('FILE_NOT_FOUND');
+  if (!record.fileId) return _err_('FILE_NOT_FOUND');
   try {
     const file = DriveApp.getFileById(record.fileId);
     return { success: true, url: file.getUrl(), name: file.getName() };
   } catch (_) {
-    return _err('FILE_NOT_FOUND');
+    return _err_('FILE_NOT_FOUND');
   }
 }
 
@@ -219,9 +219,9 @@ function getFileUrl_(body, scope) {
  * scope 限制下，只匯出解析落在自己 scope 內（含無法歸屬）的紀錄（Y-4）
  */
 function exportRecords_(body, scope) {
-  const sheet  = _getRecordSheet();
+  const sheet  = _getRecordSheet_();
   const schema = SHEET_SCHEMA.TRAINING_RECORD;
-  let records  = parseSheetData(sheet);
+  let records  = parseSheetData_(sheet);
 
   if (body.status) records = records.filter(r => r.status === body.status);
   if (body.userId) records = records.filter(r => r.userId === body.userId);

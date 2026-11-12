@@ -77,7 +77,7 @@ function handleRequest(payload) {
     const { token, body } = payload || {};
     action = (payload || {}).action;
 
-    if (!action) return _err('MISSING_ACTION');
+    if (!action) return _err_('MISSING_ACTION');
 
     // ── 公開路由（無需 Token）──
     if (action === 'train/getUserName') {
@@ -103,7 +103,7 @@ function handleRequest(payload) {
 
     // ── Level 1：驗證 Token（train_ 原生優先，降級 SchoolPortalLib）──
     const session = verifyTrainSession_(token);
-    if (!session || !session.valid) return _err('TOKEN_EXPIRED');
+    if (!session || !session.valid) return _err_('TOKEN_EXPIRED');
     userId = session.userId;
 
     switch (action) {
@@ -124,14 +124,14 @@ function handleRequest(payload) {
         ? sa
         : JSON.parse(String(sa || '{}'));
     } catch (_) {}
-    if (!access.training_admin) return _err('FORBIDDEN');
+    if (!access.training_admin) return _err_('FORBIDDEN');
 
     // Stage B：僅全權管理者可執行的路由，統一在 switch 前攔截（單一事實來源，見上方常數）
     // S-B-2：_normalizeScope_() 把人工填寫 Hub 時漏寫中括號的字串（如 "學務處"）轉為
     // 單元素陣列，避免 _isAllScope_() 的 !Array.isArray() fail-open 成全權管理者
     const scope = _normalizeScope_(access.training_scope);
     if (TRAINING_SCOPE_ALL_ONLY_ACTIONS.has(action) && !_isAllScope_(scope)) {
-      return _err('FORBIDDEN');
+      return _err_('FORBIDDEN');
     }
 
     switch (action) {
@@ -175,7 +175,7 @@ function handleRequest(payload) {
       case 'get_stats_settings':              return getStatsSettings_();
       case 'save_stats_settings':             return saveStatsSettings_(body || {});
 
-      default: return _err('UNKNOWN_ACTION');
+      default: return _err_('UNKNOWN_ACTION');
     }
   } catch (err) {
     _logOp_(userId, 'ERROR_' + (action || 'UNKNOWN'), err.message);
@@ -185,5 +185,5 @@ function handleRequest(payload) {
 
 // ==================== 回應輔助 ====================
 
-function _ok(data)  { return { success: true,  data  }; }
-function _err(msg)  { return { success: false, error: msg }; }
+function _ok_(data)  { return { success: true,  data  }; }
+function _err_(msg)  { return { success: false, error: msg }; }
