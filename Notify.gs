@@ -239,8 +239,17 @@ function previewNotification_(callerUserId, scope) {
   return { success: true, count, groups: { n1, n2, n2Admin, n3Admin } };
 }
 
+/**
+ * 觸發器入口（每日 07:50，名稱寫死在觸發器裡不可改名）（task_52660e35 損-05）
+ * 只接受本專案觸發器或部署者手動執行；管理端「立即發送」改走 _runOverdueNotification_()
+ */
+function checkAndNotifyOverdue(e) {
+  _assertTriggerOrDeployer_(e, 'checkAndNotifyOverdue');
+  return _runOverdueNotification_();
+}
+
 /** 實際發送通知（分組 BCC + 管理者每日彙整），回傳 { mails, recipients } */
-function checkAndNotifyOverdue() {
+function _runOverdueNotification_() {
   const list = _buildNotificationList_();
   const { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList_(list);
   let mails = 0, recipients = 0;

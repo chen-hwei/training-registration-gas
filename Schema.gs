@@ -332,6 +332,18 @@ function _assertManualRunByDeployer_(fnName) {
 }
 
 /**
+ * 觸發器 handler 守衛（task_52660e35 損-05）：觸發器名稱寫死在觸發器裡不能改成底線結尾，只能在入口擋。
+ * - 時間驅動觸發器的事件物件帶 triggerUid，且必須是本專案現存觸發器的 uniqueId → 放行
+ * - 否則退回部署者守衛（編輯器手動執行放行；google.script.run 直呼擋下）
+ * 不依賴觸發器情境下 Session.getActiveUser() 的值（健檢附錄 A 前提 2 未實測）。
+ */
+function _assertTriggerOrDeployer_(e, fnName) {
+  const uid = (e && e.triggerUid) ? String(e.triggerUid) : '';
+  if (uid && ScriptApp.getProjectTriggers().some(t => t.getUniqueId() === uid)) return;
+  _assertManualRunByDeployer_(fnName);
+}
+
+/**
  * 唯讀盤點 Hub 全部 training_scope 現值（task_40e96378 Stage 1a，GAS 編輯器手動執行）
  * fail-closed 上線前後各跑一次，確認沒有管理者因「空陣列／格式錯誤不再視為全權」而意外失權。
  * 只列 training_admin=true 或有 training_scope key 的帳號；不寫入任何資料。

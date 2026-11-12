@@ -8,8 +8,16 @@
  *
  * 效能注意（gas-limitations 鐵律）：ImportedData 與任務關鍵字／區間只在迴圈外各算一次，
  * 逐教師迭代時只做記憶體比對，禁止對每位教師重新讀表或重算區間。
+ *
+ * 觸發器入口（名稱寫死在觸發器裡不可改名）：只接受本專案觸發器或部署者手動執行（task_52660e35 損-05）
  */
-function syncTrainingStats() {
+function syncTrainingStats(e) {
+  _assertTriggerOrDeployer_(e, 'syncTrainingStats');
+  return _runSyncTrainingStats_();
+}
+
+/** 同步本體（task_52660e35 損-05 自 syncTrainingStats 拆出） */
+function _runSyncTrainingStats_() {
   const academicYear = _currentAcademicYear_();
 
   // ── Step 1：當學年 ACTIVE 任務，預先算好關鍵字、硬性區間與 audienceRules（迴圈外算一次）──

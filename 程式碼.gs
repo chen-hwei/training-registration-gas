@@ -144,7 +144,7 @@ function handleRequest(payload) {
       case 'v1/admin/getFileUrl':           return getFileUrl_(body || {}, scope);
       case 'v1/admin/exportRecords':        return { success: true, data: exportRecords_(body || {}, scope) };
       case 'v1/admin/previewNotification':  return previewNotification_(userId, scope);
-      case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, checkAndNotifyOverdue());
+      case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, _runOverdueNotification_());
       case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements_(body || {}, scope) };
       case 'v1/admin/getCatalogAdmin':      return { success: true, data: getCatalogAdmin_(scope) };
       case 'v1/admin/getCatalogStats':      return getCatalogStats_(body || {}, scope);
