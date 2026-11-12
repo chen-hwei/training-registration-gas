@@ -510,6 +510,7 @@ function importTrainingData(body) {
  * 在 GAS 編輯器執行此函式（TrainingReport.gs），結果顯示於執行記錄
  */
 function debugFindCRPDRecord() {
+  _assertManualRunByDeployer_('debugFindCRPDRecord');  // task_52660e35 損-07：維運函式禁止前端直呼
   var TEACHER_NAME = '陳宏煒';  // ← 若要查別人，改這裡
   var KEYWORDS     = ['CRPD', '身心障礙者權利公約', '兒童權利公約', 'CRC'];
 
@@ -564,6 +565,7 @@ function debugFindCRPDRecord() {
  * 在 GAS 編輯器執行此函式（TrainingReport.gs）
  */
 function manualAddImportedRecord() {
+  _assertManualRunByDeployer_('manualAddImportedRecord');  // task_52660e35 損-06：維運函式禁止前端直呼
   // ── 在此填入要補加的紀錄資訊 ──
   var RECORD = {
     academicYear: 114,
@@ -607,6 +609,7 @@ function manualAddImportedRecord() {
  * 在 GAS 編輯器執行此函式（TrainingReport.gs），結果顯示於執行記錄
  */
 function debugRequirementsAndDateFilter() {
+  _assertManualRunByDeployer_('debugRequirementsAndDateFilter');  // task_52660e35 損-07：維運函式禁止前端直呼
   var TEST_USER_ID = 't1180';   // ← 改成您的工號
 
   Logger.log('=== Step 1：確認 audienceRules 是否有寫入 ===');
@@ -1187,6 +1190,7 @@ function saveReportSettings(body) {
  * - 重複執行會建立新範本並改指向新檔；舊範本不會刪除，可自行至 Drive 清理
  */
 function createReportDocTemplate() {
+  _assertManualRunByDeployer_('createReportDocTemplate');  // task_52660e35 損-06：維運函式禁止前端直呼
   var doc  = DocumentApp.create('研習達成率審查簽呈_範本');
   var body = doc.getBody();
 
@@ -1241,6 +1245,7 @@ function createReportDocTemplate() {
  * - 不帶參數時預設覆蓋當前學年度；如需指定學年度，直接在編輯器改傳入值後執行
  */
 function overwriteSnapshotFromHub(academicYear) {
+  _assertManualRunByDeployer_('overwriteSnapshotFromHub');  // task_52660e35 損-06：維運函式禁止前端直呼
   var year = Number(academicYear || _currentAcademicYear());
   var res  = snapshotTeacherRoster({ academicYear: year, rosterRows: [], overwrite: true });
   Logger.log(JSON.stringify(res));
@@ -1255,6 +1260,7 @@ function overwriteSnapshotFromHub(academicYear) {
  * 純讀取 Hub.UserStatusCache，不寫入任何資料。於 GAS 編輯器手動執行，看「執行記錄」。
  */
 function surveyStatsExclusions() {
+  _assertManualRunByDeployer_('surveyStatsExclusions');  // task_52660e35 損-07：維運函式禁止前端直呼
   var hub    = SpreadsheetApp.openById(getHubSpreadsheetId_());
   var data   = hub.getSheetByName('UserStatusCache').getDataRange().getValues();
   var hdr    = data[0];
@@ -1513,6 +1519,7 @@ function saveStatsSettings(body) {
  * 在 GAS 編輯器中直接執行此函式即可，無需傳入參數
  */
 function resetIdentityRulesToDefault() {
+  _assertManualRunByDeployer_('resetIdentityRulesToDefault');  // task_52660e35 損-06：維運函式禁止前端直呼
   PropertiesService.getScriptProperties()
     .setProperty(IDENTITY_RULES_KEY_, JSON.stringify(DEFAULT_IDENTITY_RULES_));
   Logger.log('✅ 身分分類規則已重設為預設值，共 ' + DEFAULT_IDENTITY_RULES_.length + ' 條規則。');

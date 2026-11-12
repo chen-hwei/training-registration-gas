@@ -167,6 +167,7 @@ function parseSheetData(sheet) {
  * - 絕不使用 insertRow，以免產生雙標題行
  */
 function ensureSheetHeaders(sheetName) {
+  _assertManualRunByDeployer_('ensureSheetHeaders');  // task_52660e35 損-06：維運函式禁止前端直呼
   const schema = SHEET_SCHEMA[sheetName];
   if (!schema) throw new Error('SHEET_SCHEMA 找不到：' + sheetName);
 
@@ -186,6 +187,7 @@ function ensureSheetHeaders(sheetName) {
 
 /** 建立三張工作表並寫入標題列（可重複執行，執行後既有資料不受影響） */
 function initSheetHeaders() {
+  _assertManualRunByDeployer_('initSheetHeaders');  // task_52660e35 損-06：維運函式禁止前端直呼
   ensureSheetHeaders('TRAINING_CATALOG');
   ensureSheetHeaders('TRAINING_RECORD');
   ensureSheetHeaders('TRAINING_REQUIREMENT');

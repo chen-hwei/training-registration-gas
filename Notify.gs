@@ -558,6 +558,7 @@ function _digestReplyTo_(items) {
 
 /** 除錯用：逐步印出通知邏輯各關卡的狀態，不發送任何信件 */
 function debugNotify() {
+  _assertManualRunByDeployer_('debugNotify');  // task_52660e35 損-07：維運函式禁止前端直呼
   const today   = new Date();
   console.log('=== debugNotify 開始，today=' + today.toISOString() + ' ===');
 
@@ -609,6 +610,7 @@ function debugNotify() {
  * 不寫死查特定帳號，逐一印出所有管理者，橫跨處室的自然會在輸出裡現形。
  */
 function debugDigestReplyTo() {
+  _assertManualRunByDeployer_('debugDigestReplyTo');  // task_52660e35 損-07：維運函式禁止前端直呼
   console.log('=== debugDigestReplyTo 開始 ===');
   const list = _buildNotificationList();
   const { n2AdminDigest } = _groupNotificationList(list);
@@ -629,6 +631,7 @@ function debugDigestReplyTo() {
 
 /** 建立定時觸發器（可重複執行：會先刪除同名舊觸發器再重建，不疊加） */
 function setupNotifyTriggers() {
+  _assertManualRunByDeployer_('setupNotifyTriggers');  // task_52660e35 損-06：維運函式禁止前端直呼
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'checkAndNotifyOverdue') ScriptApp.deleteTrigger(t);
   });

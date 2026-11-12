@@ -440,6 +440,7 @@ function renewRequirements(adminId, body) {
  * 執行後請確認試算表資料正確，確認無誤後可將此函式刪除。
  */
 function seed114Requirements() {
+  _assertManualRunByDeployer_('seed114Requirements');  // task_52660e35 損-06：維運函式禁止前端直呼
   const sheet   = _getRequirementSheet();
   const schema  = SHEET_SCHEMA.TRAINING_REQUIREMENT;
 
@@ -686,6 +687,7 @@ function seed114Requirements() {
  *   若某人的身分不在清單內，該任務不計入其達標檢查。
  */
 function updateAudienceRules114() {
+  _assertManualRunByDeployer_('updateAudienceRules114');  // task_52660e35 損-06：維運函式禁止前端直呼
   const sheet  = _getRequirementSheet();
   const schema = SHEET_SCHEMA.TRAINING_REQUIREMENT;
   const data   = sheet.getDataRange().getValues();
@@ -746,6 +748,7 @@ function updateAudienceRules114() {
  *   （上下學期切半，避免同一筆匯入紀錄同時命中兩個任務而重複計入）
  */
 function seedHistoricalRequirements() {
+  _assertManualRunByDeployer_('seedHistoricalRequirements');  // task_52660e35 損-06：維運函式禁止前端直呼
   const TARGET_YEARS = [110, 111, 112, 113];
   const SOURCE_YEAR  = 114;
 
@@ -830,6 +833,7 @@ function seedHistoricalRequirements() {
  * 執行後可刪除此函式。
  */
 function fixSemesterEndDates114() {
+  _assertManualRunByDeployer_('fixSemesterEndDates114');  // task_52660e35 損-06：維運函式禁止前端直呼
   const sheet  = _getRequirementSheet();
   const keys   = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
   const idCol  = keys.indexOf('requirementId');
@@ -863,6 +867,7 @@ function fixSemesterEndDates114() {
  * 執行前請確認已執行 initSheetHeaders()（使試算表有「比對關鍵字」欄）
  */
 function seedMatchKeywords114() {
+  _assertManualRunByDeployer_('seedMatchKeywords114');  // task_52660e35 損-06：維運函式禁止前端直呼
   const sheet  = _getRequirementSheet();
   const keys   = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;
   const idCol  = keys.indexOf('requirementId');
@@ -909,6 +914,7 @@ function seedMatchKeywords114() {
  * 僅整欄覆寫 semesterSplit 一欄，不碰其他資料
  */
 function backfillSemesterSplit() {
+  _assertManualRunByDeployer_('backfillSemesterSplit');  // task_52660e35 損-06：維運函式禁止前端直呼
   const sheet    = _getRequirementSheet();
   const data     = sheet.getDataRange().getValues();
   const keys     = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys;

@@ -188,6 +188,7 @@ function syncTrainingStats() {
 
 /** 建立每晚 23:30 的定時觸發器（可重複執行：會先刪除同名舊觸發器再重建，不疊加） */
 function setupSyncTrigger() {
+  _assertManualRunByDeployer_('setupSyncTrigger');  // task_52660e35 損-06：維運函式禁止前端直呼
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'syncTrainingStats') ScriptApp.deleteTrigger(t);
   });
