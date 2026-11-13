@@ -165,9 +165,9 @@ function parseSheetData_(sheet) {
  * - 工作表不存在時自動建立（Phase 0 初始化情境）
  * - 已存在時直接覆寫第一列標題（修復/更新情境）
  * - 絕不使用 insertRow，以免產生雙標題行
+ * - 私有（結尾底線，task_6d2f8a14）：僅由 initSheetHeaders 呼叫，部署者守衛由外層負責
  */
-function ensureSheetHeaders(sheetName) {
-  _assertManualRunByDeployer_('ensureSheetHeaders');  // task_52660e35 損-06：維運函式禁止前端直呼
+function ensureSheetHeaders_(sheetName) {
   const schema = SHEET_SCHEMA[sheetName];
   if (!schema) throw new Error('SHEET_SCHEMA 找不到：' + sheetName);
 
@@ -188,9 +188,9 @@ function ensureSheetHeaders(sheetName) {
 /** 建立三張工作表並寫入標題列（可重複執行，執行後既有資料不受影響） */
 function initSheetHeaders() {
   _assertManualRunByDeployer_('initSheetHeaders');  // task_52660e35 損-06：維運函式禁止前端直呼
-  ensureSheetHeaders('TRAINING_CATALOG');
-  ensureSheetHeaders('TRAINING_RECORD');
-  ensureSheetHeaders('TRAINING_REQUIREMENT');
+  ensureSheetHeaders_('TRAINING_CATALOG');
+  ensureSheetHeaders_('TRAINING_RECORD');
+  ensureSheetHeaders_('TRAINING_REQUIREMENT');
   Logger.log('initSheetHeaders 完成，三張工作表已就緒。');
 }
 
@@ -208,7 +208,7 @@ const STATS_CACHE_SHEET      = 'StatsCache';       // 伺服器端統計快取�
 const REPORT_DOC_TEMPLATE_ID = '';        // fallback；正式值優先讀 PropertiesService（REPORT_TEMPLATE_ID_KEY）
 const SCHOOL_NAME            = '臺北市立中崙高級中學';
 const PRINCIPAL_NAME         = '';        // fallback；正式值優先讀 PropertiesService（PRINCIPAL_NAME_KEY）
-const REPORT_TEMPLATE_ID_KEY = 'reportDocTemplateId';  // 簽呈範本文件 ID（createReportDocTemplate_ 自動寫入）
+const REPORT_TEMPLATE_ID_KEY = 'reportDocTemplateId';  // 簽呈範本文件 ID（createReportDocTemplate 自動寫入）
 const PRINCIPAL_NAME_KEY     = 'principalName';        // 校長姓名（管理後台「報告設定」可修改）
 const STATS_PARTTIME_KEY     = 'statsIncludePartTime'; // 兼課教師是否計入統計母數（管理後台可切換）
 

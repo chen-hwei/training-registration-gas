@@ -175,7 +175,7 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 | 管理後台跳回首頁 | Hub `UserStatusCache` 的 `systemAccess` 欄未設 `training_admin:true` | 見上方「管理者權限設定」 |
 | clasp push 後改了沒生效 | 部署版本未更新 | 每次 push 後到 GAS 編輯器「新增版本」 |
 | SchoolPortalLib 設定消失 | 以前 `appsscript.json` 沒有 Library 設定，clasp push 時覆寫 | Library 已嵌入 `appsscript.json`，此問題已修復 |
-| `initSheetHeaders()` 拋出「工作表不存在」 | 舊版 `ensureSheetHeaders` 用 `_getTrainingSheet_` 會 throw | `ensureSheetHeaders` 已改為自動建立工作表 |
+| `initSheetHeaders()` 拋出「工作表不存在」 | 舊版 `ensureSheetHeaders` 用 `_getTrainingSheet_` 會 throw | `ensureSheetHeaders_`（`task_6d2f8a14` 起改私有）已改為自動建立工作表 |
 
 ### ⚠️ WEB_APP_BASE_URL 更新時機（v3.5 起改讀 Script Properties）
 若日後**重新部署**（產生新 Deployment ID），到 GAS 編輯器「專案設定 → 指令碼屬性」新增/修改 `WEB_APP_BASE_URL` 屬性值即可，**不需要改程式碼**。`getWebAppBaseUrl_()`（`Schema.gs`）優先讀 Script Properties，讀不到才 fallback 回程式碼內的 `WEB_APP_BASE_URL_FALLBACK` 常數（僅作保底，非唯一維護點）。

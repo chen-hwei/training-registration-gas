@@ -249,7 +249,7 @@ function _healthCheckPreExport_(year) {
   //   判讀為合法日期會存成 Date 型別，parseSheetData_ 讀回時一律轉成「破折號」字串
   //   （見 Schema.gs parseSheetData_，trainingDate 不在 timeKeys 清單內）；只有 Sheets 無法辨識
   //   的離譜值（如 6 位數年份）才會維持寫入時的原始「斜線」字串。兩種寫法都合法，不可用格式判斷。
-  //   年份下限採 2000（系統有 seedHistoricalRequirements() 灌入的歷史學年度資料），
+  //   年份下限採 2000（系統內有早期回溯灌入的 110～113 歷史學年度資料），
   //   不綁 _currentAcademicYear_()——那是學年度邏輯，與「日期合理性」是兩回事。
   var TRAINING_DATE_MIN_YEAR = 2000, TRAINING_DATE_MAX_YEAR = 2100;
   var trainingDateBad = recordRows
