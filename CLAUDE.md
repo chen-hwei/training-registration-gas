@@ -98,6 +98,14 @@ GAS 編輯器 → 右上「部署」→「管理部署」→ ✎ 編輯 → 版�
 
 ## 🏗️ 架構重點
 
+### ⛔ 後端全域函式命名鐵律（`task_52660e35`）
+`appsscript.json` 為 `ANYONE_ANONYMOUS`＋`USER_DEPLOYING`：**名稱不以底線結尾的全域函式，任何人（含未登入的匿名者）都能用 `google.script.run` 以部署者權限直接呼叫**，繞過 `handleRequest` 的 token 與管理者檢查（2026-11-12 無痕視窗實測成立）。GAS 只把「結尾」底線視為私有，開頭底線（如 `_foo`）照樣公開。
+新增後端全域函式時，只能二選一：
+1. **名稱結尾加底線**（`foo_`）——handler、helper 一律如此，經 `handleRequest` 分派
+2. **第一行呼叫 `_assertManualRunByDeployer_('函式名')`**——僅限需從 GAS 編輯器「執行」的維運／診斷函式；觸發器入口改用 `_assertTriggerOrDeployer_(e, '函式名')` 並把本體放進底線結尾的函式
+
+目前公開白名單只有 `doGet`、`include`、`handleRequest`、`checkAndNotifyOverdue`、`syncTrainingStats`，其餘公開函式第一行都是守衛。⚠️ 部署者本人從網頁呼叫有守衛的函式會被放行，測守衛只能用唯讀函式（如 `auditTrainingScopes`）在無痕視窗測。
+
 ### 前端共用元件（config.html）
 - `api(action, body)` → 所有後端呼叫唯一入口（透過 `google.script.run`，**禁止 fetch**）
 - `initPage({ adminOnly: true })` → 頁面初始化 + Token 檢查 + 管理者檢查
@@ -163,11 +171,11 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 | 白屏（連藍色頁首都沒有） | 使用消費者 URL，每次部署 `googleusercontent.com` hash 改變，localStorage Token 失效 | 改用 `/a/macros/zlsh.tp.edu.tw/` 域 URL |
 | 白屏（頁首可見，內容空白） | `showSpinner()` 的 `z-index:900` 蓋住 `z-index:100` 的頁首 | spinner `z-index` 已改為 `90`；現在遮罩元素 `#spinner-overlay` 在 `config.html`，樣式由 SchoolPortalLib `getSharedCSS()` 提供 |
 | 點導覽連結又被帶到 `googleusercontent.com` | `window.top.location.href = '?page=...'` 是相對路徑；若 `window.top` 停在 `googleusercontent.com`，相對路徑就停留在 `googleusercontent.com` | `config.html` 新增 `_navigate()` helper，後端注入絕對 URL `APP_BASE_URL`（`Schema.gs` 的 `getWebAppBaseUrl_()` 優先讀 Script Properties `WEB_APP_BASE_URL`，讀不到才 fallback 回 `WEB_APP_BASE_URL_FALLBACK` 常數；`doGet()` 以 `template.appBaseUrl` 注入） |
-| 資料載入後內容靜默空白（Date 序列化地雷） | 日期欄位 `getValues()` 回傳 JS `Date` 物件，`google.script.run` postMessage 無法序列化 → `result = null` → `withSuccessHandler(null)` → 靜默白屏，不進 `.catch()` | `Schema.gs parseSheetData` 補 `instanceof Date` 判斷，強制 `Utilities.formatDate()` 轉字串（同教職員名冊管理系統） |
+| 資料載入後內容靜默空白（Date 序列化地雷） | 日期欄位 `getValues()` 回傳 JS `Date` 物件，`google.script.run` postMessage 無法序列化 → `result = null` → `withSuccessHandler(null)` → 靜默白屏，不進 `.catch()` | `Schema.gs parseSheetData_` 補 `instanceof Date` 判斷，強制 `Utilities.formatDate()` 轉字串（同教職員名冊管理系統） |
 | 管理後台跳回首頁 | Hub `UserStatusCache` 的 `systemAccess` 欄未設 `training_admin:true` | 見上方「管理者權限設定」 |
 | clasp push 後改了沒生效 | 部署版本未更新 | 每次 push 後到 GAS 編輯器「新增版本」 |
 | SchoolPortalLib 設定消失 | 以前 `appsscript.json` 沒有 Library 設定，clasp push 時覆寫 | Library 已嵌入 `appsscript.json`，此問題已修復 |
-| `initSheetHeaders()` 拋出「工作表不存在」 | 舊版 `ensureSheetHeaders` 用 `_getTrainingSheet` 會 throw | `ensureSheetHeaders` 已改為自動建立工作表 |
+| `initSheetHeaders()` 拋出「工作表不存在」 | 舊版 `ensureSheetHeaders` 用 `_getTrainingSheet_` 會 throw | `ensureSheetHeaders` 已改為自動建立工作表 |
 
 ### ⚠️ WEB_APP_BASE_URL 更新時機（v3.5 起改讀 Script Properties）
 若日後**重新部署**（產生新 Deployment ID），到 GAS 編輯器「專案設定 → 指令碼屬性」新增/修改 `WEB_APP_BASE_URL` 屬性值即可，**不需要改程式碼**。`getWebAppBaseUrl_()`（`Schema.gs`）優先讀 Script Properties，讀不到才 fallback 回程式碼內的 `WEB_APP_BASE_URL_FALLBACK` 常數（僅作保底，非唯一維護點）。
@@ -187,7 +195,7 @@ window.location.href = '?page=admin';       // ❌ 在 iframe 內失效
 
 ```
 研習登錄系統/
-├── 程式碼.gs      # doGet / doPost / handleRequest 路由
+├── 程式碼.gs      # doGet / handleRequest 路由（`task_52660e35` 起移除 doPost）
 ├── Schema.gs      # SHEET_SCHEMA + 系統常數 + ID 產生器
 ├── Catalog.gs     # 研習目錄 CRUD
 ├── Record.gs      # 登錄紀錄與 Base64 檔案上傳

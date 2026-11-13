@@ -219,9 +219,9 @@
 
 ```
 研習登錄系統/
-├── 程式碼.gs        # doGet / doPost / handleRequest 路由
+├── 程式碼.gs        # doGet / handleRequest 路由（`task_52660e35` 起移除 doPost）
 ├── Schema.gs        # SHEET_SCHEMA 定義與系統常數（含 TRAINING_REQUIREMENT）
-├── Requirement.gs   # 年度研習任務 CRUD（getRequirements / renewRequirements / seed114Requirements）
+├── Requirement.gs   # 年度研習任務 CRUD（getRequirements_ / renewRequirements_ / seed114Requirements）
 ├── Catalog.gs       # 研習目錄 CRUD
 ├── Record.gs        # 登錄紀錄與 Base64 檔案上傳
 ├── Review.gs        # 審核流程（核准 / 退件 / 匯出）
@@ -229,7 +229,7 @@
 ├── Sync.gs          # 每晚同步 TrainingStats → Portal Hub
 ├── Notify.gs        # 通知系統（N1/N2/N3）+ 防重複寄送 + 處室管理者查詢
 ├── TrainingReport.gs # 研習統計分析模組（匯入/名冊快照/指標計算/StatsCache/匯出）
-├── CatalogStats.gs  # 研習目錄課程統計（getCatalogStats：課程 × 審核狀態 × 部別）
+├── CatalogStats.gs  # 研習目錄課程統計（getCatalogStats_：課程 × 審核狀態 × 部別）
 ├── TrainAuth.gs     # 原生登入與 Token（帳號查詢 / 後六碼驗證 / SSO 交換碼兌換 / Session 驗證）
 ├── HealthCheck.gs   # 資料健檢（學年切換前、簽呈匯出前）
 ├── Index.html       # 教師端首頁（年度任務進度儀表板 + 公告課程列表）
@@ -293,6 +293,7 @@
 | **v3.32** | 依年度任務指派管理者 Stage 1a：年度任務新增任務系列代號（回填 80 筆）；`training_scope` 格式錯誤改為無權限（fail-closed）；維運函式加部署者守衛（[PR #52](https://github.com/chen-hwei/training-registration-gas/pull/52)） | ✅ 完成（2026-09-30） |
 | **v3.33** | Stage 1b：`TASK:<系列代號>` 任務管理者權限接入審核／課程／任務／統計路由；通知新增任務管理者收件與回信對象；系列代號已發最高號紀錄（[PR #53](https://github.com/chen-hwei/training-registration-gas/pull/53)） | ✅ 完成（2026-10-01） |
 | **v3.34** | Stage 1c：管理後台支援任務管理者畫面；新增任務可歸入既有系列；新增任務截止日期前端檢查（[PR #54](https://github.com/chen-hwei/training-registration-gas/pull/54)） | ✅ 完成（2026-10-02） |
+| **v3.35** | 公開函式曝露修正：handler／helper 共 70 支改結尾底線、23 支維運函式加部署者守衛、觸發器入口驗 `triggerUid`、`handleRequest` 型別守衛、移除 `doPost`；匿名已無法以 `google.script.run` 直呼後端（[PR #57](https://github.com/chen-hwei/training-registration-gas/pull/57)，GAS 125 版） | ✅ 完成（2026-11-13） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
@@ -318,7 +319,7 @@ UAT 期間發現並修復下列問題：
 | 症狀 | 根本原因 | 修復位置 |
 |---|---|---|
 | 點選導覽連結後白屏，URL 變 `googleusercontent.com` | `window.top.location.href = '?page=X'` 使用相對路徑，當 `window.top` 在 `googleusercontent.com` 時仍留在錯誤域 | `config.html` 新增 `_navigate()`，從 `doGet()` 注入絕對 `APP_BASE_URL` |
-| 資料載入後內容空白，API 靜默失敗 | `getValues()` 對日期格式儲存格回傳 JS `Date`，`google.script.run` postMessage 無法序列化，`withSuccessHandler` 收到 `null` | `Schema.gs` `parseSheetData` 加入 `instanceof Date` 檢查，以 `Utilities.formatDate()` 轉字串 |
+| 資料載入後內容空白，API 靜默失敗 | `getValues()` 對日期格式儲存格回傳 JS `Date`，`google.script.run` postMessage 無法序列化，`withSuccessHandler` 收到 `null` | `Schema.gs` `parseSheetData_` 加入 `instanceof Date` 檢查，以 `Utilities.formatDate()` 轉字串 |
 | 管理後台回傳 FORBIDDEN | `SchoolPortalLib.getUser().systemAccess` 可能已是 JS Object，`JSON.parse(Object)` 拋 SyntaxError，catch 後誤判無權限 | `程式碼.gs` Level 2 改為先 `typeof sa === 'object'` 判斷再決定是否 parse |
 | 導覽列出現兩個「管理後台」連結 | `Admin.html` 靜態 `<a>` 缺 `data-admin-link="1"`，`_renderAdminNav()` 重複插入 | `Admin.html` 靜態連結補上屬性 |
 | 送出成功後頁面不跳轉 | GAS iframe `allow-top-navigation-by-user-activation` 屬性，`setTimeout` 非同步回呼無使用者手勢，瀏覽器封鎖導覽 | `Submit.html` 改為成功後按鈕變「前往我的紀錄 →」由使用者點擊觸發 |
@@ -326,7 +327,7 @@ UAT 期間發現並修復下列問題：
 | 退件後靜默失敗 | `confirmReject()` 先呼叫 `closeRejectModal()` 清空了 `_rejectTargetId`，再讀取時已為空 | 先儲存 `var targetId = _rejectTargetId` 再關 Modal |
 | Hub.TrainingStats 工作表不存在時 null pointer | `getSheetByName()` 回傳 null，直接 `clearContents()` 爆錯 | `Sync.gs` 改為工作表不存在時自動建立 |
 | 管理者信箱收到大量 Drive 共用通知 | `file.addViewer(email)` 預設寄送共用通知信 | `Drive.gs` 改用 Drive API v2 `Permissions.insert`，傳入 `sendNotificationEmails:false` |
-| 通知系統不發信（N2 靜默失敗） | `TRAINING_CATALOG` 日期欄位儲存格格式為日期型，`parseSheetData` 轉出 `YYYY-MM-DD`，但 `Notify.gs` 用 `/` 做 split | 解析前加 `.replace(/-/g, '/')` 統一格式 |
+| 通知系統不發信（N2 靜默失敗） | `TRAINING_CATALOG` 日期欄位儲存格格式為日期型，`parseSheetData_` 轉出 `YYYY-MM-DD`，但 `Notify.gs` 用 `/` 做 split | 解析前加 `.replace(/-/g, '/')` 統一格式 |
 | 通知預覽前端永遠空白 | `previewNotification()` 回傳平面陣列，前端期望 `{ n1:[], n2:[], n3:[] }` 分組格式，且欄位名稱不符 | 後端改為分組回傳，欄位統一為 `userId`、`title` |
 
 ---
@@ -360,7 +361,7 @@ clasp push
 - 登錄、審核、研習目錄與年度任務的寫入均以 `LockService` 保護，防止多人同時送出時資料錯位；研習統計模組與每晚同步未加鎖
 - 手機拍攝的研習證明照片會在前端自動以 Canvas API 壓縮至 2MB 以下，再轉 Base64 上傳
 - 通知信從腳本擁有者的學校 Gmail 寄出（`MailApp`），每日配額 1,500 人次；教師信改分組 BCC 群發，`to` 固定為系統回信地址、教師名單一律走 `bcc`，嚴禁互見；以 `CacheService` 防止同一教師/同一管理者同一天重複收到相同通知
-- 管理者**實際收信**對象依任務/紀錄所屬處室精準路由（v3.24 起，`task_6e2d40af` Stage D）：單一處室彙整信 Reply-To 動態指向該處室承辦人，橫跨多處室或查無對應管理者時退回系統信箱並留痕；`previewNotification`（預覽）與 `checkAndNotifyOverdue`（實際寄信）共用同一份計算結果，兩者口徑保證一致，Stage A／B／D 過渡狀態至此結案；v3.33 起收件人另含該任務系列的任務管理者（處室 ∪ 任務 ∪ 全權）
+- 管理者**實際收信**對象依任務/紀錄所屬處室精準路由（v3.24 起，`task_6e2d40af` Stage D）：單一處室彙整信 Reply-To 動態指向該處室承辦人，橫跨多處室或查無對應管理者時退回系統信箱並留痕；`previewNotification_`（預覽）與 `_runOverdueNotification_`（實際寄信，觸發器入口 `checkAndNotifyOverdue`）共用同一份計算結果，兩者口徑保證一致，Stage A／B／D 過渡狀態至此結案；v3.33 起收件人另含該任務系列的任務管理者（處室 ∪ 任務 ∪ 全權）
 
 ## 系統設計哲學
 

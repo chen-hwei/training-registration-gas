@@ -8,14 +8,22 @@
  *
  * 效能注意（gas-limitations 鐵律）：ImportedData 與任務關鍵字／區間只在迴圈外各算一次，
  * 逐教師迭代時只做記憶體比對，禁止對每位教師重新讀表或重算區間。
+ *
+ * 觸發器入口（名稱寫死在觸發器裡不可改名）：只接受本專案觸發器或部署者手動執行（task_52660e35 損-05）
  */
-function syncTrainingStats() {
-  const academicYear = _currentAcademicYear();
+function syncTrainingStats(e) {
+  _assertTriggerOrDeployer_(e, 'syncTrainingStats');
+  return _runSyncTrainingStats_();
+}
+
+/** 同步本體（task_52660e35 損-05 自 syncTrainingStats 拆出） */
+function _runSyncTrainingStats_() {
+  const academicYear = _currentAcademicYear_();
 
   // ── Step 1：當學年 ACTIVE 任務，預先算好關鍵字、硬性區間與 audienceRules（迴圈外算一次）──
-  // baseRequiredHours 與 audienceRules 口徑須與 Requirement.gs 的 getRequirements 一致：
+  // baseRequiredHours 與 audienceRules 口徑須與 Requirement.gs 的 getRequirements_ 一致：
   // 若任務本身 requiredHours 為 0 但有 audienceRules，改依教師身分分類覆寫實際應達時數
-  const reqDefs = parseSheetData(_getRequirementSheet())
+  const reqDefs = parseSheetData_(_getRequirementSheet_())
     .filter(r => r.status === 'ACTIVE' && Number(r.academicYear) === academicYear)
     .map(r => {
       let keywords = [];
@@ -36,7 +44,7 @@ function syncTrainingStats() {
 
   // ── Step 2：課程 Hash Map：catalogId → isRequired（原「必修達成數」欄位語意，維持不變）──
   const catalogMap = {};
-  parseSheetData(_getCatalogSheet()).forEach(c => {
+  parseSheetData_(_getCatalogSheet_()).forEach(c => {
     catalogMap[c.catalogId] = c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE';
   });
 
@@ -45,7 +53,7 @@ function syncTrainingStats() {
   //   (b) { userId → 必修課程達成數 }（原邏輯：課程 isRequired 計數，全期間不分學年）──
   const approvedMap    = {};
   const requiredDoneMap = {};
-  parseSheetData(_getRecordSheet())
+  parseSheetData_(_getRecordSheet_())
     .filter(r => r.status === 'APPROVED')
     .forEach(r => {
       if (r.requirementId) {
@@ -115,7 +123,7 @@ function syncTrainingStats() {
     return VALID_DEPT.includes(d) ? d : '';
   }
 
-  const now      = _now();
+  const now      = _now_();
   const dataRows = [];
   cacheData.slice(1).forEach(row => {
     const uid = row[uidCol];
@@ -128,7 +136,7 @@ function syncTrainingStats() {
     if (!_isTrainingTracked_(jobPrimary, includePartTime)) return;
     const name = String(row[nameCol] || '').trim();
 
-    // 身分分類（供 audienceRules 分眾覆寫應達時數，口徑與 getRequirements 一致）
+    // 身分分類（供 audienceRules 分眾覆寫應達時數，口徑與 getRequirements_ 一致）
     const identityGroup = _classifyIdentity_({
       jobPrimary: jpCol >= 0 ? row[jpCol] : '',
       title:      ttCol >= 0 ? row[ttCol] : '',
@@ -188,6 +196,7 @@ function syncTrainingStats() {
 
 /** 建立每晚 23:30 的定時觸發器（可重複執行：會先刪除同名舊觸發器再重建，不疊加） */
 function setupSyncTrigger() {
+  _assertManualRunByDeployer_('setupSyncTrigger');  // task_52660e35 損-06：維運函式禁止前端直呼
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'syncTrainingStats') ScriptApp.deleteTrigger(t);
   });

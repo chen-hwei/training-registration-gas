@@ -11,15 +11,15 @@ var HEALTHCHECK_SAMPLE_LIMIT = 30;
  * @param {string} scope - 'yearSwitch' 或 'preExport'（健檢群組；⚠️ 與處室權限 training_scope 同名異義，不可混用）
  * @param {number} academicYear - 目標學年度
  */
-function runDataHealthCheck(userId, scope, academicYear) {
+function runDataHealthCheck_(userId, scope, academicYear) {
   try {
-    var year = Number(academicYear || _currentAcademicYear());
+    var year = Number(academicYear || _currentAcademicYear_());
     var groups = (scope === 'preExport') ? _healthCheckPreExport_(year) : _healthCheckYearSwitch_(year);
     var problemCount = groups.reduce(function(sum, g) { return sum + (g.level === 'warning' ? g.count : 0); }, 0);
     _logOp_(userId, 'RUN_HEALTH_CHECK', 'scope=' + scope + ' academicYear=' + year + ' 問題數=' + problemCount);
-    return _ok({ groups: groups });
+    return _ok_({ groups: groups });
   } catch (e) {
-    return _err('runDataHealthCheck 失敗：' + e.message);
+    return _err_('runDataHealthCheck 失敗：' + e.message);
   }
 }
 
@@ -56,7 +56,7 @@ function _healthCheckYearSwitch_(year) {
   var groups = [];
 
   // ── 讀一次 TRAINING_REQUIREMENT，供①②共用 ──
-  var reqRows = parseSheetData(_getRequirementSheet());
+  var reqRows = parseSheetData_(_getRequirementSheet_());
 
   // ① 目標學年是否已有 ACTIVE 任務資料
   var targetActive = reqRows.filter(function(r) {
@@ -110,12 +110,12 @@ function _healthCheckYearSwitch_(year) {
   // ⑤～⑦ 處室歸屬空值（task_c95dbe21 Stage 2a）：空值自 Stage 2a 起僅全權管理者可見，
   //   列出來源供全權管理者補正。本健檢路由已列 ALL-only（清單含全校各處室資料）。
   //   TRAINING_CATALOG／TRAINING_RECORD 各讀一次，處室索引由已讀的 reqRows 與課程列就地組出，不重讀
-  var catalogRows = parseSheetData(_getCatalogSheet());
+  var catalogRows = parseSheetData_(_getCatalogSheet_());
   var ownerIndex = { reqOwner: {}, catReq: {} };
   reqRows.forEach(function(r) { ownerIndex.reqOwner[r.requirementId] = String(r.owner || '').trim(); });
   catalogRows.forEach(function(c) { ownerIndex.catReq[c.catalogId] = String(c.requirementId || '').trim(); });
 
-  // ⑤ ACTIVE 任務主責單位空白（不限學年；Y-2：renewRequirements 會原樣複製空 owner，複製前即應補正）
+  // ⑤ ACTIVE 任務主責單位空白（不限學年；Y-2：renewRequirements_ 會原樣複製空 owner，複製前即應補正）
   var ownerEmpty = reqRows
     .filter(function(r) { return r.status === 'ACTIVE' && !String(r.owner || '').trim(); })
     .map(function(r) { return '[' + r.requirementId + '] ' + r.name + '（' + r.academicYear + ' 學年度）：主責單位空白'; });
@@ -128,7 +128,7 @@ function _healthCheckYearSwitch_(year) {
   groups.push(_hcGroup_('yearSwitch_catalogUnlinked', '研習課程未掛年度任務', catalogUnlinked));
 
   // ⑦ 待審紀錄查不到負責處室（三段瀑布解析為空，僅全權管理者審得到）
-  var pendingOwnerEmpty = parseSheetData(_getRecordSheet())
+  var pendingOwnerEmpty = parseSheetData_(_getRecordSheet_())
     .filter(function(r) { return r.status === 'PENDING' && !_resolveRecordOwner_(r, ownerIndex); })
     .map(function(r) { return '[' + r.recordId + '] ' + r.userId + '：' + r.title + '（' + r.trainingDate + '）'; });
   groups.push(_hcGroup_('yearSwitch_pendingOwnerEmpty', '待審紀錄查不到負責處室', pendingOwnerEmpty));
@@ -170,8 +170,8 @@ function _healthCheckPreExport_(year) {
   var groups = [];
   var ss = SpreadsheetApp.openById(getTrainingSsId_());
 
-  // ⑤ 教師名單一致性：TeacherSnapshot 該學年度全部姓名 vs calcStats 實際納入統計的篩選條件
-  // （不呼叫 calcStats() 本體，因其內含 saveStatsCache_ 寫入快取，健檢須維持零寫入）
+  // ⑤ 教師名單一致性：TeacherSnapshot 該學年度全部姓名 vs calcStats_ 實際納入統計的篩選條件
+  // （不呼叫 calcStats_() 本體，因其內含 saveStatsCache_ 寫入快取，健檢須維持零寫入）
   var snapSheet = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
   var excluded = [];
   if (snapSheet) {
@@ -207,18 +207,18 @@ function _healthCheckPreExport_(year) {
     var hCol = iHdr.indexOf('hours');
     var dCol = iHdr.indexOf('date');
     iData.slice(1).forEach(function(r, idx) {
-      if (Number(r[yCol]) > year) return;  // 累積口徑：只看截至目標學年（比照 calcStats cumulative 模式）
+      if (Number(r[yCol]) > year) return;  // 累積口徑：只看截至目標學年（比照 calcStats_ cumulative 模式）
       var rowLabel = '第 ' + (idx + 2) + ' 列';
       var name = String(r[nCol] || '').trim();
       var title = String(r[tCol] || '').trim();
       if (!name || !title) missingField.push(rowLabel + '：教師姓名或研習名稱缺漏');
 
-      // 日期欄可能因 Sheets 自動判讀而讀出 Date 物件，須先轉字串再驗證（比照 parseSheetData 的處理方式）
+      // 日期欄可能因 Sheets 自動判讀而讀出 Date 物件，須先轉字串再驗證（比照 parseSheetData_ 的處理方式）
       var dateRaw = r[dCol];
       var dateStr = dateRaw instanceof Date
         ? Utilities.formatDate(dateRaw, 'Asia/Taipei', 'yyyy/M/d')
         : String(dateRaw || '').trim();
-      // 空白日期是系統既有容許的正常狀態（calcStats／syncTrainingStats 皆不因此出錯），只標記「有值但解析失敗」
+      // 空白日期是系統既有容許的正常狀態（calcStats_／syncTrainingStats 皆不因此出錯），只標記「有值但解析失敗」
       // 沿用既有 _detectAcademicYearFromDate_（會回傳 null），不重寫日期解析邏輯
       if (dateStr && _detectAcademicYearFromDate_(dateStr) === null) {
         dateBad.push(rowLabel + '（' + name + '）：日期「' + dateStr + '」無法解析');
@@ -237,7 +237,7 @@ function _healthCheckPreExport_(year) {
 
   // ⑦ TRAINING_RECORD 審核狀態列舉值不合法
   var VALID_STATUS = ['PENDING', 'APPROVED', 'REJECTED'];
-  var recordRows = parseSheetData(_getRecordSheet());
+  var recordRows = parseSheetData_(_getRecordSheet_());
   var statusBad = recordRows
     .filter(function(r) { return VALID_STATUS.indexOf(r.status) < 0; })
     .map(function(r) { return '[' + r.recordId + '] ' + r.userId + '：審核狀態「' + r.status + '」非合法值'; });
@@ -246,11 +246,11 @@ function _healthCheckPreExport_(year) {
   // ⑧ TRAINING_RECORD 研習日期年份異常（不限狀態：PENDING 尚未審核也可能已寫入髒值，
   //   APPROVED／REJECTED 若曾中招會讓 Review.gs 依年度匯出時漏收或誤收，故全掃）
   //   只驗年份是否落在合理範圍，不驗「年/月/日」格式本身——trainingDate 若能被 Sheets
-  //   判讀為合法日期會存成 Date 型別，parseSheetData 讀回時一律轉成「破折號」字串
-  //   （見 Schema.gs parseSheetData，trainingDate 不在 timeKeys 清單內）；只有 Sheets 無法辨識
+  //   判讀為合法日期會存成 Date 型別，parseSheetData_ 讀回時一律轉成「破折號」字串
+  //   （見 Schema.gs parseSheetData_，trainingDate 不在 timeKeys 清單內）；只有 Sheets 無法辨識
   //   的離譜值（如 6 位數年份）才會維持寫入時的原始「斜線」字串。兩種寫法都合法，不可用格式判斷。
   //   年份下限採 2000（系統有 seedHistoricalRequirements() 灌入的歷史學年度資料），
-  //   不綁 _currentAcademicYear()——那是學年度邏輯，與「日期合理性」是兩回事。
+  //   不綁 _currentAcademicYear_()——那是學年度邏輯，與「日期合理性」是兩回事。
   var TRAINING_DATE_MIN_YEAR = 2000, TRAINING_DATE_MAX_YEAR = 2100;
   var trainingDateBad = recordRows
     .map(function(r) {
@@ -276,18 +276,18 @@ function _healthCheckPreExport_(year) {
 function debugScopeProbe() {
   _assertManualRunByDeployer_('debugScopeProbe');
   const PROBES = [undefined, ['輔導室'], ['學務處'], ['TASK:RS002'], ['TASK:RS006'], ['學務處', 'TASK:RS002'], []];
-  const year = _currentAcademicYear();
+  const year = _currentAcademicYear_();
   const safe = fn => { try { return fn(); } catch (e) { return 'ERR:' + e.message; } };
   const lines = PROBES.map(raw => {
     const scope = _normalizeScope_(raw);
     const label = raw === undefined ? '全權(未設定)' : JSON.stringify(raw);
-    const pending = safe(() => getPendingReviews(scope).length);
-    const catalog = safe(() => getCatalogAdmin(scope).length);
-    const reqs    = safe(() => getAllRequirements({ academicYear: year }, scope).map(r => r.requirementId).join('/') || '（無）');
-    const reqStat = safe(() => ((calcRequirementStats({ academicYear: year }, scope).data || {}).requirements || []).length);
-    const catStat = safe(() => ((getCatalogStats({ academicYear: year }, scope).data || {}).courses || []).length);
-    const exp     = safe(() => exportRecords({}, scope).count);
-    const preview = safe(() => { const g = previewNotification('', scope).groups; return 'N1=' + g.n1.length + ' N2=' + g.n2.length; });
+    const pending = safe(() => getPendingReviews_(scope).length);
+    const catalog = safe(() => getCatalogAdmin_(scope).length);
+    const reqs    = safe(() => getAllRequirements_({ academicYear: year }, scope).map(r => r.requirementId).join('/') || '（無）');
+    const reqStat = safe(() => ((calcRequirementStats_({ academicYear: year }, scope).data || {}).requirements || []).length);
+    const catStat = safe(() => ((getCatalogStats_({ academicYear: year }, scope).data || {}).courses || []).length);
+    const exp     = safe(() => exportRecords_({}, scope).count);
+    const preview = safe(() => { const g = previewNotification_('', scope).groups; return 'N1=' + g.n1.length + ' N2=' + g.n2.length; });
     return label + ' | 待審 ' + pending + ' | 課程 ' + catalog + ' | 匯出 ' + exp +
       ' | 任務統計 ' + reqStat + ' | 課程統計 ' + catStat + ' | 通知 ' + preview + ' | ' + year + '學年任務 ' + reqs;
   });

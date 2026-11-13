@@ -106,7 +106,7 @@ const SHEET_SCHEMA = {
       'deliveryType', 'semesterSplit', 'notes', 'links',
       'isRecurring', 'status', 'createdAt', 'audienceRules', 'matchKeywords',
       'teacherNote', 'targetAudience',
-      // task_40e96378：跨學年穩定的任務系列代號（RS001…），renewRequirements 沿用、不可編輯；
+      // task_40e96378：跨學年穩定的任務系列代號（RS001…），renewRequirements_ 沿用、不可編輯；
       // 任務管理者授權（training_scope 的 "TASK:RSxxx"）綁此代號，學年切換後不必重新指派
       'seriesId'
     ]
@@ -115,16 +115,16 @@ const SHEET_SCHEMA = {
 
 // ==================== 工作表存取輔助 ====================
 
-function _getTrainingSheet(sheetName) {
+function _getTrainingSheet_(sheetName) {
   const ss = SpreadsheetApp.openById(getTrainingSsId_());
   const sheet = ss.getSheetByName(sheetName);
   if (!sheet) throw new Error('工作表不存在：' + sheetName);
   return sheet;
 }
 
-function _getCatalogSheet()      { return _getTrainingSheet(SHEET_SCHEMA.TRAINING_CATALOG.name);     }
-function _getRecordSheet()       { return _getTrainingSheet(SHEET_SCHEMA.TRAINING_RECORD.name);      }
-function _getRequirementSheet()  { return _getTrainingSheet(SHEET_SCHEMA.TRAINING_REQUIREMENT.name); }
+function _getCatalogSheet_()      { return _getTrainingSheet_(SHEET_SCHEMA.TRAINING_CATALOG.name);     }
+function _getRecordSheet_()       { return _getTrainingSheet_(SHEET_SCHEMA.TRAINING_RECORD.name);      }
+function _getRequirementSheet_()  { return _getTrainingSheet_(SHEET_SCHEMA.TRAINING_REQUIREMENT.name); }
 
 // ==================== 資料讀寫工具 ====================
 
@@ -132,7 +132,7 @@ function _getRequirementSheet()  { return _getTrainingSheet(SHEET_SCHEMA.TRAININ
  * 將工作表資料（不含標題列）依 SHEET_SCHEMA 解析為英文 Key 的物件陣列
  * 以工作表名稱自動比對 SHEET_SCHEMA
  */
-function parseSheetData(sheet) {
+function parseSheetData_(sheet) {
   const schema = SHEET_SCHEMA[sheet.getName()];
   if (!schema) throw new Error('SHEET_SCHEMA 找不到：' + sheet.getName());
   const data = sheet.getDataRange().getValues();
@@ -167,6 +167,7 @@ function parseSheetData(sheet) {
  * - 絕不使用 insertRow，以免產生雙標題行
  */
 function ensureSheetHeaders(sheetName) {
+  _assertManualRunByDeployer_('ensureSheetHeaders');  // task_52660e35 損-06：維運函式禁止前端直呼
   const schema = SHEET_SCHEMA[sheetName];
   if (!schema) throw new Error('SHEET_SCHEMA 找不到：' + sheetName);
 
@@ -186,6 +187,7 @@ function ensureSheetHeaders(sheetName) {
 
 /** 建立三張工作表並寫入標題列（可重複執行，執行後既有資料不受影響） */
 function initSheetHeaders() {
+  _assertManualRunByDeployer_('initSheetHeaders');  // task_52660e35 損-06：維運函式禁止前端直呼
   ensureSheetHeaders('TRAINING_CATALOG');
   ensureSheetHeaders('TRAINING_RECORD');
   ensureSheetHeaders('TRAINING_REQUIREMENT');
@@ -240,7 +242,7 @@ function _isCountedInStats_(dept, job, includePartTime) {
 
 /**
  * 應受訓人員名單：_isTeacherJob_() 或行政人員。用於讀 Hub.UserStatusCache 的路徑
- * （Sync.gs、calcRequirementStats、Notify.gs）。不套 VALID_DEPT——行政人員部別本就
+ * （Sync.gs、calcRequirementStats_、Notify.gs）。不套 VALID_DEPT——行政人員部別本就
  * 空白，套了等於把他們全刪，而 audienceRules 分眾任務本就為行政人員設有應達時數。
  * ⚠️ 行政人員判定用「嚴格相等」，與 _classifyIdentity_() 對同一欄位採「包含」比對
  * （如 jobPrimary_equals／compound 的 indexOf）不一致——目前 Hub 資料值恰好都是
@@ -297,6 +299,7 @@ function _isAllScope_(scope) {
  * （task_c95dbe21 Stage 2a：原「空值＝全體可見」改制，Q3 裁示）
  */
 function _inScope_(owner, scope) {
+  scope = _normalizeScope_(scope);  // task_52660e35 損-15：防未正規化字串走子字串比對
   if (!owner) return _isAllScope_(scope);
   return _isAllScope_(scope) || scope.indexOf(owner) !== -1;
 }
@@ -327,6 +330,18 @@ function _assertManualRunByDeployer_(fnName) {
   if (!_isManualRunByDeployer_()) {
     throw new Error(fnName + '：僅限部署者於 GAS 編輯器手動執行。');
   }
+}
+
+/**
+ * 觸發器 handler 守衛（task_52660e35 損-05）：觸發器名稱寫死在觸發器裡不能改成底線結尾，只能在入口擋。
+ * - 時間驅動觸發器的事件物件帶 triggerUid，且必須是本專案現存觸發器的 uniqueId → 放行
+ * - 否則退回部署者守衛（編輯器手動執行放行；google.script.run 直呼擋下）
+ * 不依賴觸發器情境下 Session.getActiveUser() 的值（健檢附錄 A 前提 2 未實測）。
+ */
+function _assertTriggerOrDeployer_(e, fnName) {
+  const uid = (e && e.triggerUid) ? String(e.triggerUid) : '';
+  if (uid && ScriptApp.getProjectTriggers().some(t => t.getUniqueId() === uid)) return;
+  _assertManualRunByDeployer_(fnName);
 }
 
 /**
@@ -383,19 +398,19 @@ function auditTrainingScopes() {
  * @param {Object[]} [preReadCatalog] 已解析的完整 TRAINING_CATALOG 陣列
  *   （task_6e2d40af Stage D，D-5）。帶了就不重讀 TRAINING_CATALOG；不帶時行為與
  *   改動前完全相同，`Review.gs`／`Catalog.gs`／`Requirement.gs`／
- *   `previewNotification()` 既有無參數呼叫零影響。
+ *   `previewNotification_()` 既有無參數呼叫零影響。
  * @param {Object[]} [preReadReq] 已解析的完整 TRAINING_REQUIREMENT 陣列（task_c95dbe21 Stage 2b，
- *   供 getPendingReviews 同時建關鍵字索引時免重讀）。不帶時行為與改動前完全相同。
+ *   供 getPendingReviews_ 同時建關鍵字索引時免重讀）。不帶時行為與改動前完全相同。
  */
 function _buildOwnerIndex_(preReadCatalog, preReadReq) {
   const reqOwner  = {};
   const reqSeries = {};  // task_40e96378 Stage 1b：任務編號 → 任務系列代號，供 TASK: 授權判定
-  (preReadReq || parseSheetData(_getRequirementSheet())).forEach(r => {
+  (preReadReq || parseSheetData_(_getRequirementSheet_())).forEach(r => {
     reqOwner[r.requirementId]  = String(r.owner || '').trim();
     reqSeries[r.requirementId] = String(r.seriesId || '').trim();
   });
   const catReq = {};
-  const catalogRows = preReadCatalog || parseSheetData(_getCatalogSheet());
+  const catalogRows = preReadCatalog || parseSheetData_(_getCatalogSheet_());
   catalogRows.forEach(c => {
     catReq[c.catalogId] = String(c.requirementId || '').trim();
   });
@@ -432,6 +447,7 @@ function _resolveRecordOwner_(item, index) {
  * - 「新增任務」「封存任務」「改主責處室」維持處室層級，呼叫端改用 _inScope_()，不走本函式
  */
 function _inScopeItem_(owner, seriesId, scope) {
+  scope = _normalizeScope_(scope);  // task_52660e35 損-15：防未正規化字串走子字串比對
   if (_isAllScope_(scope)) return true;
   if (owner && scope.indexOf(owner) !== -1) return true;
   return !!seriesId && scope.indexOf('TASK:' + seriesId) !== -1;
@@ -463,7 +479,7 @@ function _statusRank_(status) {
 
 /**
  * 研習日期嚴格解析：只接受 yyyy/M/d 與 yyyy-MM-dd，年 2000～2100、月 1～12、日 1～31，其餘一律 null。
- * trainingDate 寫入時為斜線（Record.gs 正規化），Sheets 判讀為日期後 parseSheetData 讀出為破折號；
+ * trainingDate 寫入時為斜線（Record.gs 正規化），Sheets 判讀為日期後 parseSheetData_ 讀出為破折號；
  * 在鎖內直接讀 getValues() 時可能拿到 Date 物件，先以 Asia/Taipei 轉字串再解析。
  * ⚠️ 2c 建議與 2d 改歸屬的學年判定一律用本函式，禁止用 toAcademicYear_()——
  * 後者解析失敗時回傳當前學年，壞日期會靜默通過（task_f4b8c2d1 R-5 同型）。
@@ -494,7 +510,7 @@ function _academicYearOfDate_(p) {
  * @param {number} padLen  - 序號補零至幾位
  * @param {number} idColIdx - ID 欄在 schema.keys 中的 index（即欄的 0-based 位置）
  */
-function _generateSequentialId(allRows, prefix, padLen, idColIdx) {
+function _generateSequentialId_(allRows, prefix, padLen, idColIdx) {
   let maxSeq = 0;
   for (let i = 1; i < allRows.length; i++) {
     const id = String(allRows[i][idColIdx] || '');
@@ -506,16 +522,16 @@ function _generateSequentialId(allRows, prefix, padLen, idColIdx) {
   return prefix + String(maxSeq + 1).padStart(padLen, '0');
 }
 
-function _generateCatalogId(allRows) {
+function _generateCatalogId_(allRows) {
   const year = String(new Date().getFullYear());
   const idColIdx = SHEET_SCHEMA.TRAINING_CATALOG.keys.indexOf('catalogId');
-  return _generateSequentialId(allRows, 'C' + year, 4, idColIdx);
+  return _generateSequentialId_(allRows, 'C' + year, 4, idColIdx);
 }
 
-function _generateRecordId(allRows) {
+function _generateRecordId_(allRows) {
   const year = String(new Date().getFullYear());
   const idColIdx = SHEET_SCHEMA.TRAINING_RECORD.keys.indexOf('recordId');
-  return _generateSequentialId(allRows, 'R' + year, 6, idColIdx);
+  return _generateSequentialId_(allRows, 'R' + year, 6, idColIdx);
 }
 
 /**
@@ -523,10 +539,10 @@ function _generateRecordId(allRows) {
  * @param {string[][]} allRows - getDataRange().getValues()
  * @param {number} academicYear - 台灣學年度（如 114）
  */
-function _generateRequirementId(allRows, academicYear) {
+function _generateRequirementId_(allRows, academicYear) {
   const prefix  = 'RQ' + String(academicYear);
   const idColIdx = SHEET_SCHEMA.TRAINING_REQUIREMENT.keys.indexOf('requirementId');
-  return _generateSequentialId(allRows, prefix, 3, idColIdx);
+  return _generateSequentialId_(allRows, prefix, 3, idColIdx);
 }
 
 // 已發過的最高系列序號（Script Properties，task_40e96378 Stage 1b Y-3 裁示 A）：
@@ -537,7 +553,7 @@ const SERIES_SEQ_HWM_KEY = 'SERIES_SEQ_HWM';
 /**
  * 任務系列代號目前最大序號（task_40e96378）：取「seriesId 欄 RS 前綴最大值」與
  * 「SERIES_SEQ_HWM 已發最高號」兩者較大者，皆無回 0。
- * 批次產號（addRequirement／renewRequirements／backfillSeriesIdsApply）呼叫端自行遞增，
+ * 批次產號（addRequirement_／renewRequirements_／backfillSeriesIdsApply）呼叫端自行遞增，
  * 寫入後須呼叫 _saveSeriesSeqHwm_() 推進紀錄（皆在持鎖期間）。
  */
 function _maxSeriesSeq_(allRows) {
@@ -569,13 +585,13 @@ function _formatSeriesId_(seq) {
  * 回傳目前台灣學年度（民國年）
  * 8月以後為新學年（例：2025/9 → 114學年度，2026/5 → 114學年度）
  */
-function _currentAcademicYear() {
+function _currentAcademicYear_() {
   const d = new Date();
   const rocYear = d.getFullYear() - 1911;
   return (d.getMonth() + 1) >= 8 ? rocYear : rocYear - 1;
 }
 
 /** 回傳台北時間的 ISO 格式 Timestamp */
-function _now() {
+function _now_() {
   return Utilities.formatDate(new Date(), 'Asia/Taipei', "yyyy-MM-dd'T'HH:mm:ss");
 }

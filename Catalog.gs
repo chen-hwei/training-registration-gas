@@ -3,8 +3,8 @@
 // ── Level 1（教師端） ──
 
 /** 取得所有 ACTIVE 狀態的研習課程清單 */
-function getCatalog() {
-  return parseSheetData(_getCatalogSheet())
+function getCatalog_() {
+  return parseSheetData_(_getCatalogSheet_())
     .filter(c => c.status === 'ACTIVE')
     .map(c => ({
       ...c,
@@ -17,12 +17,12 @@ function getCatalog() {
 
 /**
  * 管理端研習目錄清單（task_c95dbe21 Stage 2a，2e／Q-a）
- * N-1：直接重用 getCatalog()（ACTIVE 篩選＋hours／isRequired 正規化），全權管理者回傳與其完全相同；
+ * N-1：直接重用 getCatalog_()（ACTIVE 篩選＋hours／isRequired 正規化），全權管理者回傳與其完全相同；
  * 非全權只回「所掛任務 owner ∈ scope」的課程，未掛任務者僅全權可見。
  * 教師端共用路由 v1/getCatalog 不動（教師端不可受處室過濾影響）。
  */
-function getCatalogAdmin(scope) {
-  const list = getCatalog();
+function getCatalogAdmin_(scope) {
+  const list = getCatalog_();
   if (_isAllScope_(scope)) return list;
   const index = _buildOwnerIndex_(list);
   // task_40e96378 Stage 1b：處室 ∪ TASK:（任務管理者看得到掛在自己系列任務下的課程）
@@ -35,22 +35,22 @@ function getCatalogAdmin(scope) {
  * （B-4：課程若掛任務，視同該任務的處室資產；task_c95dbe21 R-1：非全權不掛任務即 FORBIDDEN，
  * 原條件在 requirementId 為空時整段跳過，光改 _inScope_ 擋不住）
  */
-function addCatalog(userId, body, scope) {
-  if (!body.title)  return _err('MISSING_TITLE');
-  if (!body.hours)  return _err('MISSING_HOURS');
+function addCatalog_(userId, body, scope) {
+  if (!body.title)  return _err_('MISSING_TITLE');
+  if (!body.hours)  return _err_('MISSING_HOURS');
 
   const requirementId = String(body.requirementId || '').trim();
   if (!_isAllScope_(scope)) {
-    if (!requirementId) return _err('FORBIDDEN');
-    if (!_inScopeRid_(requirementId, _buildOwnerIndex_(), scope)) return _err('FORBIDDEN');
+    if (!requirementId) return _err_('FORBIDDEN');
+    if (!_inScopeRid_(requirementId, _buildOwnerIndex_(), scope)) return _err_('FORBIDDEN');
   }
 
-  const sheet = _getCatalogSheet();
+  const sheet = _getCatalogSheet_();
   const lock  = LockService.getScriptLock();
   lock.waitLock(10000);
   try {
     const allRows   = sheet.getDataRange().getValues();
-    const catalogId = _generateCatalogId(allRows);
+    const catalogId = _generateCatalogId_(allRows);
     const schema    = SHEET_SCHEMA.TRAINING_CATALOG;
 
     const newCatalog = {
@@ -67,7 +67,7 @@ function addCatalog(userId, body, scope) {
       link:           String(body.link           || ''),
       isRequired:     body.isRequired === true || body.isRequired === 'TRUE',
       status:         'ACTIVE',
-      createdAt:      _now(),
+      createdAt:      _now_(),
       requirementId:  String(body.requirementId   || '')
     };
 
@@ -87,13 +87,13 @@ function addCatalog(userId, body, scope) {
  * 編輯研習課程（不可修改 catalogId、createdBy、createdAt、status）
  * scope 限制下，改前 requirementId 與改後 requirementId 對應的 owner 皆須 ∈ scope
  * （空值僅全權可過，task_c95dbe21 Stage 2a：非全權改成不掛任務即 FORBIDDEN）
- * （B-4：requirementId 改綁與 editRequirement 的 owner 改前／改後同型，防止把課程從
+ * （B-4：requirementId 改綁與 editRequirement_ 的 owner 改前／改後同型，防止把課程從
  * A 處室任務改掛到 B 處室繞過權限）
  */
-function editCatalog(userId, body, scope) {
-  if (!body.catalogId) return _err('MISSING_CATALOG_ID');
+function editCatalog_(userId, body, scope) {
+  if (!body.catalogId) return _err_('MISSING_CATALOG_ID');
 
-  const sheet  = _getCatalogSheet();
+  const sheet  = _getCatalogSheet_();
   const schema = SHEET_SCHEMA.TRAINING_CATALOG;
   const lock   = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -105,16 +105,16 @@ function editCatalog(userId, body, scope) {
     for (let i = 1; i < data.length; i++) {
       if (data[i][idIdx] === body.catalogId) { rowIdx = i; break; }
     }
-    if (rowIdx === -1) return _err('CATALOG_NOT_FOUND');
+    if (rowIdx === -1) return _err_('CATALOG_NOT_FOUND');
 
     if (!_isAllScope_(scope)) {
       const index = _buildOwnerIndex_();
       const currentReqId = String(data[rowIdx][reqIdIdx] || '').trim();
-      if (!_inScopeRid_(currentReqId, index, scope)) return _err('FORBIDDEN');
+      if (!_inScopeRid_(currentReqId, index, scope)) return _err_('FORBIDDEN');
 
       if (body.requirementId !== undefined) {
         const newReqId = String(body.requirementId || '').trim();
-        if (!_inScopeRid_(newReqId, index, scope)) return _err('FORBIDDEN');
+        if (!_inScopeRid_(newReqId, index, scope)) return _err_('FORBIDDEN');
       }
     }
 
@@ -145,10 +145,10 @@ function editCatalog(userId, body, scope) {
  * 封存研習課程（狀態設為 ARCHIVED，不實體刪除）
  * scope 限制下，課程現有 requirementId 對應的 owner 須 ∈ scope（B-4 同型；空值僅全權，task_c95dbe21 Stage 2a）
  */
-function archiveCatalog(body, scope) {
-  if (!body.catalogId) return _err('MISSING_CATALOG_ID');
+function archiveCatalog_(body, scope) {
+  if (!body.catalogId) return _err_('MISSING_CATALOG_ID');
 
-  const sheet  = _getCatalogSheet();
+  const sheet  = _getCatalogSheet_();
   const schema = SHEET_SCHEMA.TRAINING_CATALOG;
   const lock   = LockService.getScriptLock();
   lock.waitLock(10000);
@@ -164,7 +164,7 @@ function archiveCatalog(body, scope) {
 
       if (!_isAllScope_(scope)) {
         const currentReqId = String(data[i][reqIdIdx] || '').trim();
-        if (!_inScopeRid_(currentReqId, _buildOwnerIndex_(), scope)) return _err('FORBIDDEN');
+        if (!_inScopeRid_(currentReqId, _buildOwnerIndex_(), scope)) return _err_('FORBIDDEN');
       }
 
       data[i][statusIdx] = 'ARCHIVED';
@@ -172,7 +172,7 @@ function archiveCatalog(body, scope) {
       break;
     }
 
-    if (!found) return _err('CATALOG_NOT_FOUND');
+    if (!found) return _err_('CATALOG_NOT_FOUND');
     sheet.clearContents();
     sheet.getRange(1, 1, data.length, data[0].length).setValues(data);
     return { success: true };

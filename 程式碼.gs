@@ -26,26 +26,13 @@ function include(filename) {
   return HtmlService.createTemplateFromFile(filename).evaluate().getContent();
 }
 
-function doPost(e) {
-  try {
-    const payload = JSON.parse(e.postData.contents);
-    return ContentService
-      .createTextOutput(JSON.stringify(handleRequest(payload)))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ success: false, error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
 // ==================== 路由分流（handleRequest） ====================
 
 // 僅全權管理者（scope 含 "ALL" 或未設 training_scope）可執行的路由（task_6e2d40af Stage B）
-// 對應任務單 Stage B 路由表：renewRequirements（跨處室批次寫入）、triggerNotification（全校寄信）、
+// 對應任務單 Stage B 路由表：renewRequirements_（跨處室批次寫入）、triggerNotification（全校寄信）、
 // TRAIN-REPORT 設定／資料寫入 8 支（Q-B：全校統計口徑限全權）、匯出 2 支（Q-G：明文排除揭露面收斂）
 // task_c95dbe21 Stage 1：研習統計分頁整頁限全權（推翻 Q-E／Q-F／Q-G），讀取與重算 8 支一併收斂；
-// report_req_stats 刻意不列入（年度任務分頁要用；Stage 3 起 calcRequirementStats 依 scope 做任務層過濾）
+// report_req_stats 刻意不列入（年度任務分頁要用；Stage 3 起 calcRequirementStats_ 依 scope 做任務層過濾）
 const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
   'v1/admin/renewRequirements',
   'v1/admin/triggerNotification',
@@ -58,7 +45,7 @@ const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
   'get_identity_rules', 'get_stats_settings',
   // task_c95dbe21 Stage 2a（R-4）：健檢結果含全校各處室空值清單，限全權
   'v1/admin/runHealthCheck',
-  // task_c95dbe21 Stage 2b（2d）：改歸屬為跨處室寫入，與 renewRequirements 同類限全權
+  // task_c95dbe21 Stage 2b（2d）：改歸屬為跨處室寫入，與 renewRequirements_ 同類限全權
   'v1/admin/reassignRecordRequirement'
 ]);
 
@@ -77,7 +64,9 @@ function handleRequest(payload) {
     const { token, body } = payload || {};
     action = (payload || {}).action;
 
-    if (!action) return _err('MISSING_ACTION');
+    if (!action || typeof action !== 'string') return _err_('MISSING_ACTION');
+    // task_52660e35 損-08：token 只接受字串（或未帶），避免非字串真值讓 startsWith 拋錯
+    if (token !== undefined && token !== null && typeof token !== 'string') return _err_('TOKEN_EXPIRED');
 
     // ── 公開路由（無需 Token）──
     if (action === 'train/getUserName') {
@@ -103,17 +92,17 @@ function handleRequest(payload) {
 
     // ── Level 1：驗證 Token（train_ 原生優先，降級 SchoolPortalLib）──
     const session = verifyTrainSession_(token);
-    if (!session || !session.valid) return _err('TOKEN_EXPIRED');
+    if (!session || !session.valid) return _err_('TOKEN_EXPIRED');
     userId = session.userId;
 
     switch (action) {
-      case 'v1/getCatalog':                    return { success: true, data: getCatalog() };
-      case 'v1/getMyRecords':                  return { success: true, data: getMyRecords(userId) };
-      case 'v1/submitRecord':                  return submitRecord(userId, body || {});
-      case 'v1/deleteRecord':                  return deleteRecord(userId, body || {});
-      case 'v1/getRequirements':               return { success: true, data: getRequirements(userId, body || {}) };
-      case 'v1/getMyImportedRecords':          return getMyImportedRecords(userId, body || {});
-      case 'v1/checkImportedBeforeSubmit':     return checkImportedBeforeSubmit(userId, body || {});
+      case 'v1/getCatalog':                    return { success: true, data: getCatalog_() };
+      case 'v1/getMyRecords':                  return { success: true, data: getMyRecords_(userId) };
+      case 'v1/submitRecord':                  return submitRecord_(userId, body || {});
+      case 'v1/deleteRecord':                  return deleteRecord_(userId, body || {});
+      case 'v1/getRequirements':               return { success: true, data: getRequirements_(userId, body || {}) };
+      case 'v1/getMyImportedRecords':          return getMyImportedRecords_(userId, body || {});
+      case 'v1/checkImportedBeforeSubmit':     return checkImportedBeforeSubmit_(userId, body || {});
     }
 
     // ── Level 2：驗證管理者身分 ──
@@ -124,66 +113,69 @@ function handleRequest(payload) {
         ? sa
         : JSON.parse(String(sa || '{}'));
     } catch (_) {}
-    if (!access.training_admin) return _err('FORBIDDEN');
+    if (!access.training_admin) return _err_('FORBIDDEN');
 
     // Stage B：僅全權管理者可執行的路由，統一在 switch 前攔截（單一事實來源，見上方常數）
     // S-B-2：_normalizeScope_() 把人工填寫 Hub 時漏寫中括號的字串（如 "學務處"）轉為
     // 單元素陣列，避免 _isAllScope_() 的 !Array.isArray() fail-open 成全權管理者
     const scope = _normalizeScope_(access.training_scope);
     if (TRAINING_SCOPE_ALL_ONLY_ACTIONS.has(action) && !_isAllScope_(scope)) {
-      return _err('FORBIDDEN');
+      return _err_('FORBIDDEN');
     }
 
     switch (action) {
-      case 'v1/admin/addCatalog':           return addCatalog(userId, body || {}, scope);
-      case 'v1/admin/editCatalog':          return editCatalog(userId, body || {}, scope);
-      case 'v1/admin/archiveCatalog':       return archiveCatalog(body || {}, scope);
-      case 'v1/admin/getPendingReviews':    return { success: true, data: getPendingReviews(scope) };
-      case 'v1/admin/reviewRecord':         return reviewRecord(userId, body || {}, scope);
-      case 'v1/admin/reassignRecordRequirement': return reassignRecordRequirement(userId, body || {});
-      case 'v1/admin/getFileUrl':           return getFileUrl(body || {}, scope);
-      case 'v1/admin/exportRecords':        return { success: true, data: exportRecords(body || {}, scope) };
-      case 'v1/admin/previewNotification':  return previewNotification(userId, scope);
-      case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, checkAndNotifyOverdue());
-      case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements(body || {}, scope) };
-      case 'v1/admin/getCatalogAdmin':      return { success: true, data: getCatalogAdmin(scope) };
-      case 'v1/admin/getCatalogStats':      return getCatalogStats(body || {}, scope);
-      case 'v1/admin/addRequirement':       return addRequirement(userId, body || {}, scope);
-      case 'v1/admin/editRequirement':      return editRequirement(userId, body || {}, scope);
-      case 'v1/admin/archiveRequirement':   return archiveRequirement(userId, body || {}, scope);
-      case 'v1/admin/renewRequirements':    return renewRequirements(userId, body || {});
-      case 'v1/admin/runHealthCheck':       return runDataHealthCheck(userId, (body || {}).scope, (body || {}).academicYear);
+      case 'v1/admin/addCatalog':           return addCatalog_(userId, body || {}, scope);
+      case 'v1/admin/editCatalog':          return editCatalog_(userId, body || {}, scope);
+      case 'v1/admin/archiveCatalog':       return archiveCatalog_(body || {}, scope);
+      case 'v1/admin/getPendingReviews':    return { success: true, data: getPendingReviews_(scope) };
+      case 'v1/admin/reviewRecord':         return reviewRecord_(userId, body || {}, scope);
+      case 'v1/admin/reassignRecordRequirement': return reassignRecordRequirement_(userId, body || {});
+      case 'v1/admin/getFileUrl':           return getFileUrl_(body || {}, scope);
+      case 'v1/admin/exportRecords':        return { success: true, data: exportRecords_(body || {}, scope) };
+      case 'v1/admin/previewNotification':  return previewNotification_(userId, scope);
+      case 'v1/admin/triggerNotification':  return Object.assign({ success: true }, _runOverdueNotification_());
+      case 'v1/admin/getAllRequirements':   return { success: true, data: getAllRequirements_(body || {}, scope) };
+      case 'v1/admin/getCatalogAdmin':      return { success: true, data: getCatalogAdmin_(scope) };
+      case 'v1/admin/getCatalogStats':      return getCatalogStats_(body || {}, scope);
+      case 'v1/admin/addRequirement':       return addRequirement_(userId, body || {}, scope);
+      case 'v1/admin/editRequirement':      return editRequirement_(userId, body || {}, scope);
+      case 'v1/admin/archiveRequirement':   return archiveRequirement_(userId, body || {}, scope);
+      case 'v1/admin/renewRequirements':    return renewRequirements_(userId, body || {});
+      case 'v1/admin/runHealthCheck':       return runDataHealthCheck_(userId, (body || {}).scope, (body || {}).academicYear);
 
       // ── 研習統計分析模組（TRAIN-REPORT）──
-      case 'report_import':              return importTrainingData(body || {});
-      case 'report_snapshot':            return snapshotTeacherRoster(body || {});
-      case 'report_snapshot_batch':      return snapshotRosterBatch(body || {});
-      case 'report_get_roster_sources':  return getRosterSources();
-      case 'report_get_stats_cache':     return getStatsCache((body||{}).academicYear, (body||{}).mode);
-      case 'report_batch_calc':          return batchCalcStats(body || {});
-      case 'report_calc':                return calcStats((body || {}).academicYear, (body || {}).mode);
-      case 'report_export_csv':          return exportDoubleColumnCSV((body || {}).academicYear);
-      case 'report_export_doc':          return generateGoogleDoc((body || {}).academicYear);
-      case 'report_get_settings':        return getReportSettings();
-      case 'report_save_settings':       return saveReportSettings(body || {});
-      case 'get_indicators':             return getIndicators();
-      case 'save_indicator':             return saveIndicator(body || {});
-      case 'delete_indicator':           return deleteIndicator((body || {}).id);
-      case 'get_identity_rules':              return getIdentityRules();
-      case 'save_identity_rules':             return saveIdentityRules(body || {});
-      case 'report_req_stats':                return calcRequirementStats(body || {}, scope);
-      case 'get_stats_settings':              return getStatsSettings();
-      case 'save_stats_settings':             return saveStatsSettings(body || {});
+      case 'report_import':              return importTrainingData_(body || {});
+      case 'report_snapshot':            return snapshotTeacherRoster_(body || {});
+      case 'report_snapshot_batch':      return snapshotRosterBatch_(body || {});
+      case 'report_get_roster_sources':  return getRosterSources_();
+      case 'report_get_stats_cache':     return getStatsCache_((body||{}).academicYear, (body||{}).mode);
+      case 'report_batch_calc':          return batchCalcStats_(body || {});
+      case 'report_calc':                return calcStats_((body || {}).academicYear, (body || {}).mode);
+      case 'report_export_csv':          return exportDoubleColumnCSV_((body || {}).academicYear);
+      case 'report_export_doc':          return generateGoogleDoc_((body || {}).academicYear);
+      case 'report_get_settings':        return getReportSettings_();
+      case 'report_save_settings':       return saveReportSettings_(body || {});
+      case 'get_indicators':             return getIndicators_();
+      case 'save_indicator':             return saveIndicator_(body || {});
+      case 'delete_indicator':           return deleteIndicator_((body || {}).id);
+      case 'get_identity_rules':              return getIdentityRules_();
+      case 'save_identity_rules':             return saveIdentityRules_(body || {});
+      case 'report_req_stats':                return calcRequirementStats_(body || {}, scope);
+      case 'get_stats_settings':              return getStatsSettings_();
+      case 'save_stats_settings':             return saveStatsSettings_(body || {});
 
-      default: return _err('UNKNOWN_ACTION');
+      default: return _err_('UNKNOWN_ACTION');
     }
   } catch (err) {
-    _logOp_(userId, 'ERROR_' + (action || 'UNKNOWN'), err.message);
+    // task_52660e35 損-08：通過身分驗證前（userId 空）的例外不寫五系統共用 AuditLog，
+    // 避免匿名者以自填 action 灌入稽核表；改記本專案執行紀錄
+    if (userId) _logOp_(userId, 'ERROR_' + (action || 'UNKNOWN'), err.message);
+    else Logger.log('[handleRequest] 未驗證請求例外 action=' + String(action).slice(0, 60) + '：' + err.message);
     return { success: false, error: err.message };
   }
 }
 
 // ==================== 回應輔助 ====================
 
-function _ok(data)  { return { success: true,  data  }; }
-function _err(msg)  { return { success: false, error: msg }; }
+function _ok_(data)  { return { success: true,  data  }; }
+function _err_(msg)  { return { success: false, error: msg }; }

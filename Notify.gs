@@ -11,17 +11,17 @@
 
 // ── 防重複發送 ──
 
-function _notifCacheKey(type, targetId, courseOrRecordId) {
+function _notifCacheKey_(type, targetId, courseOrRecordId) {
   const d = new Date();
   return `notif_${type}_${targetId}_${courseOrRecordId}_${d.getFullYear()}${d.getMonth()}${d.getDate()}`;
 }
 
-function _hasNotifiedToday(type, targetId, courseOrRecordId) {
-  return !!CacheService.getScriptCache().get(_notifCacheKey(type, targetId, courseOrRecordId));
+function _hasNotifiedToday_(type, targetId, courseOrRecordId) {
+  return !!CacheService.getScriptCache().get(_notifCacheKey_(type, targetId, courseOrRecordId));
 }
 
-function _markNotified(type, targetId, courseOrRecordId) {
-  CacheService.getScriptCache().put(_notifCacheKey(type, targetId, courseOrRecordId), '1', 86400);
+function _markNotified_(type, targetId, courseOrRecordId) {
+  CacheService.getScriptCache().put(_notifCacheKey_(type, targetId, courseOrRecordId), '1', 86400);
 }
 
 // ── 主入口：計算通知名單（供實際發送與預覽共用） ──
@@ -32,19 +32,19 @@ function _markNotified(type, targetId, courseOrRecordId) {
  *   adminEmails, owner, replyTo（task_6e2d40af Stage D：owner／replyTo 依課程或
  *   紀錄解析出的處室動態決定，N1 的 adminEmails 維持 [] 不變，Y-D1）
  */
-function _buildNotificationList() {
+function _buildNotificationList_() {
   const today = new Date();
 
   // D-5：Hub UserStatusCache／TRAINING_CATALOG 各只讀一次，分別餵給下游函式
   const hubRows     = _readHubUserStatusRows_();
-  const teachers     = _getActiveTeachers(hubRows);
+  const teachers     = _getActiveTeachers_(hubRows);
   const buckets      = _buildAdminBuckets_(hubRows);
-  const fullCatalog  = parseSheetData(_getCatalogSheet());
+  const fullCatalog  = parseSheetData_(_getCatalogSheet_());
   const catalog      = fullCatalog.filter(c => c.status === 'ACTIVE' &&
     (c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE'));
   const ownerIndex   = _buildOwnerIndex_(fullCatalog);
 
-  const records = parseSheetData(_getRecordSheet());
+  const records = parseSheetData_(_getRecordSheet_());
 
   // Hash Map：「userId_catalogId」→ 最高狀態（APPROVED > PENDING > REJECTED）
   const statusMap = {};
@@ -81,11 +81,11 @@ function _buildNotificationList() {
       if (topStatus === 'APPROVED') return;
 
       if (daysLeft > 0 && daysLeft <= 7) {
-        if (!_hasNotifiedToday('N1', teacher.userId, course.catalogId)) {
+        if (!_hasNotifiedToday_('N1', teacher.userId, course.catalogId)) {
           list.push(Object.assign({ type: 'N1', teacher, course, daysLeft, adminEmails: [] }, meta));
         }
       } else if (daysLeft <= 0) {
-        if (!_hasNotifiedToday('N2', teacher.userId, course.catalogId)) {
+        if (!_hasNotifiedToday_('N2', teacher.userId, course.catalogId)) {
           list.push(Object.assign({ type: 'N2', teacher, course, daysLeft, adminEmails }, meta));
         }
       }
@@ -93,7 +93,7 @@ function _buildNotificationList() {
   });
 
   // N3：PENDING 紀錄超過 3 天（改為管理者每日彙整，不再逐筆做記錄層級防重複，
-  // dedupe 改在 _sendAdminDigest 呼叫端以 adminEmail + 當日 做一次性判斷）
+  // dedupe 改在 _sendAdminDigest_ 呼叫端以 adminEmail + 當日 做一次性判斷）
   const threeDaysAgo = new Date(today.getTime() - 3 * 86400000);
   const teacherById = {};
   teachers.forEach(t => { teacherById[t.userId] = t; }); // Y-F1：取代 O(n×m) 的 teachers.find()
@@ -125,11 +125,11 @@ function _buildNotificationList() {
 
 /**
  * 將名單依「課程 × 剩餘天數」（N1）／「課程」（N2 教師）／「管理者信箱」（N2/N3 彙整）分組
- * checkAndNotifyOverdue 與 previewNotification 共用，確保預覽與實發口徑一致
- * （Y-F4：Stage D 起兩邊共用同一份 _buildNotificationList() 算出的 owner／
+ * checkAndNotifyOverdue 與 previewNotification_ 共用，確保預覽與實發口徑一致
+ * （Y-F4：Stage D 起兩邊共用同一份 _buildNotificationList_() 算出的 owner／
  * adminEmails，Y-B4 登記的「Stage B～D 之間暫時性偏離」至此結案）
  */
-function _groupNotificationList(list) {
+function _groupNotificationList_(list) {
   const n1Map = {}, n2Map = {}, n2AdminMap = {}, n3AdminMap = {};
 
   list.forEach(item => {
@@ -169,12 +169,12 @@ function _groupNotificationList(list) {
  * n2Admin／n3Admin 只含呼叫者自己的 email，且該 email 底下的 items 本身也只含解析到
  * 自己 scope 的課程／紀錄——見「Y-4 揭露面收斂的實際邊界」節。
  * 無法歸屬（owner 空值）者僅全權可見（task_c95dbe21 Stage 2a）。
- * Y-E3：items 已在 _buildNotificationList() 階段掛好 owner，這裡直接讀用，
+ * Y-E3：items 已在 _buildNotificationList_() 階段掛好 owner，這裡直接讀用，
  * 不重建 _buildOwnerIndex_()，省一次 TRAINING_CATALOG／TRAINING_REQUIREMENT 重讀。
  */
-function previewNotification(callerUserId, scope) {
-  const list = _buildNotificationList();
-  let { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList(list);
+function previewNotification_(callerUserId, scope) {
+  const list = _buildNotificationList_();
+  let { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList_(list);
 
   if (!_isAllScope_(scope)) {
     const inScope = (owner, seriesId) => _inScopeItem_(owner, seriesId, scope);  // task_40e96378 Stage 1b：處室 ∪ TASK:
@@ -239,18 +239,27 @@ function previewNotification(callerUserId, scope) {
   return { success: true, count, groups: { n1, n2, n2Admin, n3Admin } };
 }
 
+/**
+ * 觸發器入口（每日 07:50，名稱寫死在觸發器裡不可改名）（task_52660e35 損-05）
+ * 只接受本專案觸發器或部署者手動執行；管理端「立即發送」改走 _runOverdueNotification_()
+ */
+function checkAndNotifyOverdue(e) {
+  _assertTriggerOrDeployer_(e, 'checkAndNotifyOverdue');
+  return _runOverdueNotification_();
+}
+
 /** 實際發送通知（分組 BCC + 管理者每日彙整），回傳 { mails, recipients } */
-function checkAndNotifyOverdue() {
-  const list = _buildNotificationList();
-  const { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList(list);
+function _runOverdueNotification_() {
+  const list = _buildNotificationList_();
+  const { n1Groups, n2Groups, n2AdminDigest, n3AdminDigest } = _groupNotificationList_(list);
   let mails = 0, recipients = 0;
 
   // N1：教師分組 BCC（依課程 × 剩餘天數）
   n1Groups.forEach(g => {
-    _chunkArray(g.teachers, 50).forEach(chunk => {
+    _chunkArray_(g.teachers, 50).forEach(chunk => {
       try {
-        _sendGroupedReminder('N1', g.course, g.daysLeft, chunk, g.replyTo);
-        chunk.forEach(t => _markNotified('N1', t.userId, g.course.catalogId));
+        _sendGroupedReminder_('N1', g.course, g.daysLeft, chunk, g.replyTo);
+        chunk.forEach(t => _markNotified_('N1', t.userId, g.course.catalogId));
         _logOp_('', 'NOTIFY_N1', 'catalogId=' + g.course.catalogId + '，daysLeft=' + g.daysLeft +
           '，' + chunk.length + ' 人：' + chunk.map(t => t.userId).join(','));
         mails++;
@@ -264,10 +273,10 @@ function checkAndNotifyOverdue() {
 
   // N2：教師分組 BCC（依課程）
   n2Groups.forEach(g => {
-    _chunkArray(g.teachers, 50).forEach(chunk => {
+    _chunkArray_(g.teachers, 50).forEach(chunk => {
       try {
-        _sendGroupedReminder('N2', g.course, null, chunk, g.replyTo);
-        chunk.forEach(t => _markNotified('N2', t.userId, g.course.catalogId));
+        _sendGroupedReminder_('N2', g.course, null, chunk, g.replyTo);
+        chunk.forEach(t => _markNotified_('N2', t.userId, g.course.catalogId));
         _logOp_('', 'NOTIFY_N2', 'catalogId=' + g.course.catalogId +
           '，' + chunk.length + ' 人：' + chunk.map(t => t.userId).join(','));
         mails++;
@@ -281,11 +290,11 @@ function checkAndNotifyOverdue() {
 
   // N2 管理者每日彙整
   Object.keys(n2AdminDigest).forEach(email => {
-    if (_hasNotifiedToday('N2_DIGEST', email, 'ALL')) return;
+    if (_hasNotifiedToday_('N2_DIGEST', email, 'ALL')) return;
     try {
       const items = n2AdminDigest[email];
-      _sendAdminDigest('N2', email, items, _digestReplyTo_(items));
-      _markNotified('N2_DIGEST', email, 'ALL');
+      _sendAdminDigest_('N2', email, items, _digestReplyTo_(items));
+      _markNotified_('N2_DIGEST', email, 'ALL');
       _logOp_('', 'NOTIFY_N2_DIGEST', email + '，' + items.length + ' 筆');
       mails++;
       recipients++;
@@ -296,11 +305,11 @@ function checkAndNotifyOverdue() {
 
   // N3 管理者每日彙整
   Object.keys(n3AdminDigest).forEach(email => {
-    if (_hasNotifiedToday('N3_DIGEST', email, 'ALL')) return;
+    if (_hasNotifiedToday_('N3_DIGEST', email, 'ALL')) return;
     try {
       const items = n3AdminDigest[email];
-      _sendAdminDigest('N3', email, items, _digestReplyTo_(items));
-      _markNotified('N3_DIGEST', email, 'ALL');
+      _sendAdminDigest_('N3', email, items, _digestReplyTo_(items));
+      _markNotified_('N3_DIGEST', email, 'ALL');
       _logOp_('', 'NOTIFY_N3_DIGEST', email + '，' + items.length + ' 筆');
       mails++;
       recipients++;
@@ -316,7 +325,7 @@ function checkAndNotifyOverdue() {
 // ── 信件發送函式 ──
 
 /** 分組陣列，size 內為一組（BCC 單封上限抓 50，超過分批） */
-function _chunkArray(arr, size) {
+function _chunkArray_(arr, size) {
   const chunks = [];
   for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
   return chunks;
@@ -328,7 +337,7 @@ function _chunkArray(arr, size) {
  * replyTo：課程解析出的處室承辦人信箱（task_6e2d40af Stage D）；查不到處室承辦人
  * （null）則沿用系統信箱。Q-C 裁示：to 永遠是系統信箱，不隨處室動態化。
  */
-function _sendGroupedReminder(type, course, daysLeft, teachers, replyTo) {
+function _sendGroupedReminder_(type, course, daysLeft, teachers, replyTo) {
   const bcc = teachers.map(t => t.email).filter(Boolean).join(',');
   if (!bcc) return;
   const to = getMailReplyTo_();
@@ -365,7 +374,7 @@ function _sendGroupedReminder(type, course, daysLeft, teachers, replyTo) {
  * replyTo：由呼叫端 _digestReplyTo_() 依信內 items 是否橫跨多處室算好傳入
  * （task_6e2d40af Stage D，Q-H 裁示）。to 維持該管理者本人信箱，不受影響。
  */
-function _sendAdminDigest(type, email, items, replyTo) {
+function _sendAdminDigest_(type, email, items, replyTo) {
   let subject, rows;
 
   if (type === 'N2') {
@@ -413,11 +422,11 @@ function _readHubUserStatusRows_() {
 /**
  * 取得應收催辦通知的人員清單（從 Hub.UserStatusCache）
  * task_c5f2e08d Q-6：套用 _isTrainingTracked_()，兼課教師與實習老師不再收催辦信，
- * 行政人員維持照收（與 Sync.gs／calcRequirementStats 口徑一致）
+ * 行政人員維持照收（與 Sync.gs／calcRequirementStats_ 口徑一致）
  * @param {Array[]} [preReadRows] 已讀入的 Hub 原始列（D-5，帶了就不重讀；
  *   不帶時行為與改動前完全相同，供 debugNotify() 等既有無參數呼叫零影響）
  */
-function _getActiveTeachers(preReadRows) {
+function _getActiveTeachers_(preReadRows) {
   const data  = preReadRows || _readHubUserStatusRows_();
   const hdr   = data[0];
   const uidCol    = hdr.indexOf('userId');
@@ -558,22 +567,23 @@ function _digestReplyTo_(items) {
 
 /** 除錯用：逐步印出通知邏輯各關卡的狀態，不發送任何信件 */
 function debugNotify() {
+  _assertManualRunByDeployer_('debugNotify');  // task_52660e35 損-07：維運函式禁止前端直呼
   const today   = new Date();
   console.log('=== debugNotify 開始，today=' + today.toISOString() + ' ===');
 
   // 1. 必修 ACTIVE 課程
-  const catalog = parseSheetData(_getCatalogSheet())
+  const catalog = parseSheetData_(_getCatalogSheet_())
     .filter(c => c.status === 'ACTIVE' && (c.isRequired === true || String(c.isRequired).toUpperCase() === 'TRUE'));
   console.log('必修 ACTIVE 課程數：' + catalog.length);
   catalog.forEach(c => console.log('  課程: ' + c.catalogId + ' / ' + c.title + ' / endDate=' + c.endDate + ' / isRequired=' + c.isRequired));
 
   // 2. 在職教師
-  const teachers = _getActiveTeachers();
+  const teachers = _getActiveTeachers_();
   console.log('在職教師數：' + teachers.length);
   teachers.slice(0, 5).forEach(t => console.log('  教師: ' + t.userId + ' / ' + t.name + ' / email=' + t.email + ' / dept=' + t.department));
 
   // 3. 每位教師的 statusMap（Y-D6：迴圈外讀一次，取代原本 catalog.forEach 內每輪重讀）
-  const records = parseSheetData(_getRecordSheet());
+  const records = parseSheetData_(_getRecordSheet_());
   const statusMap = {};
   records.forEach(r => {
     const key = r.userId + '_' + r.catalogId;
@@ -593,7 +603,7 @@ function debugNotify() {
     teachers.forEach(teacher => {
       const key       = teacher.userId + '_' + course.catalogId;
       const topStatus = statusMap[key] || '(無紀錄)';
-      const cached    = _hasNotifiedToday('N2', teacher.userId, course.catalogId);
+      const cached    = _hasNotifiedToday_('N2', teacher.userId, course.catalogId);
       if (daysLeft <= 0) {
         console.log('    N2候選: ' + teacher.userId + ' status=' + topStatus + ' cached=' + cached);
       }
@@ -609,9 +619,10 @@ function debugNotify() {
  * 不寫死查特定帳號，逐一印出所有管理者，橫跨處室的自然會在輸出裡現形。
  */
 function debugDigestReplyTo() {
+  _assertManualRunByDeployer_('debugDigestReplyTo');  // task_52660e35 損-07：維運函式禁止前端直呼
   console.log('=== debugDigestReplyTo 開始 ===');
-  const list = _buildNotificationList();
-  const { n2AdminDigest } = _groupNotificationList(list);
+  const list = _buildNotificationList_();
+  const { n2AdminDigest } = _groupNotificationList_(list);
   const systemReplyTo = getMailReplyTo_();
   console.log('系統預設 Reply-To（getMailReplyTo_）：' + systemReplyTo);
 
@@ -629,6 +640,7 @@ function debugDigestReplyTo() {
 
 /** 建立定時觸發器（可重複執行：會先刪除同名舊觸發器再重建，不疊加） */
 function setupNotifyTriggers() {
+  _assertManualRunByDeployer_('setupNotifyTriggers');  // task_52660e35 損-06：維運函式禁止前端直呼
   ScriptApp.getProjectTriggers().forEach(function(t) {
     if (t.getHandlerFunction() === 'checkAndNotifyOverdue') ScriptApp.deleteTrigger(t);
   });
