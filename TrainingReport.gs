@@ -454,8 +454,9 @@ function importTrainingData_(body) {
         return;
       }
       var key = rec.teacherName + '||' + rec.title.slice(0, 20) + '||' + rec.date;
+      // 損-27：比對前先算出本列來源（舊寫法只在新鍵才算，重複列一律被標成 both）
+      rec.source = detectSource_(rec);
       if (!dedupeMap[key]) {
-        rec.source       = detectSource_(rec);
         rec.academicYear = academicYear;
         dedupeMap[key]   = rec;
       } else {
