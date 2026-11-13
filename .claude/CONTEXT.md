@@ -19,7 +19,7 @@
 **必修（isRequired）** —— 研習場次的屬性。`isRequired = TRUE` 且審核為 `APPROVED` 的筆數，
 即教師的「必修達成數」。
 
-**每晚同步** —— `Sync.gs` 於每晚 23:30 執行 `syncTrainingStats()`，
+**每晚同步** —— `Sync.gs` 於每晚 23:30 執行 `syncTrainingStats()`（v3.35 起為觸發器入口，本體 `_runSyncTrainingStats_()`），
 把本學年統計批次寫入 `Hub.TrainingStats`（**覆寫，非累加**）。主門戶儀表板讀的就是它。
 
 **管理者識別** —— `systemAccess.training_admin = true`（存於 `Hub.UserStatusCache`）。
