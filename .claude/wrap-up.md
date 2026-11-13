@@ -34,10 +34,10 @@
 
 觸發條件（符合任一即需執行）：
 
-- `syncTrainingStats()` 的寫入欄位有新增或改名
+- `syncTrainingStats()`／本體 `_runSyncTrainingStats_()`（`task_52660e35` 起拆出）的寫入欄位有新增或改名
 - `TrainingStats` 工作表 Schema 有異動
 - 每晚同步排程時間（23:30）有調整
-- **`syncTrainingStats()` 的寫入邏輯有異動（即使欄位不變）** —— 例如有效時數的取值
+- **`_runSyncTrainingStats_()`（`syncTrainingStats()` 觸發器入口的本體）的寫入邏輯有異動（即使欄位不變）** —— 例如有效時數的取值
   規則改變，欄位名稱相同但語意已偏移
 
 動作：提醒使用者主門戶儀表板讀取 `Hub.TrainingStats` 顯示 KPI，異動後需確認主門戶端

@@ -45,7 +45,7 @@ Token 只記帳號，後端每次請求都即時讀 Hub（`verifyTrainSession_()
 （`_resolveRecordOwner_()`）串起來判定。
 
 **任務系列代號（`seriesId`）** —— `TRAINING_REQUIREMENT` 第 20 欄（v3.32，`task_40e96378`），格式 `RS` 加 3 位數。
-**任務編號 `requirementId` 每學年都會換，系列代號跨學年不變**：`renewRequirements` 沿用來源代號，`editRequirement` 不可改。
+**任務編號 `requirementId` 每學年都會換，系列代號跨學年不變**：`renewRequirements_` 沿用來源代號，`editRequirement_` 不可改。
 一個系列在同一學年可以有多個任務（例如拆成上、下學期）。新增任務時預設開新系列，全權管理者可選「歸入既有系列」（D3）。
 沒選到既有系列的唯一補救方法：到試算表手改 T 欄。
 
@@ -83,18 +83,18 @@ v3.33 起另有任務桶 `task[seriesId]`：收件人＝`scoped[owner]∪task[se
 跨學年誤計的唯一防線**。目標不可為空（不能改回自由研習）。AuditLog `REASSIGN_RECORD`。
 
 **研習日期嚴格解析** —— `Schema.gs` `_parseTrainingDateStrict_()`：只接受 `yyyy/M/d`
-（寫入格式）與 `yyyy-MM-dd`（Sheets 判讀為日期後 `parseSheetData` 的輸出），Date 物件先轉字串，
+（寫入格式）與 `yyyy-MM-dd`（Sheets 判讀為日期後 `parseSheetData_` 的輸出），Date 物件先轉字串，
 其餘回 null。凡「依研習日期判學年且判錯會改資料」的場合一律用它，**禁用 `toAcademicYear_()`**
 ——後者解析失敗時回傳當前學年，壞日期會靜默通過（`task_f4b8c2d1` R-5 同型）。
 
 **部別桶（hs／jh／other）** —— 統計回傳依教師部別分三桶：`高中部`→`hs`、`國中部`→`jh`、
-其餘（含部別空白）→`other`，三桶加總恆等於全校數。`calcRequirementStats` 與 `getCatalogStats`
-的後端、以及 `Admin.html` 的 `_rsDeptKey()` 使用同一規則。**不同於 `calcStats` 的
+其餘（含部別空白）→`other`，三桶加總恆等於全校數。`calcRequirementStats_` 與 `getCatalogStats_`
+的後端、以及 `Admin.html` 的 `_rsDeptKey()` 使用同一規則。**不同於 `calcStats_` 的
 「非高中部一律國中部」**——後者母體經 `VALID_DEPT` 篩選，前者未篩，沿用會把部別空白者灌進國中部。
 「其他」桶多為行政人員（`t9xxx` 帳號），使用者裁示視為正常分類（P-3b-1，2026-09-29）。
 
-**課程統計 vs 任務統計（口徑差異）** —— 兩者依不同欄位歸屬。**課程統計**（`getCatalogStats`）依紀錄的
-`catalogId` 歸課程、以課程所掛任務的 `owner` 決定處室；**任務統計**（`calcRequirementStats`）依
+**課程統計 vs 任務統計（口徑差異）** —— 兩者依不同欄位歸屬。**課程統計**（`getCatalogStats_`）依紀錄的
+`catalogId` 歸課程、以課程所掛任務的 `owner` 決定處室；**任務統計**（`calcRequirementStats_`）依
 紀錄自己的 `requirementId` 歸任務。紀錄被「改歸屬」後兩邊可能歸到不同處室，屬合理結果，
 畫面說明文字已註明。`catalogId` 為空的自訂課程紀錄不計入課程統計。
 
