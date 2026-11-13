@@ -221,7 +221,7 @@
 研習登錄系統/
 ├── 程式碼.gs        # doGet / handleRequest 路由（`task_52660e35` 起移除 doPost）
 ├── Schema.gs        # SHEET_SCHEMA 定義與系統常數（含 TRAINING_REQUIREMENT）
-├── Requirement.gs   # 年度研習任務 CRUD（getRequirements_ / renewRequirements_ / seed114Requirements）
+├── Requirement.gs   # 年度研習任務 CRUD（getRequirements_ / renewRequirements_ / backfillSeriesIds）
 ├── Catalog.gs       # 研習目錄 CRUD
 ├── Record.gs        # 登錄紀錄與 Base64 檔案上傳
 ├── Review.gs        # 審核流程（核准 / 退件 / 匯出）
