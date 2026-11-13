@@ -294,6 +294,7 @@
 | **v3.33** | Stage 1b：`TASK:<系列代號>` 任務管理者權限接入審核／課程／任務／統計路由；通知新增任務管理者收件與回信對象；系列代號已發最高號紀錄（[PR #53](https://github.com/chen-hwei/training-registration-gas/pull/53)） | ✅ 完成（2026-10-01） |
 | **v3.34** | Stage 1c：管理後台支援任務管理者畫面；新增任務可歸入既有系列；新增任務截止日期前端檢查（[PR #54](https://github.com/chen-hwei/training-registration-gas/pull/54)） | ✅ 完成（2026-10-02） |
 | **v3.35** | 公開函式曝露修正：handler／helper 共 70 支改結尾底線、23 支維運函式加部署者守衛、觸發器入口驗 `triggerUid`、`handleRequest` 型別守衛、移除 `doPost`；匿名已無法以 `google.script.run` 直呼後端（[PR #57](https://github.com/chen-hwei/training-registration-gas/pull/57)，GAS 125 版） | ✅ 完成（2026-11-13） |
+| **v3.36** | 維運函式下架：刪除 9 支一次性 seed／修正／診斷函式（含會覆寫手調資料的 `fixSemesterEndDates114`、`seedMatchKeywords114`），`ensureSheetHeaders` 改私有；部署者瀏覽器也叫不到這些函式（[PR #58](https://github.com/chen-hwei/training-registration-gas/pull/58)，GAS 126 版） | ✅ 完成（2026-11-13） |
 
 ### 已部署系統常數
 | 常數 | 說明 |
