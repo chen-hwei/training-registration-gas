@@ -2367,9 +2367,10 @@
         }
         continue;
       }
-      if (c === 34) {                         // 進入引號區段（欄位任意位置皆容忍）
-        if (!quoted) { quoted = true; buf = []; }
-        buf.push(text.slice(start, i));
+      if (c === 34 && i === start && !quoted) {
+        // 只在欄首進入引號區段（同 Python csv）；欄位中段落單的 " 視為一般字元，
+        // 否則會把後面所有列併進同一欄而靜默消失（審查 Y-1）
+        quoted = true; buf = [];
         inQ = true; start = i + 1;
       } else if (c === 44) {                  // ,
         if (quoted) buf.push(text.slice(start, i));
