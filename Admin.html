@@ -2525,8 +2525,8 @@
       return res;
     }).then(function(snapRes) {
       if (!snapRes || !snapRes.success) {
-        if (!isBatch) { hideSpinner(); showToast((snapRes && snapRes.error) || '快照失敗', 'error'); }
-        return null;
+        // task_cc04bc9e：快照失敗也交給下一段統一處理，批次模式才能回報失敗原因
+        return { success: false, error: '名冊快照失敗：' + ((snapRes && snapRes.error) || '未知原因') };
       }
       // Step B：匯入。預設合併去重（appendMode），只有勾選「取代」才整批取代該學年
       // 不再以「名冊快照是否已存在」推斷是否已有匯入資料（審查 Y-1）：
@@ -2535,10 +2535,11 @@
       return api('report_import', { academicYear: yr, rows: targetObjs, appendMode: appendMode });
     }).then(function(impRes) {
       if (!isBatch) hideSpinner();
-      if (!impRes) return false;
-      if (!impRes.success) {
-        if (!isBatch) showToast(impRes.error || '匯入失敗', 'error');
-        return false;
+      if (!impRes || !impRes.success) {
+        var errMsg = (impRes && impRes.error) || '匯入失敗';
+        if (!isBatch) showToast(errMsg, 'error');
+        // task_cc04bc9e：批次模式回傳失敗原因，避免被當成成功靜默略過
+        return { yr: yr, error: errMsg };
       }
       var d = impRes.data;
       var msg = yr + ' 學年度：' + d.imported + ' 筆';
@@ -2563,8 +2564,9 @@
       }
       return { yr: yr, msg: msg, unmatched: d.unmatchedNames || [] };
     }).catch(function(err) {
-      if (!isBatch) { hideSpinner(); showToast('發生錯誤：' + err.message, 'error'); }
-      return false;
+      var errMsg = '發生錯誤：' + (err && err.message ? err.message : err);
+      if (!isBatch) { hideSpinner(); showToast(errMsg, 'error'); }
+      return { yr: yr, error: errMsg };
     });
   }
 
@@ -2599,6 +2601,7 @@
     var total     = years.length;
     var done      = 0;
     var allMsgs   = [];
+    var allFails  = [];  // task_cc04bc9e：[{ yr, error }]
     var allUnmatched = [];
 
     progEl.style.display = '';
@@ -2612,14 +2615,25 @@
         document.getElementById('rpt-batch-all-btn').style.display = 'none';
         progEl.style.display = 'none';
         if (replaceChk) replaceChk.checked = false;  // 取代只生效一次，避免下次誤用
-        resultEl.innerHTML = '✅ 批次匯入完成（' + (replace ? '取代' : '合併') + '）：' + allMsgs.join('；');
+        // task_cc04bc9e：有失敗年度時改標題、列出原因，提示改用錯誤色
+        var modeTxt = replace ? '取代' : '合併';
+        if (allFails.length > 0) {
+          resultEl.innerHTML = '⚠️ 批次匯入結束（' + modeTxt + '）：' +
+            (allMsgs.length > 0 ? '成功 ' + _escHtml(allMsgs.join('；')) + '；' : '') +
+            allFails.map(function(f) {
+              return '<br><span style="color:var(--danger)">❌ ' + f.yr + ' 學年度：' + _escHtml(f.error) + '</span>';
+            }).join('');
+        } else {
+          resultEl.innerHTML = '✅ 批次匯入完成（' + modeTxt + '）：' + _escHtml(allMsgs.join('；'));
+        }
         if (allUnmatched.length > 0) {
           var warnEl = document.getElementById('rpt-import-warning');
           warnEl.innerHTML = '⚠️ 部分人員未能比對到名冊：<b>' + allUnmatched.join('、') + '</b>';
           warnEl.style.display = '';
         }
         _rptRefreshBreakdownUI_();
-        showToast('批次匯入完成', 'success');
+        if (allFails.length > 0) showToast(allFails.length + ' 個學年度匯入失敗，請看下方原因', 'error');
+        else showToast('批次匯入完成', 'success');
         return;
       }
       var yr = years[i];
@@ -2631,7 +2645,9 @@
         }).join('　');
 
       rptDoImport(yr, true, replace).then(function(result) {
-        if (result && result.msg) {
+        if (result && result.error) {
+          allFails.push(result);
+        } else if (result && result.msg) {
           allMsgs.push(result.msg);
           result.unmatched.forEach(function(n) {
             if (allUnmatched.indexOf(n) < 0) allUnmatched.push(n);
