@@ -377,6 +377,34 @@ function _detectAcademicYearFromDate_(dateStr) {
 }
 
 /**
+ * 整表重寫前的篩選器檢查（task_cc04bc9e）
+ * 工作表開著基本篩選器時拋錯，不自動移除，避免默默拿掉管理者設好的篩選條件
+ */
+function _assertNoFilter_(sheet, label) {
+  if (sheet.getFilter()) {
+    throw new Error(label + ' 分頁開著篩選器，整表重寫會讓被篩掉的列遺失資料。' +
+      '請先到試算表「資料 → 移除篩選器」後再操作，此次未寫入任何資料。');
+  }
+}
+
+/**
+ * 寫入後讀回單一欄，回傳「應有值卻讀回空白」的列數（task_cc04bc9e）
+ * 只比對是否變空白：日期字串可能被 Sheets 自動轉成 Date，不比對內容本身
+ * data 含標頭列；colIdx 為 0-based
+ */
+function _countLostColumnValues_(sheet, data, colIdx) {
+  if (colIdx < 0 || data.length < 2) return 0;
+  var readBack = sheet.getRange(2, colIdx + 1, data.length - 1, 1).getValues();
+  var lost = 0;
+  for (var i = 1; i < data.length; i++) {
+    var expected = String(data[i][colIdx] === undefined || data[i][colIdx] === null ? '' : data[i][colIdx]).trim();
+    var actual   = readBack[i - 1][0];
+    if (expected !== '' && (actual === '' || actual === null)) lost++;
+  }
+  return lost;
+}
+
+/**
  * 研習資料匯入
  * body.academicYear - 學年度
  * body.rows         - [{ rawRow, headers }] 前端解析後的原始列資料
@@ -499,10 +527,20 @@ function importTrainingData_(body) {
     });
 
     var allData = [iHdr].concat(prevRows).concat(newData);
+    // task_cc04bc9e 防呆 A：開著篩選器時整表重寫，被藏起來的列會掉 date 值（推定為篩選器行為），
+    // 導致之後追加匯入的去重鍵配不上而重複；在清空前擋下，此時工作表尚未被動過
+    _assertNoFilter_(importSheet, IMPORTED_DATA_SHEET);
     importSheet.clearContents();
     importSheet.getRange(1, 1, allData.length, keys.length).setValues(allData);
 
     clearStatsCache_(academicYear);  // 資料已更新，清除伺服器端統計快取
+
+    // task_cc04bc9e 防呆 C：只讀回 date 欄，兜住篩選器以外尚未知的掉值原因
+    var lostDates = _countLostColumnValues_(importSheet, allData, keys.indexOf('date'));
+    if (lostDates > 0) {
+      return _err_('匯入已寫入，但 ' + IMPORTED_DATA_SHEET + ' 有 ' + lostDates +
+        ' 列的日期沒有存進去。請檢查該分頁是否有篩選器、保護範圍或隱藏列，排除後以「取代」模式重新匯入。');
+    }
     return _ok_({
       imported:           toWrite.length,
       duplicatesResolved: dedupeCount,
