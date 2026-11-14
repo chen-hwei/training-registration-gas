@@ -554,6 +554,14 @@
              padding:12px 14px;background:#f0f4ff;border-radius:var(--radius);font-size:0.84rem">
         </div>
 
+        <!-- task_473feb38：預設合併；勾選後該學年既有匯入資料整批取代（匯入前會再確認） -->
+        <label for="rpt-import-replace"
+               style="display:flex;align-items:center;gap:8px;min-height:44px;cursor:pointer;
+                      font-size:0.84rem;color:var(--danger)">
+          <input type="checkbox" id="rpt-import-replace" style="width:20px;height:20px;margin:0">
+          ⚠️ 取代所選學年既有的匯入資料（不勾＝與既有資料合併去重）
+        </label>
+
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
           <button class="btn btn-sm btn-outline" onclick="rptParseFile()">📂 解析檔案</button>
           <button id="rpt-batch-all-btn" class="btn btn-sm btn-primary"
@@ -2498,7 +2506,7 @@
   }
 
   /* ── S1b：執行單一年度快照 + 匯入（yr 由按鈕帶入或批次呼叫）── */
-  function rptDoImport(yr, isBatch) {
+  function rptDoImport(yr, isBatch, replace) {
     yr = Number(yr);
     if (!yr || yr < 100) { showToast('學年度無效', 'error'); return Promise.resolve(false); }
     var targetObjs = _rptYearGroups[String(yr)] || [];
@@ -2519,8 +2527,10 @@
         if (!isBatch) { hideSpinner(); showToast((snapRes && snapRes.error) || '快照失敗', 'error'); }
         return null;
       }
-      // Step B：匯入（快照已存在代表可能已有同來源資料 → appendMode 追加去重）
-      var appendMode = snapRes.appended || false;
+      // Step B：匯入。預設合併去重（appendMode），只有勾選「取代」才整批取代該學年
+      // 不再以「名冊快照是否已存在」推斷是否已有匯入資料（審查 Y-1）：
+      // 該學年尚無匯入資料時，後端追加模式與取代模式結果相同
+      var appendMode = !replace;
       return api('report_import', { academicYear: yr, rows: targetObjs, appendMode: appendMode });
     }).then(function(impRes) {
       if (!isBatch) hideSpinner();
@@ -2573,6 +2583,14 @@
     years.sort(function(a,b){ return a - b; });
     if (years.length === 0) { showToast('沒有可匯入的年度', 'error'); return; }
 
+    // task_473feb38：勾選「取代」時先確認，取消則整批不執行
+    var replaceChk = document.getElementById('rpt-import-replace');
+    var replace    = !!(replaceChk && replaceChk.checked);
+    if (replace && !confirm('將刪除下列學年度「既有的全部匯入資料」，改為本次檔案內容：\n\n' +
+        years.join('、') + ' 學年度\n\n此動作無法復原，確定要取代嗎？')) {
+      return;
+    }
+
     _rptBatchRunning = true;
     document.getElementById('rpt-batch-all-btn').disabled = true;
     var progEl    = document.getElementById('rpt-batch-progress');
@@ -2592,7 +2610,8 @@
         document.getElementById('rpt-batch-all-btn').disabled = false;
         document.getElementById('rpt-batch-all-btn').style.display = 'none';
         progEl.style.display = 'none';
-        resultEl.innerHTML = '✅ 批次匯入完成：' + allMsgs.join('；');
+        if (replaceChk) replaceChk.checked = false;  // 取代只生效一次，避免下次誤用
+        resultEl.innerHTML = '✅ 批次匯入完成（' + (replace ? '取代' : '合併') + '）：' + allMsgs.join('；');
         if (allUnmatched.length > 0) {
           var warnEl = document.getElementById('rpt-import-warning');
           warnEl.innerHTML = '⚠️ 部分人員未能比對到名冊：<b>' + allUnmatched.join('、') + '</b>';
@@ -2610,7 +2629,7 @@
           return '<span style="color:var(--gray-400)">○' + y + '</span>';
         }).join('　');
 
-      rptDoImport(yr, true).then(function(result) {
+      rptDoImport(yr, true, replace).then(function(result) {
         if (result && result.msg) {
           allMsgs.push(result.msg);
           result.unmatched.forEach(function(n) {

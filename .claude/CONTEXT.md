@@ -120,6 +120,11 @@ localStorage 的 Token 隨之消失而白屏。**正確入口只有 `/a/macros/z
 **通知（N1／N2／N3）** —— `Notify.gs` 的三類定時通知。改動通知條件前，
 必須確認 `setupNotifyTriggers()` 的觸發器仍存在。
 
+**ImportedData 篩選器陷阱** —— ImportedData 開著基本篩選器時，`importTrainingData_` 整表重寫，
+寫進被篩選器藏起來的列，date 欄可能沒有存進去（2026-11-14 `task_473feb38` 驗收觀察，前提未完全證實），
+之後追加匯入的去重鍵就對不上，每次重匯都多出重複列。**匯入前 ImportedData 不可開篩選器**；
+要篩選請用「建立篩選器檢視」（只影響自己的畫面）。程式防呆見 `task_cc04bc9e`。
+
 ## SSO 接手（v3.15）
 
 **`_bootPage()`** —— `config.html` 包裝既有 `initPage()` 的 SSO 交換碼兌換入口，四頁
