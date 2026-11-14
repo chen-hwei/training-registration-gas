@@ -2478,10 +2478,10 @@
         if (!isBatch) { hideSpinner(); showToast((snapRes && snapRes.error) || '快照失敗', 'error'); }
         return null;
       }
-      // Step B：匯入（快照已存在代表可能已有同來源資料 → appendMode 追加去重）
-      // 損-26：後端回傳 {success, data:{appended}}，舊寫法讀 snapRes.appended 永遠 false
-      // replace（使用者勾選「取代」）時強制取代模式
-      var appendMode = !replace && !!(snapRes.data && snapRes.data.appended);
+      // Step B：匯入。預設合併去重（appendMode），只有勾選「取代」才整批取代該學年
+      // 不再以「名冊快照是否已存在」推斷是否已有匯入資料（審查 Y-1）：
+      // 該學年尚無匯入資料時，後端追加模式與取代模式結果相同
+      var appendMode = !replace;
       return api('report_import', { academicYear: yr, rows: targetObjs, appendMode: appendMode });
     }).then(function(impRes) {
       if (!isBatch) hideSpinner();
