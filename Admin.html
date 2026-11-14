@@ -2331,23 +2331,72 @@
     }).catch(function(){});
   }
 
-  /* ── CSV 解析（含 BOM 清除）── */
+  /* ── CSV 解析（RFC 4180 逐字元掃描，task_c1543e95）──
+   * 整份文字單次掃描，支援引號內的逗號／換行與 "" 跳脫，開頭 BOM 只清一次。
+   * 欄位值後處理（與舊版匯入資料的去重鍵相容）：
+   *   - 欄位內換行（\r\n / \r / \n）轉成一個空白
+   *   - 移除值中的 "（舊版解析會吞掉所有引號，保留會使合併重匯時去重鍵對不上）
+   *   - 每欄 trim；整列只有一個空欄的空白行濾掉（同舊版 filter(Boolean)）
+   */
   function _parseCSV(text) {
-    var lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(Boolean);
-    return lines.map(function(line, idx) {
-      // 簡易 CSV 解析（支援引號欄位）
-      var cols = [], cur = '', inQ = false;
-      for (var i = 0; i < line.length; i++) {
-        var c = line[i];
-        if (c === '"') { inQ = !inQ; }
-        else if (c === ',' && !inQ) { cols.push(cur.trim()); cur = ''; }
-        else { cur += c; }
+    text = String(text || '');
+    if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+    var rows = [], row = [], start = 0, inQ = false, quoted = false, buf = null;
+    var len = text.length;
+
+    function cleanVal(v) {
+      return v.replace(/\r\n|\r|\n/g, ' ').replace(/"/g, '').trim();
+    }
+    function endField(i) {
+      // 未含引號的欄位直接 slice，避免逐字串接；含引號者用 buf 累積
+      var v = quoted ? buf.join('') : text.slice(start, i);
+      row.push(cleanVal(v));
+      quoted = false; buf = null;
+    }
+    function endRow() {
+      if (!(row.length === 1 && row[0] === '')) rows.push(row);
+      row = [];
+    }
+
+    for (var i = 0; i < len; i++) {
+      var c = text.charCodeAt(i);
+      if (inQ) {
+        if (c === 34) {                       // "
+          if (text.charCodeAt(i + 1) === 34) { buf.push(text.slice(start, i + 1)); i++; start = i + 1; }
+          else { buf.push(text.slice(start, i)); inQ = false; start = i + 1; }
+        }
+        continue;
       }
-      cols.push(cur.trim());
-      // 第一列 BOM 清除
-      if (idx === 0) cols[0] = cols[0].replace(/^﻿/, '').trim();
-      return cols;
-    });
+      if (c === 34 && i === start && !quoted) {
+        // 只在欄首進入引號區段（同 Python csv）；欄位中段落單的 " 視為一般字元，
+        // 否則會把後面所有列併進同一欄而靜默消失（審查 Y-1）
+        quoted = true; buf = [];
+        inQ = true; start = i + 1;
+      } else if (c === 44) {                  // ,
+        if (quoted) buf.push(text.slice(start, i));
+        endField(i); start = i + 1;
+      } else if (c === 10 || c === 13) {      // \n 或 \r（\r\n 視為一次換行）
+        if (quoted) buf.push(text.slice(start, i));
+        endField(i); endRow();
+        if (c === 13 && text.charCodeAt(i + 1) === 10) i++;
+        start = i + 1;
+      }
+    }
+    // 最後一欄（檔尾無換行，或引號未閉合時把剩餘文字視為欄位內容）
+    if (start < len || row.length > 0 || quoted) {
+      if (quoted) buf.push(text.slice(start, len));
+      endField(len); endRow();
+    }
+    return rows;
+  }
+
+  /* ── 副檔名防呆：Excel 檔以文字讀取只會得到亂碼，提示另存 CSV（task_c1543e95）── */
+  function _rejectExcelFile_(file) {
+    if (file && /\.xlsx?$/i.test(file.name || '')) {
+      showToast('「' + file.name + '」是 Excel 檔，請另存為 CSV（UTF-8）後再匯入', 'error');
+      return true;
+    }
+    return false;
   }
 
   /* ── S1b：解析多個研習 CSV，合併後依日期分年度 ── */
@@ -2356,6 +2405,7 @@
     if (!files || files.length === 0) { showToast('請先選擇研習資料檔案', 'error'); return; }
 
     var fileArray = Array.prototype.slice.call(files);
+    if (fileArray.some(_rejectExcelFile_)) return;
     var pending   = fileArray.length;
     var allRows   = [];     // 合併後所有資料列（已正規化為相同 headers）
     var firstHdrs = null;
@@ -2619,6 +2669,7 @@
   function rptParseRoster() {
     var file = document.getElementById('rpt-roster-file').files[0];
     if (!file) { showToast('請先選擇名冊 CSV', 'error'); return; }
+    if (_rejectExcelFile_(file)) return;
     var reader = new FileReader();
     reader.onload = function(e) {
       var rows = _parseCSV(e.target.result);
@@ -2775,6 +2826,7 @@
     inp.onchange = function() {
       var file = inp.files[0];
       if (!file) { document.body.removeChild(inp); return; }
+      if (_rejectExcelFile_(file)) { document.body.removeChild(inp); return; }
       var reader = new FileReader();
       reader.onload = function(e) {
         document.body.removeChild(inp);
