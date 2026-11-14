@@ -2602,6 +2602,7 @@
     var done      = 0;
     var allMsgs   = [];
     var allFails  = [];  // task_cc04bc9e：[{ yr, error }]
+    var failedYrs = {};  // task_cc04bc9e Y-1：{ 學年: true }，供進度列標 ❌
     var allUnmatched = [];
 
     progEl.style.display = '';
@@ -2639,7 +2640,10 @@
       var yr = years[i];
       progEl.innerHTML = '正在匯入 <b>' + yr + ' 學年度</b>... (' + (i+1) + '/' + total + ')　' +
         years.map(function(y, j) {
-          if (j < i)  return '<span style="color:var(--success)">✅' + y + '</span>';
+          // task_cc04bc9e Y-1：已跑完的年度依實際結果標 ✅／❌
+          if (j < i)  return failedYrs[y]
+            ? '<span style="color:var(--danger)">❌' + y + '</span>'
+            : '<span style="color:var(--success)">✅' + y + '</span>';
           if (j === i) return '<span style="color:var(--primary)">⏳' + y + '</span>';
           return '<span style="color:var(--gray-400)">○' + y + '</span>';
         }).join('　');
@@ -2647,6 +2651,7 @@
       rptDoImport(yr, true, replace).then(function(result) {
         if (result && result.error) {
           allFails.push(result);
+          failedYrs[yr] = true;
         } else if (result && result.msg) {
           allMsgs.push(result.msg);
           result.unmatched.forEach(function(n) {
