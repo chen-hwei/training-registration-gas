@@ -121,6 +121,16 @@ function _normalizeDate_(dateStr) {
   return m[1] + '/' + parseInt(m[2], 10) + '/' + parseInt(m[3], 10);
 }
 
+// ── 內部：儲存格值轉日期字串（task_473feb38 損-28）──
+// 試算表會把 2025/8/15 自動判讀成 Date，String(Date) 會變成英文長字串；
+// Date 物件一律以台北時區格式化，字串則維持原值（去頭尾空白）
+function _cellToDateStr_(val, pattern) {
+  if (val instanceof Date) {
+    return isNaN(val.getTime()) ? '' : Utilities.formatDate(val, 'Asia/Taipei', pattern || 'yyyy/M/d');
+  }
+  return String(val || '').trim();
+}
+
 // ── 內部：將一列原始資料依欄位別名對映為標準物件 ──
 function normalizeRow_(row, headers) {
   var obj = {};
@@ -451,7 +461,7 @@ function importTrainingData_(body) {
             academicYear: academicYear,
             teacherName:  String(r[eNmCol] || '').trim(),
             title:        String(r[eTlCol] || '').trim(),
-            date:         String(r[eDtCol] || '').trim(),
+            date:         _normalizeDate_(_cellToDateStr_(r[eDtCol])),  // 損-28：與新列同格式才能去重
             hours:        String(r[eHrCol] || '').trim(),
             source:       String(r[eSrCol] || '').trim(),
             courseCode:   String(r[eCcCol] || '').trim(),
@@ -472,8 +482,9 @@ function importTrainingData_(body) {
         return;
       }
       var key = rec.teacherName + '||' + rec.title.slice(0, 20) + '||' + rec.date;
+      // 損-27：比對前先算出本列來源（舊寫法只在新鍵才算，重複列一律被標成 both）
+      rec.source = detectSource_(rec);
       if (!dedupeMap[key]) {
-        rec.source       = detectSource_(rec);
         rec.academicYear = academicYear;
         dedupeMap[key]   = rec;
       } else {
@@ -558,7 +569,7 @@ function getStatsCache_(academicYear, mode) {
     for (var i = 1; i < rows.length; i++) {
       if (String(rows[i][0]) === key) {
         var parsed = JSON.parse(String(rows[i][2] || 'null'));
-        return _ok_({ statsData: parsed, cachedAt: String(rows[i][1]) });
+        return _ok_({ statsData: parsed, cachedAt: _cellToDateStr_(rows[i][1], 'yyyy/MM/dd HH:mm') });
       }
     }
     return _ok_(null);
@@ -1719,15 +1730,21 @@ function _matchImportedToRequirements_(myName, academicYear) {
     myRecords.push({
       title:       title,
       hours:       hours,
-      date:        iDtCol >= 0 ? String(r[iDtCol] || '') : '',
+      date:        iDtCol >= 0 ? _cellToDateStr_(r[iDtCol]) : '',
       organizer:   iOgCol >= 0 ? String(r[iOgCol] || '') : '',
       source:      iSrCol >= 0 ? String(r[iSrCol] || '') : '',
       matchedReqs: matchedReqs
     });
   });
 
-  // 依日期降冪排序
-  myRecords.sort(function(a, b) { return String(b.date).localeCompare(String(a.date)); });
+  // 依日期降冪排序（損-28：yyyy/M/d 未補零，字串比較會把 9 月排在 10 月前；改比時間戳，無日期者殿後）
+  myRecords.sort(function(a, b) {
+    var ta = _importDateTs_(a.date), tb = _importDateTs_(b.date);
+    if (ta === null && tb === null) return 0;
+    if (ta === null) return 1;
+    if (tb === null) return -1;
+    return tb - ta;
+  });
 
   return { records: myRecords, importedByReq: importedByReq };
 }
@@ -1829,7 +1846,7 @@ function checkImportedBeforeSubmit_(userId, body) {
           matched.push({
             title:     title,
             hours:     hrs,
-            date:      iDtCol >= 0 ? String(r[iDtCol] || '') : '',
+            date:      iDtCol >= 0 ? _cellToDateStr_(r[iDtCol]) : '',
             organizer: iOgCol >= 0 ? String(r[iOgCol] || '') : ''
           });
           break;
