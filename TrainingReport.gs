@@ -405,22 +405,37 @@ function _countLostColumnValues_(sheet, data, colIdx) {
 }
 
 /**
- * 研習資料匯入
+ * 研習資料匯入（task_592491b3 起：預設增補，檔案裡沒有的既有列一律保留）
  * body.academicYear - 學年度
- * body.rows         - [{ rawRow, headers }] 前端解析後的原始列資料
- * body.appendMode   - true：追加合併（保留現有同年度紀錄）；false（預設）：取代
+ * body.rows         - [{ row, headers }] 前端解析後的原始列資料
+ * body.appendMode   - true（預設）：增補，既有列全數保留，對得上的同一筆只更新；
+ *                     false：取代，該學年只留本次檔案內容（前端須先以 dryRun 預覽並確認）
+ * body.dryRun       - true：只計算不寫入，回傳取代模式會刪除的筆數與清單（取代前預覽用）
  */
 function importTrainingData_(body) {
+  var academicYear = Number(body.academicYear || _currentAcademicYear_());
+  var rows         = body.rows || [];
+  var appendMode   = body.appendMode !== false;
+  var dryRun       = body.dryRun === true;
+  if (rows.length === 0) return _err_('無匯入資料');
+
+  // 損-30（部分）：增補是「讀→合併→整表重寫」，兩人同時匯入會互相覆蓋，寫入路徑加鎖
+  var lock = null;
+  if (!dryRun) {
+    lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(30000);
+    } catch (_) {
+      return _err_('另一位管理者正在匯入研習資料，請約 30 秒後再試。');
+    }
+  }
+
   try {
-    var academicYear = Number(body.academicYear || _currentAcademicYear_());
-    var rows         = body.rows || [];
-    var appendMode   = body.appendMode || false;
-    if (rows.length === 0) return _err_('無匯入資料');
+    var ss = SpreadsheetApp.openById(getTrainingSsId_());
 
     // 讀取 TeacherSnapshot 建立姓名集合（用於 unmatchedNames 偵測）
-    var ss            = SpreadsheetApp.openById(getTrainingSsId_());
-    var snapSheet     = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
-    var knownNames    = {};
+    var snapSheet  = ss.getSheetByName(TEACHER_SNAPSHOT_SHEET);
+    var knownNames = {};
     if (snapSheet) {
       var snapData = snapSheet.getDataRange().getValues();
       var sHdr     = snapData[0];
@@ -436,69 +451,51 @@ function importTrainingData_(body) {
       return normalizeRow_(item.row, item.headers);
     }).filter(function(r) { return r.teacherName; });
 
-    // appendMode：預先載入現有同年度資料至 dedupeMap（合併而非取代）
-    var dedupeMap    = {};
-    var dedupeCount  = 0;
-    var skipped      = 0;
-
-    if (appendMode) {
-      var importSheet0 = ss.getSheetByName(IMPORTED_DATA_SHEET);
-      if (importSheet0) {
-        var existData = importSheet0.getDataRange().getValues();
-        var eHdr      = existData[0];
-        var eYrCol    = eHdr.indexOf('academicYear');
-        var eNmCol    = eHdr.indexOf('teacherName');
-        var eTlCol    = eHdr.indexOf('title');
-        var eDtCol    = eHdr.indexOf('date');
-        var eHrCol    = eHdr.indexOf('hours');
-        var eSrCol    = eHdr.indexOf('source');
-        var eCcCol    = eHdr.indexOf('courseCode');
-        var eCnCol    = eHdr.indexOf('certNumber');
-        var eOgCol    = eHdr.indexOf('organizer');
-        existData.slice(1).forEach(function(r) {
-          if (Number(r[eYrCol]) !== academicYear) return;
-          var rec = {
-            academicYear: academicYear,
-            teacherName:  String(r[eNmCol] || '').trim(),
-            title:        String(r[eTlCol] || '').trim(),
-            date:         _normalizeDate_(_cellToDateStr_(r[eDtCol])),  // 損-28：與新列同格式才能去重
-            hours:        String(r[eHrCol] || '').trim(),
-            source:       String(r[eSrCol] || '').trim(),
-            courseCode:   String(r[eCcCol] || '').trim(),
-            certNumber:   String(r[eCnCol] || '').trim(),
-            organizer:    String(r[eOgCol] || '').trim()
-          };
-          var key = rec.teacherName + '||' + rec.title.slice(0, 20) + '||' + rec.date;
-          dedupeMap[key] = rec;
+    // 讀取該學年既有資料（取代模式也要讀：dryRun 預覽需要比對）
+    var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
+    var existing    = [];
+    if (importSheet) {
+      var existData = importSheet.getDataRange().getValues();
+      var eHdr      = existData[0];
+      var col = function(n) { return eHdr.indexOf(n); };
+      var eYr = col('academicYear'), eNm = col('teacherName'), eTl = col('title'),
+          eDt = col('date'), eHr = col('hours'), eSr = col('source'),
+          eCc = col('courseCode'), eCn = col('certNumber'), eOg = col('organizer');
+      existData.slice(1).forEach(function(r) {
+        if (Number(r[eYr]) !== academicYear) return;
+        existing.push({
+          academicYear: academicYear,
+          teacherName:  String(r[eNm] || '').trim(),
+          title:        String(r[eTl] || '').trim(),
+          date:         _normalizeDate_(_cellToDateStr_(r[eDt])),  // 損-28：與新列同格式才能比對
+          hours:        String(r[eHr] || '').trim(),
+          source:       String(r[eSr] || '').trim(),
+          courseCode:   String(r[eCc] || '').trim(),
+          certNumber:   String(r[eCn] || '').trim(),
+          organizer:    String(r[eOg] || '').trim()
         });
-      }
+      });
     }
 
-    normalized.forEach(function(rec) {
-      // 安全驗證：若日期能辨識且與宣告學年度不符則略過
-      var detectedYr = _detectAcademicYearFromDate_(rec.date);
-      if (detectedYr !== null && detectedYr !== academicYear) {
-        skipped++;
-        return;
-      }
-      var key = rec.teacherName + '||' + rec.title.slice(0, 20) + '||' + rec.date;
-      // 損-27：比對前先算出本列來源（舊寫法只在新鍵才算，重複列一律被標成 both）
-      rec.source = detectSource_(rec);
-      if (!dedupeMap[key]) {
-        rec.academicYear = academicYear;
-        dedupeMap[key]   = rec;
-      } else {
-        // 重複：保留時數較大者，合併來源與 ID
-        dedupeCount++;
-        var prev = dedupeMap[key];
-        if (parseFloat(rec.hours) > parseFloat(prev.hours)) prev.hours = rec.hours;
-        if (prev.source !== rec.source) prev.source = 'both';
-        if (!prev.courseCode && rec.courseCode) prev.courseCode = rec.courseCode;
-        if (!prev.certNumber && rec.certNumber) prev.certNumber = rec.certNumber;
-      }
-    });
+    // 增補：既有列全數保留並參與比對；取代：只拿本次檔案內容互相去重
+    var merged = _mergeImportRecords_(appendMode ? existing : [], normalized, academicYear);
 
-    var toWrite      = Object.values(dedupeMap);
+    if (dryRun) {
+      // 取代模式預覽：該學年既有列全部會被刪；其中「本次檔案對不上」的列刪了就找不回來
+      var probe   = _mergeImportRecords_(existing, normalized, academicYear);
+      var notIn   = probe.unmatchedExisting;
+      return _ok_({
+        dryRun:        true,
+        existingCount: existing.length,
+        newCount:      merged.records.length,
+        notInFile:     notIn.length,
+        sample:        notIn.slice(0, 20).map(function(r) {
+          return { teacherName: r.teacherName, title: r.title, date: r.date };
+        })
+      });
+    }
+
+    var toWrite        = merged.records;
     var unmatchedNames = [];
     var seenUnmatched  = {};
     toWrite.forEach(function(rec) {
@@ -508,8 +505,6 @@ function importTrainingData_(body) {
       }
     });
 
-    // 讀取既有 ImportedData，移除同學年度舊資料後合併寫入
-    var importSheet = ss.getSheetByName(IMPORTED_DATA_SHEET);
     if (!importSheet) {
       importSheet = ss.insertSheet(IMPORTED_DATA_SHEET);
       var importHdrs = ['academicYear','teacherName','title','organizer','date','hours','courseCode','certNumber','source'];
@@ -539,17 +534,173 @@ function importTrainingData_(body) {
     var lostDates = _countLostColumnValues_(importSheet, allData, keys.indexOf('date'));
     if (lostDates > 0) {
       return _err_('匯入已寫入，但 ' + IMPORTED_DATA_SHEET + ' 有 ' + lostDates +
-        ' 列的日期沒有存進去。請檢查該分頁是否有篩選器、保護範圍或隱藏列，排除後以「取代」模式重新匯入。');
+        ' 列的日期沒有存進去。請檢查該分頁是否有篩選器、保護範圍或隱藏列，排除後重新匯入。');
     }
     return _ok_({
       imported:           toWrite.length,
-      duplicatesResolved: dedupeCount,
-      skipped:            skipped,
+      added:              merged.added,
+      duplicatesResolved: merged.matched,
+      datesFilled:        merged.datesFilled,
+      retained:           appendMode ? merged.retainedSameSource : 0,
+      skipped:            merged.skipped,
       unmatchedNames:     unmatchedNames
     });
   } catch (e) {
     return _err_('importTrainingData 失敗：' + e.message);
+  } finally {
+    if (lock) lock.releaseLock();
   }
+}
+
+// ── 內部：課名正規化（連續空白收成一個，去頭尾），供完整課名比對 ──
+function _normTitle_(title) {
+  return String(title || '').replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * 內部：匯入比對與合併（task_592491b3，純記憶體運算，不讀寫試算表）
+ * existing - 該學年既有列（一律保留，不因重複鍵而丟棄）
+ * incoming - 本次檔案正規化後的列
+ * 比對順序（對到任一層即視為同一筆）：
+ *   1. 全國來源（有課程代碼）：姓名＋課程代碼（實測一堂課一個代碼）
+ *   2. 姓名＋完整課名＋日期（臺北市核准文號一號多課，不能單獨當鍵）
+ *   3. 補日期：既有列日期空白，且姓名＋完整課名相同（雙方都有課程代碼時須一致）
+ *   3b. 本列也無日期：姓名＋完整課名對上既有無日期列即為同一筆（代碼／文號不可衝突）
+ *   4. 跨來源：沿用舊鍵「姓名＋課名前 20 字＋日期」，只配對另一來源（或已是 both）的列，
+ *      雙方都有課程代碼或核准文號時須一致——與既有 both 資料相容，
+ *      同一來源同前綴的不同場次不再被併掉（損-32 同來源部分）
+ * 回傳 { records, added, matched, datesFilled, skipped, unmatchedExisting, retainedSameSource }
+ */
+function _mergeImportRecords_(existing, incoming, academicYear) {
+  var records = [], byCode = {}, byTitleDate = {}, byTitleNoDate = {}, byCross = {};
+  var touched = [];  // 與 records 同索引：既有列是否被本次檔案對到
+
+  function index(rec, i) {
+    var name = rec.teacherName, t = _normTitle_(rec.title);
+    if (rec.courseCode && byCode[name + '||' + rec.courseCode] === undefined) {
+      byCode[name + '||' + rec.courseCode] = i;
+    }
+    if (rec.date) {
+      var td = name + '||' + t + '||' + rec.date;
+      if (byTitleDate[td] === undefined) byTitleDate[td] = i;
+      var ck = name + '||' + String(rec.title).slice(0, 20) + '||' + rec.date;
+      (byCross[ck] = byCross[ck] || []).push(i);
+    } else {
+      var tn = name + '||' + t;
+      (byTitleNoDate[tn] = byTitleNoDate[tn] || []).push(i);
+    }
+  }
+
+  existing.forEach(function(rec) {
+    records.push(rec);
+    touched.push(false);
+    index(rec, records.length - 1);
+  });
+  var existingLen = records.length;
+
+  var matched = 0, added = 0, datesFilled = 0, skipped = 0;
+  var sourcesSeen = {};  // 本次檔案出現的來源，用來計算「同來源卻不在檔案裡」的保留筆數
+  incoming.forEach(function(src) {
+    // 安全驗證：若日期能辨識且與宣告學年度不符則略過
+    var detectedYr = _detectAcademicYearFromDate_(src.date);
+    if (detectedYr !== null && detectedYr !== academicYear) { skipped++; return; }
+
+    var rec  = {};
+    Object.keys(src).forEach(function(k) { rec[k] = src[k]; });
+    rec.academicYear = academicYear;
+    rec.source = detectSource_(rec);  // 損-27：比對前先算出本列來源
+    sourcesSeen[rec.source] = true;
+    var name = rec.teacherName, t = _normTitle_(rec.title);
+    var hit  = -1;
+
+    // 1. 姓名＋課程代碼
+    if (rec.courseCode && byCode[name + '||' + rec.courseCode] !== undefined) {
+      hit = byCode[name + '||' + rec.courseCode];
+    }
+    // 2. 姓名＋完整課名＋日期
+    if (hit < 0 && rec.date && byTitleDate[name + '||' + t + '||' + rec.date] !== undefined) {
+      var c2 = byTitleDate[name + '||' + t + '||' + rec.date];
+      if (!(rec.courseCode && records[c2].courseCode && records[c2].courseCode !== rec.courseCode)) hit = c2;
+    }
+    // 3. 補日期：既有列沒有日期、完整課名相同
+    var filling = false;
+    if (hit < 0 && rec.date) {
+      var list = byTitleNoDate[name + '||' + t] || [];
+      for (var j = 0; j < list.length; j++) {
+        var c3 = records[list[j]];
+        if (c3.date) continue;  // 已被前一列補過
+        if (rec.courseCode && c3.courseCode && c3.courseCode !== rec.courseCode) continue;
+        hit = list[j]; filling = true; break;
+      }
+    }
+    // 3b. 本列也沒有日期（審查 R-1）：與既有無日期列以姓名＋完整課名視為同一筆，
+    //     代碼／文號不可衝突；不補日期，避免每次重匯都多出一列
+    if (hit < 0 && !rec.date) {
+      var listN = byTitleNoDate[name + '||' + t] || [];
+      for (var n = 0; n < listN.length; n++) {
+        var c3b = records[listN[n]];
+        if (c3b.date) continue;
+        if (rec.courseCode && c3b.courseCode && c3b.courseCode !== rec.courseCode) continue;
+        if (rec.certNumber && c3b.certNumber && c3b.certNumber !== rec.certNumber) continue;
+        hit = listN[n]; break;
+      }
+    }
+    // 4. 跨來源（舊鍵，只配對另一來源）；多個候選時優先選完整課名互相包含者
+    if (hit < 0 && rec.date) {
+      var cands = byCross[name + '||' + String(rec.title).slice(0, 20) + '||' + rec.date] || [];
+      var best = 0;
+      for (var k = 0; k < cands.length; k++) {
+        var c4 = records[cands[k]];
+        if (c4.source === rec.source) continue;
+        if (rec.courseCode && c4.courseCode && c4.courseCode !== rec.courseCode) continue;
+        if (rec.certNumber && c4.certNumber && c4.certNumber !== rec.certNumber) continue;
+        var ct = _normTitle_(c4.title);
+        var score = (ct.indexOf(t) >= 0 || t.indexOf(ct) >= 0) ? 2 : 1;
+        if (score > best) { best = score; hit = cands[k]; }
+      }
+    }
+
+    if (hit < 0) {
+      records.push(rec);
+      touched.push(true);
+      index(rec, records.length - 1);
+      added++;
+      return;
+    }
+
+    // 對到既有或本次稍早的同一筆：時數取大、合併來源、補空白欄位
+    matched++;
+    touched[hit] = true;
+    var prev = records[hit];
+    if (parseFloat(rec.hours) > parseFloat(prev.hours) || !prev.hours) prev.hours = rec.hours;
+    if (prev.source !== rec.source && prev.source !== 'both') prev.source = 'both';
+    if (!prev.courseCode && rec.courseCode) {
+      prev.courseCode = rec.courseCode;
+      if (byCode[name + '||' + rec.courseCode] === undefined) byCode[name + '||' + rec.courseCode] = hit;
+    }
+    if (!prev.certNumber && rec.certNumber) prev.certNumber = rec.certNumber;
+    if (!prev.organizer && rec.organizer) prev.organizer = rec.organizer;
+    if (filling) {
+      prev.date = rec.date;
+      datesFilled++;
+      var td = name + '||' + _normTitle_(prev.title) + '||' + rec.date;
+      if (byTitleDate[td] === undefined) byTitleDate[td] = hit;
+      var ck = name + '||' + String(prev.title).slice(0, 20) + '||' + rec.date;
+      (byCross[ck] = byCross[ck] || []).push(hit);
+    }
+  });
+
+  var unmatchedExisting = [], retainedSameSource = 0;
+  for (var i = 0; i < existingLen; i++) {
+    if (touched[i]) continue;
+    unmatchedExisting.push(records[i]);
+    // 另一來源的列本來就不在這份檔案裡，不算「保留」；同來源或 both 的列才是檔案缺漏
+    if (sourcesSeen[records[i].source] || records[i].source === 'both') retainedSameSource++;
+  }
+  return {
+    records: records, added: added, matched: matched, datesFilled: datesFilled,
+    skipped: skipped, unmatchedExisting: unmatchedExisting, retainedSameSource: retainedSameSource
+  };
 }
 
 // ==================== F3-cache：伺服器端統計快取 ====================

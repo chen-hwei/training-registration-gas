@@ -2515,13 +2515,12 @@
 
     if (!isBatch) showSpinner();
 
-    // Step A：快照（已存在 → appendMode 追加，不再詢問）
+    // Step A：快照只在該學年尚無名冊時建立
+    // task_592491b3（損-35）：已存在就沿用，不再把「目前」Hub 在職名單追加進去，
+    // 否則歷史學年母數會混入後來才到職的人員；要更新名冊請用名冊匯入區
     return api('report_snapshot', { academicYear: yr, rosterRows: [], overwrite: false })
     .then(function(res) {
-      if (!res.success && res.conflict) {
-        // 快照已存在：改用 appendMode 追加，保留現有名冊資料
-        return api('report_snapshot', { academicYear: yr, rosterRows: [], appendMode: true });
-      }
+      if (!res.success && res.conflict) return { success: true };
       return res;
     }).then(function(snapRes) {
       if (!snapRes || !snapRes.success) {
@@ -2542,9 +2541,15 @@
         return { yr: yr, error: errMsg };
       }
       var d = impRes.data;
-      var msg = yr + ' 學年度：' + d.imported + ' 筆';
-      if (d.duplicatesResolved) msg += '（去重 ' + d.duplicatesResolved + '）';
-      if (d.skipped)            msg += '（略過 ' + d.skipped + '）';
+      // task_592491b3：增補模式分開顯示新增／對上／補日期／保留，保留＝同來源但本次檔案沒有的既有列
+      var msg = yr + ' 學年度：共 ' + d.imported + ' 筆';
+      var parts = [];
+      if (d.added !== undefined)  parts.push('新增 ' + d.added);
+      if (d.duplicatesResolved)   parts.push('對上 ' + d.duplicatesResolved);
+      if (d.datesFilled)          parts.push('補日期 ' + d.datesFilled);
+      if (d.retained)             parts.push('保留檔案中沒有的 ' + d.retained);
+      if (d.skipped)              parts.push('略過 ' + d.skipped);
+      if (parts.length) msg += '（' + parts.join('，') + '）';
       if (!isBatch) {
         document.getElementById('rpt-import-result').textContent = msg + ' ✅';
         showToast(msg, 'success');
@@ -2587,13 +2592,60 @@
     if (years.length === 0) { showToast('沒有可匯入的年度', 'error'); return; }
 
     // task_473feb38：勾選「取代」時先確認，取消則整批不執行
+    // task_592491b3：確認前先逐學年預演（dryRun，不寫入），把會被刪掉、且本次檔案找不回來的筆數列出來
     var replaceChk = document.getElementById('rpt-import-replace');
     var replace    = !!(replaceChk && replaceChk.checked);
-    if (replace && !confirm('將刪除下列學年度「既有的全部匯入資料」，改為本次檔案內容：\n\n' +
-        years.join('、') + ' 學年度\n\n此動作無法復原，確定要取代嗎？')) {
-      return;
-    }
+    if (!replace) { _rptRunBatch_(years, false, replaceChk); return; }
 
+    _rptBatchRunning = true;
+    showSpinner();
+    var previews = [];
+    function previewNext(i) {
+      if (i >= years.length) {
+        hideSpinner();
+        _rptBatchRunning = false;
+        var fails = previews.filter(function(p) { return p.error; });
+        if (fails.length > 0) {
+          showToast('取代預覽失敗：' + fails.map(function(p) { return p.yr + ' ' + p.error; }).join('；'), 'error');
+          return;
+        }
+        var lines = previews.map(function(p) {
+          var s = '・' + p.yr + ' 學年度：現有 ' + p.existingCount + ' 筆全部刪除，改為本次 ' + p.newCount + ' 筆';
+          if (p.notInFile > 0) {
+            s += '\n　其中 ' + p.notInFile + ' 筆不在本次檔案中，刪除後無法從檔案找回，例如：\n' +
+              p.sample.slice(0, 5).map(function(r) {
+                return '　　' + r.teacherName + '｜' + String(r.title).slice(0, 24) + (r.date ? '｜' + r.date : '');
+              }).join('\n');
+          }
+          return s;
+        });
+        if (!confirm('【取代】會刪除下列學年度既有的全部匯入資料：\n\n' + lines.join('\n') +
+            '\n\n建議先在試算表複製 ImportedData 當備份。此動作無法復原，確定要取代嗎？')) {
+          return;
+        }
+        _rptRunBatch_(years, true, replaceChk);
+        return;
+      }
+      var yr = years[i];
+      api('report_import', { academicYear: yr, rows: _rptYearGroups[String(yr)] || [], appendMode: false, dryRun: true })
+      .then(function(res) {
+        if (res && res.success) {
+          var d = res.data;
+          previews.push({ yr: yr, existingCount: d.existingCount, newCount: d.newCount, notInFile: d.notInFile, sample: d.sample || [] });
+        } else {
+          previews.push({ yr: yr, error: (res && res.error) || '未知原因' });
+        }
+        previewNext(i + 1);
+      }).catch(function(err) {
+        previews.push({ yr: yr, error: (err && err.message) || String(err) });
+        previewNext(i + 1);
+      });
+    }
+    previewNext(0);
+  }
+
+  /* ── task_592491b3：批次匯入本體（取代模式已於呼叫前完成預覽與確認）── */
+  function _rptRunBatch_(years, replace, replaceChk) {
     _rptBatchRunning = true;
     document.getElementById('rpt-batch-all-btn').disabled = true;
     var progEl    = document.getElementById('rpt-batch-progress');
