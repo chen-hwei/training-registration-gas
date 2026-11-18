@@ -2843,7 +2843,7 @@
       if (!res.success) { showToast(res.error || '名冊批次匯入失敗', 'error'); return; }
       var d = res.data;
       var msgs = d.results.map(function(r) {
-        return r.academicYear + ' 學年（' + (r.success ? r.count + ' 人' : '失敗') + ')';
+        return r.academicYear + ' 學年（' + (r.success ? _rptRosterCountText_(r.count, r.teacherCount) : '失敗') + ')';
       });
       resultEl.textContent = '✅ 名冊匯入完成：' + msgs.join('、');
       showToast('名冊批次匯入完成', 'success');
@@ -2860,6 +2860,12 @@
   }
 
   /* ── S1a：渲染各學年度名冊來源摘要 ── */
+  /* ── task_a9f729d4 審查 Y-1：名冊筆數含行政人員／留職停薪，另列教師人數以對照儀表板母數 ── */
+  function _rptRosterCountText_(count, teacherCount) {
+    if (teacherCount === undefined || teacherCount === null) return (count || '?') + ' 人';  // 舊紀錄沒有教師數
+    return '名冊 ' + (count || 0) + ' 筆（教師 ' + teacherCount + ' 人）';
+  }
+
   function _rptRenderRosterSources(sourcesMap) {
     var years = Object.keys(sourcesMap).map(Number).sort(function(a,b){ return b - a; });
     if (years.length === 0) return;
@@ -2879,7 +2885,7 @@
         '<span style="min-width:80px;font-weight:600">' + yr + ' 學年度</span>' +
         badge + supplement +
         '<span style="color:var(--gray-500);font-size:0.78rem;margin-left:auto">' +
-        (info.count || '?') + ' 人｜' + (info.at || '') + '</span>' +
+        _rptRosterCountText_(info.count, info.teacherCount) + '｜' + (info.at || '') + '</span>' +
         '</div>';
     });
     var listEl = document.getElementById('rpt-roster-sources-list');
@@ -2927,7 +2933,7 @@
           hideSpinner();
           if (!res.success) { showToast(res.error || '補錄失敗', 'error'); return; }
           _rptClearCache_(yr);
-          showToast(yr + ' 學年度名冊補錄完成：' + res.data.snapshotCount + ' 人', 'success');
+          showToast(yr + ' 學年度名冊補錄完成：' + _rptRosterCountText_(res.data.snapshotCount, res.data.teacherCount), 'success');
           api('report_get_roster_sources', {}).then(function(r2) {
             if (r2.success) _rptRenderRosterSources(r2.data);
           });
@@ -2949,7 +2955,7 @@
       hideSpinner();
       if (!res.success) { showToast(res.error || '覆蓋失敗', 'error'); return; }
       _rptClearCache_(yr);
-      showToast(yr + ' 學年度名冊已從 Hub 覆蓋：' + res.data.snapshotCount + ' 人', 'success');
+      showToast(yr + ' 學年度名冊已從 Hub 覆蓋：' + _rptRosterCountText_(res.data.snapshotCount, res.data.teacherCount), 'success');
       api('report_get_roster_sources', {}).then(function(r2) {
         if (r2.success) _rptRenderRosterSources(r2.data);
       });

@@ -253,8 +253,9 @@ function snapshotTeacherRoster_(body) {
       var allData    = [headers].concat(keptOther).concat(mergedRows);
       sheet.clearContents();
       sheet.getRange(1, 1, allData.length, 4).setValues(allData);
-      _saveRosterSource_(academicYear, sourceTag, fileName, mergedRows.length);
-      return _ok_({ academicYear: academicYear, snapshotCount: mergedRows.length, appended: true });
+      var teacherCountA = _countRosterTeachers_(mergedRows);
+      _saveRosterSource_(academicYear, sourceTag, fileName, mergedRows.length, teacherCountA);
+      return _ok_({ academicYear: academicYear, snapshotCount: mergedRows.length, teacherCount: teacherCountA, appended: true });
     }
 
     // ── 取代模式（overwrite 或 新建）──
@@ -305,21 +306,29 @@ function snapshotTeacherRoster_(body) {
     var allData = [headers].concat(kept).concat(newRows);
     sheet.clearContents();
     sheet.getRange(1, 1, allData.length, 4).setValues(allData);
-    _saveRosterSource_(academicYear, sourceTag, fileName, newRows.length);
-    return _ok_({ academicYear: academicYear, snapshotCount: newRows.length });
+    var teacherCount = _countRosterTeachers_(newRows);
+    _saveRosterSource_(academicYear, sourceTag, fileName, newRows.length, teacherCount);
+    return _ok_({ academicYear: academicYear, snapshotCount: newRows.length, teacherCount: teacherCount });
   } catch (e) {
     return _err_('snapshotTeacherRoster 失敗：' + e.message);
   }
 }
 
 /** 記錄各學年度名冊來源至 PropertiesService */
-function _saveRosterSource_(academicYear, source, fileName, count) {
+// ── 內部：快照列中計入教師母數的人數（task_a9f729d4 審查 Y-1）──
+// rows 為 [academicYear, name, dept, job]；依建立當下的兼課開關計算，日後切換開關不回溯
+function _countRosterTeachers_(rows) {
+  var includePartTime = _loadStatsIncludePartTime_();
+  return rows.filter(function(r) { return _isCountedInStats_(r[2], r[3], includePartTime); }).length;
+}
+
+function _saveRosterSource_(academicYear, source, fileName, count, teacherCount) {
   try {
     var props = PropertiesService.getScriptProperties();
     var raw   = props.getProperty(ROSTER_SOURCES_KEY);
     var map   = raw ? JSON.parse(raw) : {};
     var ts    = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
-    map[String(academicYear)] = { source: source, fileName: fileName || '', count: count, at: ts };
+    map[String(academicYear)] = { source: source, fileName: fileName || '', count: count, teacherCount: teacherCount, at: ts };
     props.setProperty(ROSTER_SOURCES_KEY, JSON.stringify(map));
   } catch (e) { /* 記錄失敗不影響主流程 */ }
 }
@@ -362,7 +371,8 @@ function snapshotRosterBatch_(body) {
         appendMode:   appendMode,
         fileName:     fileName
       });
-      results.push({ academicYear: yr, success: res.success, count: res.data ? res.data.snapshotCount : 0, error: res.error });
+      results.push({ academicYear: yr, success: res.success, count: res.data ? res.data.snapshotCount : 0,
+                     teacherCount: res.data ? res.data.teacherCount : 0, error: res.error });
     });
 
     var failed = results.filter(function(r) { return !r.success; });
