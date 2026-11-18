@@ -565,6 +565,7 @@ function _normTitle_(title) {
  *   1. 全國來源（有課程代碼）：姓名＋課程代碼（實測一堂課一個代碼）
  *   2. 姓名＋完整課名＋日期（臺北市核准文號一號多課，不能單獨當鍵）
  *   3. 補日期：既有列日期空白，且姓名＋完整課名相同（雙方都有課程代碼時須一致）
+ *   3b. 本列也無日期：姓名＋完整課名對上既有無日期列即為同一筆（代碼／文號不可衝突）
  *   4. 跨來源：沿用舊鍵「姓名＋課名前 20 字＋日期」，只配對另一來源（或已是 both）的列，
  *      雙方都有課程代碼或核准文號時須一致——與既有 both 資料相容，
  *      同一來源同前綴的不同場次不再被併掉（損-32 同來源部分）
@@ -630,6 +631,18 @@ function _mergeImportRecords_(existing, incoming, academicYear) {
         if (c3.date) continue;  // 已被前一列補過
         if (rec.courseCode && c3.courseCode && c3.courseCode !== rec.courseCode) continue;
         hit = list[j]; filling = true; break;
+      }
+    }
+    // 3b. 本列也沒有日期（審查 R-1）：與既有無日期列以姓名＋完整課名視為同一筆，
+    //     代碼／文號不可衝突；不補日期，避免每次重匯都多出一列
+    if (hit < 0 && !rec.date) {
+      var listN = byTitleNoDate[name + '||' + t] || [];
+      for (var n = 0; n < listN.length; n++) {
+        var c3b = records[listN[n]];
+        if (c3b.date) continue;
+        if (rec.courseCode && c3b.courseCode && c3b.courseCode !== rec.courseCode) continue;
+        if (rec.certNumber && c3b.certNumber && c3b.certNumber !== rec.certNumber) continue;
+        hit = listN[n]; break;
       }
     }
     // 4. 跨來源（舊鍵，只配對另一來源）；多個候選時優先選完整課名互相包含者
