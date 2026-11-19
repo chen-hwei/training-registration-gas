@@ -3046,7 +3046,7 @@
           cacheInfoEl.textContent = '';
           cacheInfoEl.style.display = 'none';
         } else {
-          _rptSaveCache_(yr, res.data);
+          if (yr >= _rptCurrentYear()) _rptSaveCache_(yr, res.data);  // 過去學年不讀本機快取，也不寫（審查 Y-2）
           var ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
           cacheInfoEl.textContent = '上次計算：' + ts;
           cacheInfoEl.style.display = '';
@@ -3088,8 +3088,8 @@
         if (res.data.archived) {
           cacheInfoEl.style.display = 'none';
         } else {
-          // 同時回存 localStorage，下次不再呼叫 GAS
-          _rptSaveCache_(yr, res.data.statsData);
+          // 同時回存 localStorage，下次不再呼叫 GAS（只限目前學年；過去學年不讀本機快取，審查 Y-2）
+          if (yr >= _rptCurrentYear()) _rptSaveCache_(yr, res.data.statsData);
           cacheInfoEl.textContent = '上次計算：' + res.data.cachedAt + '（跨裝置快取）';
           cacheInfoEl.style.display = '';
         }

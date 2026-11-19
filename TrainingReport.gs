@@ -883,6 +883,14 @@ function _readStatsArchive_(academicYear, mode, preloadedRows) {
   };
 }
 
+/** 該學年是否已有任何封存列 */
+function _isStatsYearArchived_(academicYear, rows) {
+  for (var i = 1; i < rows.length; i++) {
+    if (Number(rows[i][0]) === academicYear) return true;
+  }
+  return false;
+}
+
 /** 驗證封存／解除封存的學年度參數，回傳錯誤字串或 null */
 function _validateArchiveYear_(body) {
   var year = Number((body || {}).academicYear);
@@ -914,34 +922,40 @@ function archiveStatsYear_(userId, body) {
   var cur  = _currentAcademicYear_();
   if (year >= cur) return _err_('只能封存已結束的學年度（目前為 ' + cur + ' 學年度）');
 
+  // 已封存先擋（不持鎖的快速檢查；鎖內會再確認一次）
+  if (_isStatsYearArchived_(year, _loadStatsArchiveRows_())) {
+    return _err_(year + ' 學年度已封存；要更正請先解除封存');
+  }
+
+  // 兩次 calcStats_ 約 10–20 秒，放在取鎖之前，避免封存期間教師送出、審核等不到鎖（審查 Y-1）
+  var cum = calcStats_(year, 'cumulative');
+  if (!cum.success) return cum;
+  var yr  = calcStats_(year, 'year');
+  if (!yr.success) return yr;
+  if (!cum.data.totals.school) return _err_(year + ' 學年度名冊快照沒有計入母數的教師，無法封存');
+
+  // 封存當下的口徑：指標規則與兼課開關（日後回溯「當時用什麼規則算的」）
+  var rulesRaw  = PropertiesService.getScriptProperties().getProperty(INDICATOR_RULES_KEY);
+  var rulesJson = rulesRaw || JSON.stringify(DEFAULT_INDICATORS_);
+  var inclPT    = _loadStatsIncludePartTime_();
+  var ts        = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
+
+  var newRows = [];
+  [cum.data, yr.data].forEach(function(d) {
+    newRows.push([year, d.mode, STATS_ARCHIVE_META_ID_, JSON.stringify({ totals: d.totals }),
+                  ts, userId, rulesJson, inclPT]);
+    d.stats.forEach(function(s) {
+      newRows.push([year, d.mode, s.id, JSON.stringify(s), ts, userId, '', '']);
+    });
+  });
+
+  // 鎖內只做「重讀封存分頁確認未封存 → 寫入」
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) return _err_('系統忙碌中，請稍後再試');
   try {
-    var rows = _loadStatsArchiveRows_();
-    for (var i = 1; i < rows.length; i++) {
-      if (Number(rows[i][0]) === year) return _err_(year + ' 學年度已封存；要更正請先解除封存');
+    if (_isStatsYearArchived_(year, _loadStatsArchiveRows_())) {
+      return _err_(year + ' 學年度已封存；要更正請先解除封存');
     }
-    var cum = calcStats_(year, 'cumulative');
-    if (!cum.success) return cum;
-    var yr  = calcStats_(year, 'year');
-    if (!yr.success) return yr;
-    if (!cum.data.totals.school) return _err_(year + ' 學年度名冊快照沒有計入母數的教師，無法封存');
-
-    // 封存當下的口徑：指標規則與兼課開關（日後回溯「當時用什麼規則算的」）
-    var rulesRaw  = PropertiesService.getScriptProperties().getProperty(INDICATOR_RULES_KEY);
-    var rulesJson = rulesRaw || JSON.stringify(DEFAULT_INDICATORS_);
-    var inclPT    = _loadStatsIncludePartTime_();
-    var ts        = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
-
-    var newRows = [];
-    [cum.data, yr.data].forEach(function(d) {
-      newRows.push([year, d.mode, STATS_ARCHIVE_META_ID_, JSON.stringify({ totals: d.totals }),
-                    ts, userId, rulesJson, inclPT]);
-      d.stats.forEach(function(s) {
-        newRows.push([year, d.mode, s.id, JSON.stringify(s), ts, userId, '', '']);
-      });
-    });
-
     var ss    = SpreadsheetApp.openById(getTrainingSsId_());
     var sheet = ss.getSheetByName(STATS_ARCHIVE_SHEET);
     if (!sheet) {
