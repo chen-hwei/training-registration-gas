@@ -188,6 +188,9 @@ function _healthCheckPreExport_(year) {
       if (!name) return;
       var dept = String(r[deptCol] || '').trim();
       var job  = String(r[jobCol]  || '').trim();
+      // task_a9f729d4 審查 R-1：行政人員／留職停薪是刻意保留在快照的名冊紀錄，不算異常，
+      // 否則每學年約 40 筆會占滿樣本上限，真正的部別或職務錯誤反而看不到
+      if (job === '行政人員' || job === '留職停薪') return;
       if (!_isCountedInStats_(dept, job, includePartTime)) {
         excluded.push(name + '：部別「' + (dept || '空白') + '」／職務「' + (job || '空白') + '」未列入統計範圍');
       }

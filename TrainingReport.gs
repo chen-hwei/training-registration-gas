@@ -159,6 +159,17 @@ function detectSource_(rec) {
 }
 
 /**
+ * 內部：CSV 名冊寫入快照的保留條件（task_a9f729d4）
+ * 計入教師母數者照舊；另保留「行政人員」「留職停薪」作為當年名冊紀錄（部別可空白）。
+ * 讀取端（calcStats_／匯出／健檢／簽呈範例表）一律再以 _isCountedInStats_ 篩選，母數不受影響。
+ * includePartTime 固定 true，理由同 R-13（開關判定留給讀取端）
+ */
+function _isKeptInSnapshot_(dept, job) {
+  var j = String(job || '').trim();
+  return _isCountedInStats_(dept, j, true) || j === '行政人員' || j === '留職停薪';
+}
+
+/**
  * 名冊快照：建立、追加或覆蓋指定學年度的 TeacherSnapshot
  * body.academicYear  - 目標學年度（數字）
  * body.rosterRows    - 人事室名冊 [{ teacherName, department, jobPrimary }]，空陣列則從 Hub
@@ -215,7 +226,7 @@ function snapshotTeacherRoster_(body) {
           if (!name) return;
           var dept = String(row.department  || '').trim();
           var job  = String(row.jobPrimary  || '').trim();
-          if (!_isCountedInStats_(dept, job, true)) return;
+          if (!_isKeptInSnapshot_(dept, job)) return;
           existMap[name] = [academicYear, name, dept, job];
         });
       } else {
@@ -242,8 +253,9 @@ function snapshotTeacherRoster_(body) {
       var allData    = [headers].concat(keptOther).concat(mergedRows);
       sheet.clearContents();
       sheet.getRange(1, 1, allData.length, 4).setValues(allData);
-      _saveRosterSource_(academicYear, sourceTag, fileName, mergedRows.length);
-      return _ok_({ academicYear: academicYear, snapshotCount: mergedRows.length, appended: true });
+      var teacherCountA = _countRosterTeachers_(mergedRows);
+      _saveRosterSource_(academicYear, sourceTag, fileName, mergedRows.length, teacherCountA);
+      return _ok_({ academicYear: academicYear, snapshotCount: mergedRows.length, teacherCount: teacherCountA, appended: true });
     }
 
     // ── 取代模式（overwrite 或 新建）──
@@ -258,7 +270,7 @@ function snapshotTeacherRoster_(body) {
         if (!row.teacherName) return;
         var dept = String(row.department || '').trim();
         var job  = String(row.jobPrimary || '').trim();
-        if (!_isCountedInStats_(dept, job, true)) return;
+        if (!_isKeptInSnapshot_(dept, job)) return;
         newRows.push([
           academicYear,
           String(row.teacherName || '').trim(),
@@ -294,21 +306,29 @@ function snapshotTeacherRoster_(body) {
     var allData = [headers].concat(kept).concat(newRows);
     sheet.clearContents();
     sheet.getRange(1, 1, allData.length, 4).setValues(allData);
-    _saveRosterSource_(academicYear, sourceTag, fileName, newRows.length);
-    return _ok_({ academicYear: academicYear, snapshotCount: newRows.length });
+    var teacherCount = _countRosterTeachers_(newRows);
+    _saveRosterSource_(academicYear, sourceTag, fileName, newRows.length, teacherCount);
+    return _ok_({ academicYear: academicYear, snapshotCount: newRows.length, teacherCount: teacherCount });
   } catch (e) {
     return _err_('snapshotTeacherRoster 失敗：' + e.message);
   }
 }
 
 /** 記錄各學年度名冊來源至 PropertiesService */
-function _saveRosterSource_(academicYear, source, fileName, count) {
+// ── 內部：快照列中計入教師母數的人數（task_a9f729d4 審查 Y-1）──
+// rows 為 [academicYear, name, dept, job]；依建立當下的兼課開關計算，日後切換開關不回溯
+function _countRosterTeachers_(rows) {
+  var includePartTime = _loadStatsIncludePartTime_();
+  return rows.filter(function(r) { return _isCountedInStats_(r[2], r[3], includePartTime); }).length;
+}
+
+function _saveRosterSource_(academicYear, source, fileName, count, teacherCount) {
   try {
     var props = PropertiesService.getScriptProperties();
     var raw   = props.getProperty(ROSTER_SOURCES_KEY);
     var map   = raw ? JSON.parse(raw) : {};
     var ts    = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
-    map[String(academicYear)] = { source: source, fileName: fileName || '', count: count, at: ts };
+    map[String(academicYear)] = { source: source, fileName: fileName || '', count: count, teacherCount: teacherCount, at: ts };
     props.setProperty(ROSTER_SOURCES_KEY, JSON.stringify(map));
   } catch (e) { /* 記錄失敗不影響主流程 */ }
 }
@@ -351,7 +371,8 @@ function snapshotRosterBatch_(body) {
         appendMode:   appendMode,
         fileName:     fileName
       });
-      results.push({ academicYear: yr, success: res.success, count: res.data ? res.data.snapshotCount : 0, error: res.error });
+      results.push({ academicYear: yr, success: res.success, count: res.data ? res.data.snapshotCount : 0,
+                     teacherCount: res.data ? res.data.teacherCount : 0, error: res.error });
     });
 
     var failed = results.filter(function(r) { return !r.success; });
@@ -1071,9 +1092,13 @@ function generateGoogleDoc_(academicYear) {
       var sYearCol    = sHdr.indexOf('academicYear');
       var sNameCol    = sHdr.indexOf('teacherName');
       var sJobCol     = sHdr.indexOf('jobPrimary');
+      var sDeptCol    = sHdr.indexOf('department');
+      var inclPT10    = _loadStatsIncludePartTime_();
 
       var teachers10  = [];
       (snapData.slice(1) || []).forEach(function(r) {
+        // task_a9f729d4：快照含行政人員／留職停薪後，範例表只取計入母數的教師
+        if (!_isCountedInStats_(String(r[sDeptCol] || '').trim(), String(r[sJobCol] || '').trim(), inclPT10)) return;
         if (Number(r[sYearCol]) === academicYear && teachers10.length < 10) {
           teachers10.push({ name: String(r[sNameCol] || ''), job: String(r[sJobCol] || '') });
         }
