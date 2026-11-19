@@ -2362,7 +2362,7 @@
       if (!res.success) { showToast(res.error || '執行失敗', 'error'); return; }
       _rptClearCache_(yr);
       showToast(yr + ' 學年度已' + (unarchive ? '解除封存' : '封存'), 'success');
-      rptLoadStats();
+      rptLoadStats(unarchive);  // 解除封存後直接重算，顯示即時數字供核對
     }).catch(function(err) {
       hideSpinner();
       showToast('發生錯誤：' + err.message, 'error');
@@ -3255,6 +3255,7 @@
     var listEl = document.getElementById('rpt-stats-list');
     if (!_rptStatsCache) {
       listEl.innerHTML = '<div class="empty-state"><div class="ei">📊</div><p>尚無資料</p></div>';
+      document.getElementById('rpt-totals-label').textContent = '';  // 避免殘留前一個學年的人數
       return;
     }
     var stats  = _rptStatsCache.stats;
