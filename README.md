@@ -299,6 +299,7 @@
 | **v3.38** | 研習／名冊 CSV 解析改 RFC 4180：支援引號欄位內換行與 `""` 跳脫，救回 `Sch_Teacher_…` 中 279 筆被切成殘片的紀錄；選到 `.xls`／`.xlsx` 時提示另存 CSV（[PR #61](https://github.com/chen-hwei/training-registration-gas/pull/61)，GAS 128 版） | ✅ 完成（2026-11-14） |
 | **v3.39** | 匯入篩選器防呆：ImportedData 開著篩選器時匯入直接中止（避免被篩掉的列掉日期造成重複），寫入後讀回日期欄比對；批次匯入逐年回報失敗原因、進度列即時標 ❌（[PR #62](https://github.com/chen-hwei/training-registration-gas/pull/62)，GAS 129 版） | ✅ 完成（2026-11-15） |
 | **v3.40** | 研習匯入改增補：檔案缺漏的既有列保留、全國改用課程代碼比對（同前綴不同場次不再誤併）、無日期列可補日期；取代前 dryRun 預覽；匯入加鎖；匯入不再追加名冊快照（[PR #63](https://github.com/chen-hwei/training-registration-gas/pull/63)，GAS 130 版） | ✅ 完成（2026-11-18） |
+| **v3.41** | 歷史學年名冊重建：以 110～114 學年人事一覽表覆蓋名冊快照（移除測試帳號與後到職人員）；快照另保留行政人員與留職停薪（不計入母數）；匯出前健檢與簽呈範例表只看計入母數的教師；名冊來源分列「名冊筆數／教師人數」（[PR #64](https://github.com/chen-hwei/training-registration-gas/pull/64)，GAS 131 版） | ✅ 完成（2026-11-19） |
 
 ### 已部署系統常數
 | 常數 | 說明 |

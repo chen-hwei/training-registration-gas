@@ -129,6 +129,10 @@ localStorage 的 Token 隨之消失而白屏。**正確入口只有 `/a/macros/z
 檔案裡沒有的既有列一律保留。結果訊息的「保留」＝同來源但本次檔案沒有的既有列（例如離職人員）。
 「取代」才會刪除，且先以 `dryRun` 預覽。比對順序見 `TrainingReport.gs` `_mergeImportRecords_` 函式頭註解。
 
+**名冊快照保留列（v3.41）** —— TeacherSnapshot 經 CSV 補錄或追加時，除計入母數的教師外，也保留聘任本職
+「行政人員」「留職停薪」的列（部別可空白），作為當年名冊紀錄。所有讀取端（`calcStats_`、匯出、健檢、簽呈範例表）
+一律再以 `_isCountedInStats_` 篩選，教師母數不受影響。名冊來源顯示「名冊 N 筆（教師 T 人）」，T 才對應儀表板母數。
+
 ## SSO 接手（v3.15）
 
 **`_bootPage()`** —— `config.html` 包裝既有 `initPage()` 的 SSO 交換碼兌換入口，四頁
