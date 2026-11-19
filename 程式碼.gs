@@ -41,6 +41,8 @@ const TRAINING_SCOPE_ALL_ONLY_ACTIONS = new Set([
   'save_identity_rules', 'save_stats_settings',
   'report_export_csv', 'report_export_doc',
   'report_calc', 'report_batch_calc', 'report_get_stats_cache',
+  // task_e02425c5：學年達成率封存／解除封存
+  'report_archive_year', 'report_unarchive_year',
   'report_get_roster_sources', 'report_get_settings', 'get_indicators',
   'get_identity_rules', 'get_stats_settings',
   // task_c95dbe21 Stage 2a（R-4）：健檢結果含全校各處室空值清單，限全權
@@ -150,7 +152,9 @@ function handleRequest(payload) {
       case 'report_get_roster_sources':  return getRosterSources_();
       case 'report_get_stats_cache':     return getStatsCache_((body||{}).academicYear, (body||{}).mode);
       case 'report_batch_calc':          return batchCalcStats_(body || {});
-      case 'report_calc':                return calcStats_((body || {}).academicYear, (body || {}).mode);
+      case 'report_calc':                return calcStatsForDashboard_((body || {}).academicYear, (body || {}).mode);
+      case 'report_archive_year':        return archiveStatsYear_(userId, body || {});
+      case 'report_unarchive_year':      return unarchiveStatsYear_(userId, body || {});
       case 'report_export_csv':          return exportDoubleColumnCSV_((body || {}).academicYear);
       case 'report_export_doc':          return generateGoogleDoc_((body || {}).academicYear);
       case 'report_get_settings':        return getReportSettings_();

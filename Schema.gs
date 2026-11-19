@@ -205,6 +205,7 @@ const OWNER_DEPTS            = ['教務處', '學務處', '輔導室', '圖書�
 // ⚠️ 同步維護點：Admin.html 的 rqm-fowner <select> 選項是硬寫的靜態 HTML（S-A-2 刻意偏離，
 // 未採前端動態讀此常數），異動本清單時務必回頭同步該處 <option>，否則後端放行、前端選不到。
 const STATS_CACHE_SHEET      = 'StatsCache';       // 伺服器端統計快取工作表
+const STATS_ARCHIVE_SHEET    = 'StatsArchive';     // 已結案學年的達成率封存值（task_e02425c5，儀表板優先讀此）
 const REPORT_DOC_TEMPLATE_ID = '';        // fallback；正式值優先讀 PropertiesService（REPORT_TEMPLATE_ID_KEY）
 const SCHOOL_NAME            = '臺北市立中崙高級中學';
 const PRINCIPAL_NAME         = '';        // fallback；正式值優先讀 PropertiesService（PRINCIPAL_NAME_KEY）
