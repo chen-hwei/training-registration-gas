@@ -2358,11 +2358,18 @@
     showSpinner();
     api(unarchive ? 'report_unarchive_year' : 'report_archive_year',
         { academicYear: yr, confirmYear: yr }).then(function(res) {
-      hideSpinner();
-      if (!res.success) { showToast(res.error || '執行失敗', 'error'); return; }
+      if (!res.success) { hideSpinner(); showToast(res.error || '執行失敗', 'error'); return; }
       _rptClearCache_(yr);
       showToast(yr + ' 學年度已' + (unarchive ? '解除封存' : '封存'), 'success');
-      rptLoadStats(unarchive);  // 解除封存後直接重算，顯示即時數字供核對
+      if (!unarchive) { hideSpinner(); rptLoadStats(); return; }
+      // 解除封存會清掉該學年兩種模式的快取，兩種模式都重算，切換模式時才有即時數字可核對
+      return api('report_batch_calc', { combinations: [
+        { academicYear: yr, mode: 'cumulative' }, { academicYear: yr, mode: 'year' }
+      ] }).then(function(r2) {
+        hideSpinner();
+        if (!r2.success) showToast(r2.error || '重新計算失敗，請手動按「重新計算」', 'error');
+        rptLoadStats();
+      });
     }).catch(function(err) {
       hideSpinner();
       showToast('發生錯誤：' + err.message, 'error');
