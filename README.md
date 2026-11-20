@@ -28,7 +28,7 @@
 - 批次審核教師上傳的研習證明（核准 / 退件並附理由）
 - 匯出研習紀錄報表（CSV）
 - 預覽並手動觸發通知（即時掌握待通知教師名單）
-- **研習統計分析**（**v3.27 起限全權管理者**，處室管理者看不到此分頁）：多來源研習資料匯入（全國進修網 + 臺北市研習網；v3.40 起匯入一律增補：檔案裡沒有的既有紀錄（如離職人員）全數保留，勾選「取代」時會先預覽刪除筆數再確認；匯入時不再把目前在職名單追加進歷史學年名冊；v3.38 起 CSV 依 RFC 4180 解析，支援欄位內換行，選到 xlsx 會提示另存 CSV；v3.39 起 ImportedData 開著篩選器時匯入會中止並提示，批次匯入逐年列出失敗原因）、人事名冊多學年管理（含一鍵從 Hub 全量覆蓋目前學年度名冊）、政策指標達成率儀表板（累積/當年度，跨裝置快取）、未達成教師矩陣總覽（指標 checkbox 篩選 + CSV 匯出）、批次預計算、**兼課教師計入統計母數可切換**（後台開關，同時影響 Hub 同步與催辦通知範圍，實習老師永久排除不受開關影響）
+- **研習統計分析**（**v3.27 起限全權管理者**，處室管理者看不到此分頁）：多來源研習資料匯入（全國進修網 + 臺北市研習網；v3.40 起匯入一律增補：檔案裡沒有的既有紀錄（如離職人員）全數保留，勾選「取代」時會先預覽刪除筆數再確認；匯入時不再把目前在職名單追加進歷史學年名冊；v3.38 起 CSV 依 RFC 4180 解析，支援欄位內換行，選到 xlsx 會提示另存 CSV；v3.39 起 ImportedData 開著篩選器時匯入會中止並提示，批次匯入逐年列出失敗原因）、人事名冊多學年管理（含一鍵從 Hub 全量覆蓋目前學年度名冊）、政策指標達成率儀表板（累積/當年度，跨裝置快取）、未達成教師矩陣總覽（指標 checkbox 篩選 + CSV 匯出）、批次預計算、**已結案學年達成率封存**（v3.42 起，儀表板按鈕手動封存，封存後指標規則或兼課開關改動都不影響該學年數字；要更正時先解除封存再重新封存；CSV 與簽呈維持即時計算）、**兼課教師計入統計母數可切換**（後台開關，同時影響 Hub 同步與催辦通知範圍，實習老師永久排除不受開關影響）
 - **年度任務達成率**：依身分分眾統計各任務達標率；計算區間採硬性學年/學期邊界（整學年 8/1–7/31、上學期 8/1–1/31、下學期 2/1–7/31），截止日期僅作催辦提醒
 - **任務達成狀況**（v3.30，處室管理者可用）：年度任務分頁的可收合區塊，顯示本處室任務的達成率儀表板（全校／高中部／國中部／其他）與未達成教師矩陣（可依部別與任務篩選），可匯出含教師帳號、姓名、學校 email 的 CSV 供另行寄信提醒；處室管理者只看得到本處室任務
 - **課程完成狀況**（v3.31，處室管理者可用）：研習目錄分頁的可收合區塊，顯示掛有年度任務的課程之已完成／審核中／退件人數（分部別）與已登錄名單，可依部別／課程／狀態篩選並匯出含學校 email 的 CSV；依課程所屬處室計算，與年度任務統計可能不同
@@ -54,7 +54,7 @@
 | 項目 | 技術 |
 |---|---|
 | 後端 | Google Apps Script（clasp 管理） |
-| 資料庫 | Google Sheets（研習紀錄試算表 6 張工作表：`TRAINING_REQUIREMENT`／`TRAINING_CATALOG`／`TRAINING_RECORD`／`ImportedData`／`TeacherSnapshot`／`StatsCache`） |
+| 資料庫 | Google Sheets（研習紀錄試算表 7 張工作表：`TRAINING_REQUIREMENT`／`TRAINING_CATALOG`／`TRAINING_RECORD`／`ImportedData`／`TeacherSnapshot`／`StatsCache`／`StatsArchive`） |
 | 檔案儲存 | Google Drive（依年份 / 教師 ID 分層管理） |
 | 身分驗證 | TRAIN 原生 Token（教師帳號 + 身分證後六碼，帳號字元集 `[A-Za-z0-9._-]`、1～30 字元，多數為 `txxxx` 格式但不限；密碼比對由 `SchoolPortalLib.verifyUserPassword` 處理，CacheService `train_` Token）；向後相容 SchoolPortalLib |
 | 前端 | HTML / CSS / Vanilla JS（GAS HtmlService） |
@@ -164,6 +164,7 @@
 |---|---|
 | `report_import` · `report_snapshot` · `report_snapshot_batch` · `report_get_roster_sources` | 研習資料匯入、人事名冊快照與來源查詢 |
 | `report_calc` · `report_batch_calc` · `report_get_stats_cache` | 指標達成率計算、批次預計算、讀取統計快取 |
+| `report_archive_year` · `report_unarchive_year` | 已結案學年達成率封存／解除封存（需輸入學年度確認，寫 AuditLog） |
 | `report_export_csv` · `report_export_doc` | 雙欄審查 CSV、Google 簽呈文件 |
 | `report_get_settings` · `report_save_settings` | 報告設定（公文範本、校長姓名） |
 | `get_indicators` · `save_indicator` · `delete_indicator` | 政策指標規則 |
@@ -300,6 +301,7 @@
 | **v3.39** | 匯入篩選器防呆：ImportedData 開著篩選器時匯入直接中止（避免被篩掉的列掉日期造成重複），寫入後讀回日期欄比對；批次匯入逐年回報失敗原因、進度列即時標 ❌（[PR #62](https://github.com/chen-hwei/training-registration-gas/pull/62)，GAS 129 版） | ✅ 完成（2026-11-15） |
 | **v3.40** | 研習匯入改增補：檔案缺漏的既有列保留、全國改用課程代碼比對（同前綴不同場次不再誤併）、無日期列可補日期；取代前 dryRun 預覽；匯入加鎖；匯入不再追加名冊快照（[PR #63](https://github.com/chen-hwei/training-registration-gas/pull/63)，GAS 130 版） | ✅ 完成（2026-11-18） |
 | **v3.41** | 歷史學年名冊重建：以 110～114 學年人事一覽表覆蓋名冊快照（移除測試帳號與後到職人員）；快照另保留行政人員與留職停薪（不計入母數）；匯出前健檢與簽呈範例表只看計入母數的教師；名冊來源分列「名冊筆數／教師人數」（[PR #64](https://github.com/chen-hwei/training-registration-gas/pull/64)，GAS 131 版） | ✅ 完成（2026-11-19） |
+| **v3.42** | 已結案學年達成率封存：儀表板新增「封存此學年／解除封存」，已封存學年改讀 `StatsArchive` 分頁，指標規則與兼課開關改動不再影響；匯入後清除該學年及之後的統計快取（修正累積模式只清當學年）；110～114 學年已封存（[PR #65](https://github.com/chen-hwei/training-registration-gas/pull/65)，GAS 132 版） | ✅ 完成（2026-11-20） |
 
 ### 已部署系統常數
 | 常數 | 說明 |

@@ -581,7 +581,12 @@
                     style="width:auto;font-size:0.84rem"
                     onchange="rptLoadStats()">
             </select>
-            <button class="btn btn-sm btn-outline" onclick="rptLoadStats(true)">重新計算</button>
+            <button id="rpt-recalc-btn" class="btn btn-sm btn-outline" onclick="rptLoadStats(true)">重新計算</button>
+            <button id="rpt-archive-btn" class="btn btn-sm btn-outline" style="display:none"
+                    onclick="rptToggleArchive()"
+                    title="封存後此學年的達成率固定為封存當下的數字，不再隨指標規則、兼課開關或補匯入變動">封存此學年</button>
+            <span id="rpt-archive-badge" class="status-badge"
+                  style="display:none;font-size:0.76rem;white-space:nowrap"></span>
             <button class="btn btn-sm btn-outline" onclick="rptToggleBatchPanel()"
                     title="預先計算多個年度與模式，結果跨裝置共用">批次預計算 ▾</button>
             <span id="rpt-cache-info"
@@ -2305,9 +2310,70 @@
     } catch(e) { return null; }
   }
   function _rptClearCache_(yr) {
-    // 清除該年度兩種模式的快取
-    try { localStorage.removeItem(_rptCacheKey_(yr, 'year')); } catch(e) {}
-    try { localStorage.removeItem(_rptCacheKey_(yr, 'cumulative')); } catch(e) {}
+    // task_e02425c5：累積模式會用到之前學年的紀錄，故清除該年度「及之後所有年度」兩種模式的快取
+    try {
+      var keys = [];
+      for (var i = 0; i < localStorage.length; i++) {
+        var k = localStorage.key(i);
+        if (k && k.indexOf(_RPT_CACHE_PFX) === 0 &&
+            Number(k.slice(_RPT_CACHE_PFX.length).split('_')[0]) >= Number(yr)) keys.push(k);
+      }
+      keys.forEach(function(k) { localStorage.removeItem(k); });
+    } catch(e) {}
+  }
+
+  /* ── task_e02425c5：依目前學年的封存狀態更新按鈕與標籤 ── */
+  var _rptArchived = false;  // 目前儀表板學年是否已封存
+  function _rptUpdateArchiveUI_(yr, data) {
+    var btn    = document.getElementById('rpt-archive-btn');
+    var badge  = document.getElementById('rpt-archive-badge');
+    var recalc = document.getElementById('rpt-recalc-btn');
+    _rptArchived = !!(data && data.archived);
+    // 目前學年（尚未結束）不可封存，按鈕不顯示
+    btn.style.display   = yr < _rptCurrentYear() ? '' : 'none';
+    btn.textContent     = _rptArchived ? '解除封存' : '封存此學年';
+    recalc.disabled     = _rptArchived;
+    recalc.title        = _rptArchived ? '已封存的學年不重新計算；要更正請先解除封存' : '';
+    if (_rptArchived) {
+      badge.textContent   = '🔒 已封存（' + data.archivedAt + '，兼課' + (data.includePartTime ? '計入' : '不計入') + '）';
+      badge.style.display = '';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+
+  /* ── task_e02425c5：封存／解除封存目前儀表板學年 ── */
+  function rptToggleArchive() {
+    var yr = Number(document.getElementById('rpt-dash-year').value);
+    var unarchive = _rptArchived;
+    var msg = unarchive
+      ? '解除封存後，' + yr + ' 學年度的達成率會改回即時計算，數字可能隨指標規則、兼課開關變動。\n' +
+        '核對無誤後請再按「封存此學年」。\n\n請輸入學年度（' + yr + '）確認解除封存：'
+      : '封存後，' + yr + ' 學年度的達成率（累積、當年度兩種模式）固定為現在的數字，\n' +
+        '之後修改指標規則、兼課開關或補匯入資料都不會改變它。\n\n請輸入學年度（' + yr + '）確認封存：';
+    var input = prompt(msg);
+    if (input === null) return;
+    if (Number(String(input).trim()) !== yr) { showToast('學年度不符，未執行', 'error'); return; }
+
+    showSpinner();
+    api(unarchive ? 'report_unarchive_year' : 'report_archive_year',
+        { academicYear: yr, confirmYear: yr }).then(function(res) {
+      if (!res.success) { hideSpinner(); showToast(res.error || '執行失敗', 'error'); return; }
+      _rptClearCache_(yr);
+      showToast(yr + ' 學年度已' + (unarchive ? '解除封存' : '封存'), 'success');
+      if (!unarchive) { hideSpinner(); rptLoadStats(); return; }
+      // 解除封存會清掉該學年兩種模式的快取，兩種模式都重算，切換模式時才有即時數字可核對
+      return api('report_batch_calc', { combinations: [
+        { academicYear: yr, mode: 'cumulative' }, { academicYear: yr, mode: 'year' }
+      ] }).then(function(r2) {
+        hideSpinner();
+        if (!r2.success) showToast(r2.error || '重新計算失敗，請手動按「重新計算」', 'error');
+        rptLoadStats();
+      });
+    }).catch(function(err) {
+      hideSpinner();
+      showToast('發生錯誤：' + err.message, 'error');
+    });
   }
 
   /* ── 初始化：設定預設學年度、載入指標、還原快取、載入名冊來源 ── */
@@ -2975,19 +3041,27 @@
         hideSpinner();
         if (!res.success) { showToast(res.error || '計算失敗', 'error'); return; }
         _rptStatsCache = res.data;
-        _rptSaveCache_(yr, res.data);
-        var ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
-        cacheInfoEl.textContent = '上次計算：' + ts;
-        cacheInfoEl.style.display = '';
+        _rptUpdateArchiveUI_(yr, res.data);
+        if (res.data.archived) {
+          cacheInfoEl.textContent = '';
+          cacheInfoEl.style.display = 'none';
+        } else {
+          if (yr >= _rptCurrentYear()) _rptSaveCache_(yr, res.data);  // 過去學年不讀本機快取，也不寫（審查 Y-2）
+          var ts = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+          cacheInfoEl.textContent = '上次計算：' + ts;
+          cacheInfoEl.style.display = '';
+        }
         _rptRenderStats();
       });
       return;
     }
 
     // 第 1 層：localStorage（毫秒級，同瀏覽器）
-    var lsCache = _rptLoadCache_(yr);
+    // task_e02425c5：過去學年可能已在別台電腦封存，一律問伺服器，不讀本機快取
+    var lsCache = yr >= _rptCurrentYear() ? _rptLoadCache_(yr) : null;
     if (lsCache) {
       _rptStatsCache = lsCache.data;
+      _rptUpdateArchiveUI_(yr, null);
       cacheInfoEl.textContent = '上次計算：' + lsCache.cachedAt;
       cacheInfoEl.style.display = '';
       _rptRenderStats();
@@ -2998,22 +3072,39 @@
     cacheInfoEl.textContent = '載入快取中...';
     cacheInfoEl.style.display = '';
     api('report_get_stats_cache', { academicYear: yr, mode: _rptCalcMode }).then(function(res) {
-      if (res.success && res.data) {
-        _rptStatsCache = res.data.statsData;
-        // 同時回存 localStorage，下次不再呼叫 GAS
-        _rptSaveCache_(yr, res.data.statsData);
-        cacheInfoEl.textContent = '上次計算：' + res.data.cachedAt + '（跨裝置快取）';
+      if (!res.success) {
+        // task_e02425c5：封存值讀取失敗不可退回顯示即時數字
+        _rptStatsCache = null;
+        _rptUpdateArchiveUI_(yr, null);
+        cacheInfoEl.textContent = res.error || '讀取失敗';
         cacheInfoEl.style.display = '';
+        _rptRenderStats();
+        showToast(res.error || '讀取失敗', 'error');
+        return;
+      }
+      if (res.data) {
+        _rptStatsCache = res.data.statsData;
+        _rptUpdateArchiveUI_(yr, res.data.archived ? res.data.statsData : null);
+        if (res.data.archived) {
+          cacheInfoEl.style.display = 'none';
+        } else {
+          // 同時回存 localStorage，下次不再呼叫 GAS（只限目前學年；過去學年不讀本機快取，審查 Y-2）
+          if (yr >= _rptCurrentYear()) _rptSaveCache_(yr, res.data.statsData);
+          cacheInfoEl.textContent = '上次計算：' + res.data.cachedAt + '（跨裝置快取）';
+          cacheInfoEl.style.display = '';
+        }
         _rptRenderStats();
         return;
       }
       // 第 3 層：無任何快取 → 顯示空狀態，提示手動計算
       _rptStatsCache = null;
+      _rptUpdateArchiveUI_(yr, null);
       cacheInfoEl.textContent = '尚無計算結果，請點「重新計算」';
       cacheInfoEl.style.display = '';
       _rptRenderStats();
     }).catch(function() {
       _rptStatsCache = null;
+      _rptUpdateArchiveUI_(yr, null);
       cacheInfoEl.style.display = 'none';
       _rptRenderStats();
     });
@@ -3110,10 +3201,16 @@
         } catch(e) {}
       });
 
-      var okCount   = d.results.filter(function(r){ return r.success; }).length;
+      var okCount   = d.results.filter(function(r){ return r.success && !r.archived; }).length;
       var failItems = d.results.filter(function(r){ return !r.success; });
+      // task_e02425c5：已封存學年不重算
+      var archItems = d.results.filter(function(r){ return r.archived; });
 
       var msg = '✅ 批次預計算完成：' + okCount + ' 個組合已存入伺服器快取';
+      if (archItems.length > 0) {
+        msg += '；' + archItems.length + ' 個已封存、未重算（' +
+          archItems.map(function(r){ return r.academicYear + '/' + r.mode; }).join('、') + '）';
+      }
       if (failItems.length > 0) {
         msg += '；' + failItems.length + ' 個失敗（' +
           failItems.map(function(r){ return r.academicYear + '/' + r.mode; }).join('、') + '）';
@@ -3165,6 +3262,7 @@
     var listEl = document.getElementById('rpt-stats-list');
     if (!_rptStatsCache) {
       listEl.innerHTML = '<div class="empty-state"><div class="ei">📊</div><p>尚無資料</p></div>';
+      document.getElementById('rpt-totals-label').textContent = '';  // 避免殘留前一個學年的人數
       return;
     }
     var stats  = _rptStatsCache.stats;
@@ -4159,6 +4257,7 @@
   window.rptSupplementRoster    = rptSupplementRoster;
   window.rptOverwriteRosterFromHub = rptOverwriteRosterFromHub;
   window.rptLoadStats           = rptLoadStats;
+  window.rptToggleArchive       = rptToggleArchive;
   window.rptToggleBatchPanel    = rptToggleBatchPanel;
   window.rptBatchCalc           = rptBatchCalc;
   window.rptBatchSelectAll      = rptBatchSelectAll;

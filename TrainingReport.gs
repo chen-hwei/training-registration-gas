@@ -731,6 +731,13 @@ function _mergeImportRecords_(existing, incoming, academicYear) {
  * 回傳 { success: true, data: { statsData, cachedAt } } 或 { success: true, data: null }
  */
 function getStatsCache_(academicYear, mode) {
+  // task_e02425c5：已封存學年一律回傳封存值；封存讀取失敗要回報錯誤，不可默默退回即時快取
+  try {
+    var archived = _readStatsArchive_(Number(academicYear), mode);
+    if (archived) return _ok_({ statsData: archived, cachedAt: archived.archivedAt, archived: true });
+  } catch (e) {
+    return _err_('讀取封存值失敗：' + e.message);
+  }
   try {
     var key   = _statsCacheKey_(academicYear, mode);
     var ss    = SpreadsheetApp.openById(getTrainingSsId_());
@@ -777,16 +784,21 @@ function saveStatsCache_(academicYear, mode, statsData) {
   } catch (e) { /* 快取寫入失敗不中斷主流程 */ }
 }
 
-/** 清除指定學年度所有模式的伺服器快取（匯入新資料後呼叫） */
-function clearStatsCache_(academicYear) {
+/**
+ * 清除伺服器快取（匯入新資料後呼叫）
+ * task_e02425c5：累積模式會用到之前學年的紀錄，故預設清掉「該學年及之後所有學年」；
+ * onlyThisYear=true 時只清該學年（解除封存用）
+ */
+function clearStatsCache_(academicYear, onlyThisYear) {
   try {
-    var prefix = String(academicYear) + '_';
+    var target = Number(academicYear);
     var ss     = SpreadsheetApp.openById(getTrainingSsId_());
     var sheet  = ss.getSheetByName(STATS_CACHE_SHEET);
     if (!sheet) return;
     var rows = sheet.getDataRange().getValues();
     var kept = [rows[0]].concat(rows.slice(1).filter(function(r) {
-      return String(r[0]).indexOf(prefix) !== 0;
+      var keyYear = Number(String(r[0]).split('_')[0]);
+      return onlyThisYear ? keyYear !== target : !(keyYear >= target);
     }));
     sheet.clearContents();
     if (kept.length > 0) sheet.getRange(1, 1, kept.length, 3).setValues(kept);
@@ -807,7 +819,13 @@ function batchCalcStats_(body) {
     var combinations = body.combinations || [];
     if (combinations.length === 0) return _err_('combinations 為必填');
     var results = [];
+    var archiveRows = _loadStatsArchiveRows_();  // 迴圈外讀一次封存分頁
     combinations.forEach(function(c) {
+      // task_e02425c5：已封存學年不重算，標記略過
+      if (_readStatsArchive_(Number(c.academicYear), c.mode, archiveRows)) {
+        results.push({ academicYear: c.academicYear, mode: c.mode, success: true, archived: true, error: null });
+        return;
+      }
       var res = calcStats_(Number(c.academicYear), c.mode);  // 內含 saveStatsCache_()
       results.push({
         academicYear: c.academicYear,
@@ -820,6 +838,169 @@ function batchCalcStats_(body) {
     return _ok_({ results: results, failedCount: failed.length });
   } catch (e) {
     return _err_('batchCalcStats 失敗：' + e.message);
+  }
+}
+
+// ==================== F3-archive：已結案學年達成率封存（task_e02425c5） ====================
+// StatsArchive 每列＝一個學年 × 一種模式 × 一個指標（避開單格 5 萬字元上限）；
+// indicatorId='__meta__' 的列存 totals、封存當下的指標規則與兼課開關，有此列才算已封存。
+
+var STATS_ARCHIVE_HEADERS_ = ['academicYear', 'mode', 'indicatorId', 'data',
+                              'archivedAt', 'archivedBy', 'rulesJson', 'includePartTime'];
+var STATS_ARCHIVE_META_ID_ = '__meta__';
+
+/** 讀整張封存分頁（含標題列）；分頁不存在回傳空陣列 */
+function _loadStatsArchiveRows_() {
+  var sheet = SpreadsheetApp.openById(getTrainingSsId_()).getSheetByName(STATS_ARCHIVE_SHEET);
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  return sheet.getDataRange().getValues();
+}
+
+/**
+ * 組回與 calcStats_ 相同結構的結果，另帶 archived／archivedAt／archivedBy／includePartTime；
+ * 該學年＋模式未封存回傳 null。preloadedRows 選填（批次時迴圈外讀一次）
+ */
+function _readStatsArchive_(academicYear, mode, preloadedRows) {
+  mode = (mode === 'year') ? 'year' : 'cumulative';
+  var rows = preloadedRows || _loadStatsArchiveRows_();
+  var meta = null, stats = [];
+  for (var i = 1; i < rows.length; i++) {
+    var r = rows[i];
+    if (Number(r[0]) !== academicYear || String(r[1]) !== mode) continue;
+    if (String(r[2]) === STATS_ARCHIVE_META_ID_) meta = r;
+    else stats.push(JSON.parse(String(r[3])));
+  }
+  if (!meta) return null;
+  return {
+    academicYear:    academicYear,
+    mode:            mode,
+    stats:           stats,
+    totals:          JSON.parse(String(meta[3])).totals,
+    archived:        true,
+    archivedAt:      _cellToDateStr_(meta[4], 'yyyy/MM/dd HH:mm'),
+    archivedBy:      String(meta[5] || ''),
+    includePartTime: meta[7] === true || String(meta[7]).toUpperCase() === 'TRUE'
+  };
+}
+
+/** 該學年是否已有任何封存列 */
+function _isStatsYearArchived_(academicYear, rows) {
+  for (var i = 1; i < rows.length; i++) {
+    if (Number(rows[i][0]) === academicYear) return true;
+  }
+  return false;
+}
+
+/** 驗證封存／解除封存的學年度參數，回傳錯誤字串或 null */
+function _validateArchiveYear_(body) {
+  var year = Number((body || {}).academicYear);
+  if (!year || Math.floor(year) !== year) return 'academicYear 格式錯誤';
+  if (Number((body || {}).confirmYear) !== year) return '確認學年度不符，未執行';
+  return null;
+}
+
+/** 儀表板讀取入口（report_calc）：已封存學年回傳封存值，否則即時計算 */
+function calcStatsForDashboard_(academicYear, mode) {
+  var year = Number(academicYear || _currentAcademicYear_());
+  try {
+    var archived = _readStatsArchive_(year, mode);
+    if (archived) return _ok_(archived);
+  } catch (e) {
+    return _err_('讀取封存值失敗：' + e.message);
+  }
+  return calcStats_(year, mode);
+}
+
+/**
+ * 封存學年度：兩種模式各算一次即時值後寫入 StatsArchive；只能封存目前學年之前的學年。
+ * 已封存者須先解除封存，避免靜默覆蓋。
+ */
+function archiveStatsYear_(userId, body) {
+  var bad = _validateArchiveYear_(body);
+  if (bad) return _err_(bad);
+  var year = Number(body.academicYear);
+  var cur  = _currentAcademicYear_();
+  if (year >= cur) return _err_('只能封存已結束的學年度（目前為 ' + cur + ' 學年度）');
+
+  // 已封存先擋（不持鎖的快速檢查；鎖內會再確認一次）
+  if (_isStatsYearArchived_(year, _loadStatsArchiveRows_())) {
+    return _err_(year + ' 學年度已封存；要更正請先解除封存');
+  }
+
+  // 兩次 calcStats_ 約 10–20 秒，放在取鎖之前，避免封存期間教師送出、審核等不到鎖（審查 Y-1）
+  var cum = calcStats_(year, 'cumulative');
+  if (!cum.success) return cum;
+  var yr  = calcStats_(year, 'year');
+  if (!yr.success) return yr;
+  if (!cum.data.totals.school) return _err_(year + ' 學年度名冊快照沒有計入母數的教師，無法封存');
+
+  // 封存當下的口徑：指標規則與兼課開關（日後回溯「當時用什麼規則算的」）
+  var rulesRaw  = PropertiesService.getScriptProperties().getProperty(INDICATOR_RULES_KEY);
+  var rulesJson = rulesRaw || JSON.stringify(DEFAULT_INDICATORS_);
+  var inclPT    = _loadStatsIncludePartTime_();
+  var ts        = Utilities.formatDate(new Date(), 'Asia/Taipei', 'yyyy/MM/dd HH:mm');
+
+  var newRows = [];
+  [cum.data, yr.data].forEach(function(d) {
+    newRows.push([year, d.mode, STATS_ARCHIVE_META_ID_, JSON.stringify({ totals: d.totals }),
+                  ts, userId, rulesJson, inclPT]);
+    d.stats.forEach(function(s) {
+      newRows.push([year, d.mode, s.id, JSON.stringify(s), ts, userId, '', '']);
+    });
+  });
+
+  // 鎖內只做「重讀封存分頁確認未封存 → 寫入」
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return _err_('系統忙碌中，請稍後再試');
+  try {
+    if (_isStatsYearArchived_(year, _loadStatsArchiveRows_())) {
+      return _err_(year + ' 學年度已封存；要更正請先解除封存');
+    }
+    var ss    = SpreadsheetApp.openById(getTrainingSsId_());
+    var sheet = ss.getSheetByName(STATS_ARCHIVE_SHEET);
+    if (!sheet) {
+      sheet = ss.insertSheet(STATS_ARCHIVE_SHEET);
+      sheet.getRange(1, 1, 1, STATS_ARCHIVE_HEADERS_.length).setValues([STATS_ARCHIVE_HEADERS_]);
+    }
+    sheet.getRange(Math.max(sheet.getLastRow(), 1) + 1, 1, newRows.length, STATS_ARCHIVE_HEADERS_.length)
+         .setValues(newRows);
+
+    _logOp_(userId, 'REPORT_ARCHIVE_YEAR', year + ' 學年度封存 ' + newRows.length + ' 列（兼課計入：' + inclPT + '）');
+    return _ok_({ academicYear: year, archivedAt: ts, rowCount: newRows.length });
+  } catch (e) {
+    return _err_('封存失敗：' + e.message);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** 解除封存：刪除該學年所有封存列，儀表板回到即時計算；同時清掉該學年舊的即時快取 */
+function unarchiveStatsYear_(userId, body) {
+  var bad = _validateArchiveYear_(body);
+  if (bad) return _err_(bad);
+  var year = Number(body.academicYear);
+
+  var lock = LockService.getScriptLock();
+  if (!lock.tryLock(10000)) return _err_('系統忙碌中，請稍後再試');
+  try {
+    var sheet = SpreadsheetApp.openById(getTrainingSsId_()).getSheetByName(STATS_ARCHIVE_SHEET);
+    var rows  = sheet ? sheet.getDataRange().getValues() : [];
+    var kept  = rows.filter(function(r, i) { return i === 0 || Number(r[0]) !== year; });
+    var removed = rows.length - kept.length;
+    if (!removed) return _err_(year + ' 學年度尚未封存');
+
+    // 先整批寫回保留列，再清掉尾端多出的列（不用 deleteRow；寫回失敗時原資料仍在）
+    var width = rows[0].length;
+    sheet.getRange(1, 1, kept.length, width).setValues(kept);
+    sheet.getRange(kept.length + 1, 1, removed, width).clearContent();
+    clearStatsCache_(year, true);
+
+    _logOp_(userId, 'REPORT_UNARCHIVE_YEAR', year + ' 學年度解除封存，刪除 ' + removed + ' 列');
+    return _ok_({ academicYear: year, removedRows: removed });
+  } catch (e) {
+    return _err_('解除封存失敗：' + e.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 
